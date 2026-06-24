@@ -1,0 +1,48 @@
+[project]
+name = "navmax"
+version = "0.1.0"
+description = "Plateforme de cybersécurité unifiée pour agents IA — Scanner réseau, Proxy web, Exploitation, OSINT"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Raphaël Pascaud", email = "7ShIkI3@users.noreply.github.com"}]
+readme = "README.md"
+keywords = ["cybersecurity", "scanner", "proxy", "exploit", "osint", "ai-agent"]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.35",
+    "aiosqlite>=0.20.0",
+    "httpx>=0.28.0",
+    "scapy>=2.6.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "structlog>=24.4.0",
+    "typer>=0.15.0",
+    "python-multipart>=0.0.17",
+    "cryptography>=44.0.0",
+    "networkx>=3.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+navmax = "navmax.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,58 @@
+"""
+Configuration centralisée via variables d'environnement et fichier .env.
+"""
+
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Config(BaseSettings):
+    """Configuration NavMAX chargée depuis l'environnement et .env."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="NAVMAX_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # --- Général ---
+    debug: bool = False
+    data_dir: Path = Path.home() / ".navmax"
+    log_level: str = "INFO"
+    log_format: str = "json"  # json | console
+
+    # --- API ---
+    api_host: str = "127.0.0.1"
+    api_port: int = 8443
+    api_workers: int = 1
+
+    # --- Base de données ---
+    db_url: str = ""
+
+    @property
+    def database_url(self) -> str:
+        """Retourne l'URL de la BDD (SQLite par défaut)."""
+        if self.db_url:
+            return self.db_url
+        db_path = self.data_dir / "navmax.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        return f"sqlite+aiosqlite:///{db_path}"
+
+    # --- Scanner ---
+    scanner_default_timeout: float = 2.0  # secondes
+    scanner_default_ports: str = "22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443,27017"
+    scanner_max_concurrency: int = 100
+    scanner_udp_enabled: bool = False  # UDP nécessite admin
+
+    # --- Proxy ---
+    proxy_port: int = 8080
+    proxy_ca_dir: Path = Path.home() / ".navmax" / "certs"
+
+    # --- Exploit ---
+    exploit_modules_dir: Path = Path.home() / ".navmax" / "exploits"
+    exploit_payload_dir: Path = Path.home() / ".navmax" / "payloads"
+
+
+# Instance globale
+config = Config()
