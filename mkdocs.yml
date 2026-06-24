@@ -1,0 +1,41 @@
+site_name: NavMAX
+site_description: Plateforme de cybersécurité unifiée pour agents IA
+site_author: Raphaël Pascaud
+repo_url: https://github.com/7ShIkI3/NavMAX
+repo_name: 7ShIkI3/NavMAX
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: teal
+      accent: cyan
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - tables
+
+nav:
+  - Accueil: index.md
+  - Installation: installation.md
+  - Guide rapide: quickstart.md
+  - Modules:
+    - Scanner: modules/scanner.md
+    - Proxy: modules/proxy.md
+    - Exploit: modules/exploit.md
+    - OSINT: modules/osint.md
+    - Workspace: modules/workspace.md
+    - Sandbox: modules/sandbox.md
+  - API Reference: api-reference.md
+  - Workflows:
+    - Audit API REST: workflows/audit-api-rest.md
+    - Recherche vulnérabilités: workflows/vulnerability-research.md
+    - Investigation OSINT: workflows/osint-investigation.md
+  - Développement: development.md

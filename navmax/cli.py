@@ -459,3 +459,80 @@ def cert(
 
 if __name__ == "__main__":
     app()
+
+
+# ---------------------------------------------------------------------------
+# Workspace
+# ---------------------------------------------------------------------------
+_workspace_app = typer.Typer(help="Gestion des workspaces (projets d'investigation)")
+app.add_typer(_workspace_app, name="workspace")
+
+
+@_workspace_app.command("create")
+def workspace_create(
+    name: str = typer.Argument(..., help="Nom du workspace"),
+    description: str = typer.Option("", "--description", "-d"),
+) -> None:
+    """Crée un nouveau workspace."""
+    import asyncio
+    from navmax.db.engine import async_session
+    from navmax.workspace import WorkspaceManager
+
+    async def _run() -> None:
+        async with async_session() as session:
+            mgr = WorkspaceManager(session)
+            ws = await mgr.create(name, description)
+            await session.commit()
+            print(f"Workspace créé : {ws.id}")
+            print(f"  Nom    : {ws.name}")
+            print(f"  Description : {ws.description or '-'}")
+
+    asyncio.run(_run())
+
+
+@_workspace_app.command("list")
+def workspace_list() -> None:
+    """Liste tous les workspaces."""
+    import asyncio
+    from navmax.db.engine import async_session
+    from navmax.workspace import WorkspaceManager
+
+    async def _run() -> None:
+        async with async_session() as session:
+            mgr = WorkspaceManager(session)
+            ws_list = await mgr.list_all()
+            if not ws_list:
+                print("Aucun workspace.")
+                return
+            print(f"\n{'='*60}")
+            print(f"  Workspaces ({len(ws_list)})")
+            print(f"{'='*60}")
+            for w in ws_list:
+                tc = len(w.targets) if w.targets else 0
+                print(f"  [{w.id[:8]}] {w.name} ({tc} cibles)")
+                if w.description:
+                    print(f"       {w.description[:80]}")
+
+    asyncio.run(_run())
+
+
+@_workspace_app.command("delete")
+def workspace_delete(
+    workspace_id: str = typer.Argument(..., help="ID du workspace"),
+) -> None:
+    """Supprime un workspace."""
+    import asyncio
+    from navmax.db.engine import async_session
+    from navmax.workspace import WorkspaceManager
+
+    async def _run() -> None:
+        async with async_session() as session:
+            mgr = WorkspaceManager(session)
+            ok = await mgr.delete(workspace_id)
+            await session.commit()
+            if ok:
+                print(f"Workspace {workspace_id} supprimé.")
+            else:
+                print(f"Workspace {workspace_id} introuvable.")
+
+    asyncio.run(_run())

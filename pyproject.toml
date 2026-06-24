@@ -1,6 +1,6 @@
 [project]
 name = "navmax"
-version = "0.1.0"
+version = "0.2.0"
 description = "Plateforme de cybersécurité unifiée pour agents IA — Scanner réseau, Proxy web, Exploitation, OSINT"
 requires-python = ">=3.11"
 license = "MIT"

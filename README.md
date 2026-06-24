@@ -6,9 +6,10 @@
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-71%2F71-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-87%2F87-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · Proxy web MITM · Framework d'exploitation · Moteur OSINT & Graphe*
+*Scanner réseau · Proxy web MITM · Framework d'exploitation (24 exploits) · Moteur OSINT & Graphe · Sandbox Docker · Workspaces*
 
 </div>
 
@@ -16,14 +17,25 @@
 
 ## 🎯 Vision
 
-NavMAX combine **4 outils de cybersécurité majeurs** en une plateforme unique, conçue pour être pilotée par des **agents IA** via API REST, SDK Python, ou CLI.
+NavMAX combine **4 piliers** de cybersécurité en une plateforme unique, conçue pour être pilotée par des **agents IA** via API REST, SDK Python, ou CLI.
 
 | Pilier | Équivalent | Fonction |
 |--------|-----------|----------|
 | 🔍 **Scanner** | Nmap | TCP Connect / SYN / UDP, détection de services, fingerprinting OS |
-| 🌐 **Proxy** | Burp Suite | MITM HTTP/HTTPS, interception, repeater, scanner web, fuzzer |
-| 💣 **Exploit** | Metasploit | Framework d'exploits, générateur de payloads, handler, post-exploitation |
-| 🕸️ **OSINT** | Maltego | DNS, WHOIS, SSL, web scraping, moteur de graphe, transforms |
+| 🌐 **Proxy** | Burp Suite | MITM HTTP/HTTPS, interception, repeater, scanner web, fuzzer, crawler, fuzzer structurel |
+| 💣 **Exploit** | Metasploit | **24 exploits**, payloads, handler, post-exploitation, encodeurs polymorphiques, sandbox Docker |
+| 🕸️ **OSINT** | Maltego | DNS, WHOIS, SSL, web scraping, Shodan/Censys/crt.sh, moteur de graphe, transforms |
+
+### 🆕 v0.2.0 — Nouveautés
+
+- **🔒 Sandbox Docker** — Exécution isolée des exploits en conteneurs éphémères
+- **📁 Workspaces** — Projets isolés (cibles, scans, sessions) via API + CLI (`navmax workspace`)
+- **💣 24 exploits** — SSH, FTP, Redis, MongoDB, MySQL, PostgreSQL, Docker, K8s, Elasticsearch, VNC, SNMP, Jenkins, Tomcat, CouchDB, Rsync, NFS, SMB, Memcached, phpMyAdmin, HTTP Basic/PUT...
+- **🔐 Encodeurs polymorphiques** — Shikata-ga-nai, AES-CTR, substitution, multi-couche (évasion AV)
+- **🌐 Crawler web** — Découverte d'endpoints, formulaires, technologies, dir busting
+- **🧬 Fuzzer structurel** — Mutation JSON/XML/forms avec payloads adaptés au type de champ
+- **🔎 OSINT avancé** — Intégration Shodan, Censys, crt.sh (certificate transparency)
+- **⚙️ CI/CD** — GitHub Actions (tests + lint auto)
 
 ---
 
@@ -145,6 +157,19 @@ curl http://127.0.0.1:8443/api/v1/health
 open http://127.0.0.1:8443/docs
 ```
 
+### Workspaces
+
+```bash
+# Créer un workspace
+navmax workspace create "Audit DMZ" -d "Scan du réseau DMZ"
+
+# Lister les workspaces
+navmax workspace list
+
+# Supprimer un workspace
+navmax workspace delete <id>
+```
+
 ---
 
 ## 🔌 API REST — endpoints
@@ -165,6 +190,11 @@ open http://127.0.0.1:8443/docs
 | `GET`  | `/api/v1/osint/dns/{domain}` | Résolution DNS |
 | `GET`  | `/api/v1/osint/whois/{domain}` | WHOIS |
 | `POST` | `/api/v1/osint/investigate` | Investigation complète + graphe |
+| `POST` | `/api/v1/workspaces/` | Créer un workspace |
+| `GET`  | `/api/v1/workspaces/` | Lister les workspaces |
+| `POST` | `/api/v1/workspaces/{id}/targets` | Associer une cible à un workspace |
+| `POST` | `/api/v1/exploit/sandbox/run` | Exécuter du code en sandbox Docker |
+| `GET`  | `/api/v1/exploit/sandbox/status` | Vérifier l'état du sandbox |
 
 ---
 
@@ -201,19 +231,24 @@ asyncio.run(main())
 - Repeater : historique des requêtes rejouées
 - Scanner web : headers sécurité, XSS reflété, SQLi (error + time-based), path traversal, open redirect, information disclosure
 - Fuzzer : 9 catégories × 50+ payloads (XSS, SQLi, command injection, XXE, SSTI, overflow...)
+- **Crawler** : liens, formulaires, technologies, dir busting (50+ paths communs)
+- **Fuzzer structurel** : mutation JSON/XML/forms, payloads adaptés par type de champ
 
 ### Exploitation
-- 4 exploits intégrés (EternalBlue CVE-2017-0144, SambaCry CVE-2017-7494, FTP Anon, Test)
+- **24 exploits** (SSH bruteforce, FTP Anon, Redis/MongoDB/ES unauthenticated, Docker API, K8s, VNC, SNMP, Jenkins, Tomcat, CouchDB, Rsync, NFS, SMB, Memcached, MySQL/Postgres bruteforce, phpMyAdmin, HTTP Basic/PUT, EternalBlue, SambaCry)
 - 6 formats de payloads (Python, Bash, PowerShell, cmd, Netcat)
-- Encodeurs : Base64, URL, Hex, XOR
+- **4 encodeurs polymorphiques** (Shikata-ga-nai, AES-CTR, substitution + padding, multi-layer)
 - Handler TCP multi-session + HTTP C2
 - Post-exploitation : hashdump, system info, persistence (cron/scheduled task/service), clear logs, port forwarding
+- **Sandbox Docker** : isolation des exploits en conteneurs éphémères
+- Plugin loader : exploits custom depuis `~/.navmax/exploits/`
 
 ### OSINT & Graphe
 - DNS : A, AAAA, MX, NS, TXT, CNAME, SOA, PTR
 - WHOIS : 20+ TLDs, parsing structuré (registrar, registrant, dates, nameservers)
 - SSL : certificats X.509 (SAN, fingerprint SHA256, OCSP, validité)
 - Web : 20 technologies, emails, liens externes, réseaux sociaux
+- **Shodan, Censys, crt.sh** : APIs tierces pour enrichissement OSINT
 - Graphe : 17 types d'entités, 27 types de relations, déduplication automatique
 - 5 transforms (Domain→DNS, Domain→WHOIS, IP→SSL, Domain→Web, IP→ReverseDNS)
 - Investigation multi-niveaux (depth 1-3)
@@ -228,7 +263,7 @@ asyncio.run(main())
 # Lancer tous les tests
 pytest tests/ -v
 
-# Résultat : 71 passed
+# Résultat : 87 passed
 ```
 
 ---
@@ -254,16 +289,19 @@ ruff check navmax/
 NavMAX/
 ├── navmax/
 │   ├── core/          # Config, logging, plugin manager
-│   ├── db/            # SQLAlchemy models (async)
-│   ├── api/           # FastAPI + routes REST
+│   ├── db/            # SQLAlchemy models (async) — Workspace, Target, Scan...
+│   ├── api/           # FastAPI + routes REST (7 route modules)
+│   ├── workspace/     # Gestion de projets d'investigation
 │   ├── scanner/       # Scanner réseau (Nmap-like)
-│   ├── proxy/         # Proxy MITM + scanner web + fuzzer
-│   ├── exploit/       # Framework d'exploitation
+│   ├── proxy/         # Proxy MITM + scanner web + fuzzer + crawler + fuzzer structurel
+│   ├── exploit/       # Framework d'exploitation + sandbox + encodeurs
+│   │   └── modules/   # 20 modules d'exploit
 │   ├── osint/         # Collecteurs + graphe + transforms
-│   │   ├── collectors/  # DNS, WHOIS, SSL, Web
-│   │   └── graph/       # NetworkX engine, entités, transforms
+│   │   └── collectors/  # DNS, WHOIS, SSL, Web, Shodan, Censys, crt.sh
 │   └── sdk/           # Client Python asynchrone
-├── tests/             # 71 tests unitaires
+├── tests/             # 87 tests unitaires + intégration
+├── .github/workflows/ # CI/CD GitHub Actions
+├── mkdocs.yml         # Documentation MkDocs
 ├── pyproject.toml
 └── PLAN.md            # Feuille de route
 ```

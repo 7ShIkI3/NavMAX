@@ -19,6 +19,26 @@ class Base(DeclarativeBase):
 
 
 # ---------------------------------------------------------------------------
+# Workspace — un projet/contexte d'investigation
+# ---------------------------------------------------------------------------
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    targets: Mapped[list["Target"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Workspace {self.name}>"
+
+
+# ---------------------------------------------------------------------------
 # Target — une cible (IP, domaine, réseau)
 # ---------------------------------------------------------------------------
 class Target(Base):
@@ -27,6 +47,8 @@ class Target(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"))
+    workspace: Mapped[Workspace | None] = relationship(back_populates="targets")
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True, comment="Nom affiché")
     address: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, comment="IP, domaine ou CIDR")
     kind: Mapped[str] = mapped_column(

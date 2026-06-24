@@ -4,8 +4,48 @@
 Plateforme de cybersécurité unifiée **pilotable par des agents IA**, combinant :
 - 🔍 **Nmap** → Reconnaissance réseau
 - 🌐 **Burp Suite** → Analyse & interception web
-- 💣 **Metasploit** → Exploitation & post-exploitation
+- 💣 **Metasploit** → Exploitation & post-exploitation (24 exploits)
 - 🕸️ **Maltego** → OSINT & graphe de relations
+
+---
+
+## Statut : v0.2.0 ✅
+
+| Phase | Contenu | Statut |
+|-------|---------|--------|
+| 1 | Fondations (Core, Scanner, DB, API, SDK) | ✅ v0.1.0 |
+| 2 | Proxy (MITM, Interception, Repeater, Scanner Web, Fuzzer) | ✅ v0.1.0 |
+| 3 | Exploit (Modules, Payloads, Handler, Post-exploit) | ✅ v0.1.0 |
+| 4 | OSINT & Graphe (DNS, WHOIS, SSL, Web, NetworkX, Transforms) | ✅ v0.1.0 |
+| 5 | **Sandbox Docker** | ✅ v0.2.0 |
+| 6 | **Workspaces (projets)** | ✅ v0.2.0 |
+| 7 | **24 exploits modulaires** | ✅ v0.2.0 |
+| 8 | **Encodeurs polymorphiques** (Shikata-ga-nai, AES-CTR...) | ✅ v0.2.0 |
+| 9 | **Crawler web + Fuzzer structurel** | ✅ v0.2.0 |
+| 10 | **OSINT Shodan/Censys/crt.sh** | ✅ v0.2.0 |
+| 11 | **CI/CD GitHub Actions** | ✅ v0.2.0 |
+| 12 | **Documentation MkDocs** | ✅ v0.2.0 |
+
+---
+
+## Prochaines étapes (v0.3.0)
+
+### P3 — IA & Automatisation
+- **Moteur de recommandation IA** (Ollama/Llama) : analyse les scans et propose les prochaines actions
+- **Interface conversationnelle** (CLI + API WebSocket) : piloter NavMAX en langage naturel
+- **Auto-apprentissage** : ajustement des paramètres selon l'environnement
+
+### P2 — Proxy avancé
+- **Moteur de règles** : auto-modification des requêtes (remplacer JWT, injecter headers)
+- **Crawling JavaScript** (Playwright/Selenium) : scraper les SPAs
+
+### P2 — OSINT avancé
+- **Monitoring continu** : relancer les collectes et alerter sur les changements
+- **Export Neo4j** : graphe persistant avec requêtes Cypher
+
+### P4 — Qualité
+- **Tests d'intégration** sur réseau de test
+- **Documentation complète** (guides, tutoriels, workflows)
 
 ---
 
@@ -25,62 +65,16 @@ Plateforme de cybersécurité unifiée **pilotable par des agents IA**, combinan
 ┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────────┐
 │ SCANNER │ │  PROXY │ │ EXPLOIT│ │   OSINT    │
 │ (Nmap)  │ │ (Burp) │ │ (MSF)  │ │ (Maltego)  │
+│         │ │+Crawler│ │+24 exp │ │+Shodan    │
+│         │ │+StrFuzz│ │+Sandbox│ │+Censys    │
 └────┬────┘ └───┬────┘ └───┬────┘ └─────┬──────┘
      │          │          │            │
 ┌────▼──────────▼──────────▼────────────▼──────┐
 │              CORE DATABASE                     │
-│  Targets · Vulns · Creds · Graph · Logs        │
+│  Workspaces · Targets · Vulns · Scans         │
 │  SQLite (dev) → PostgreSQL (prod)              │
 └────────────────────────────────────────────────┘
 ```
-
----
-
-## Ordre de Développement (justifié)
-
-### Phase 1 — FONDATIONS (Core + Scanner Nmap)
-**Pourquoi d'abord :** La reconnaissance réseau est le point d'entrée de toute opération cyber. C'est le plus autonome (pas besoin des autres modules) et pose l'infrastructure (API, DB, plugin system).
-
-| Étape | Composant |
-|-------|-----------|
-| 1.1 | Core Engine : config, logging, plugin loader |
-| 1.2 | Base de données : SQLAlchemy models (targets, scans, services) |
-| 1.3 | API REST FastAPI : endpoints CRUD + scan |
-| 1.4 | Module Scanner : TCP connect, SYN (admin), UDP, service detection |
-| 1.5 | Fingerprinting : banners, OS detection TTL/TCP stack |
-| 1.6 | Agent SDK Python : client asynchrone |
-
-### Phase 2 — INTERCEPTION WEB (Proxy Burp)
-**Pourquoi 2e :** Après avoir découvert des services, on analyse les applications web. Le proxy intercepte le trafic entre l'agent IA et la cible.
-
-| Étape | Composant |
-|-------|-----------|
-| 2.1 | Proxy HTTP/HTTPS : MITM avec cert auto-générée |
-| 2.2 | Interception : pause/modify/forward requests |
-| 2.3 | Repeater : rejouer des requêtes modifiées |
-| 2.4 | Scanner web : XSS, SQLi, CSRF, path traversal |
-| 2.5 | Fuzzer : injection paramètres, headers, body |
-
-### Phase 3 — EXPLOITATION (Metasploit-like)
-**Pourquoi 3e :** Une fois les vulnérabilités identifiées (via Scanner + Proxy), on passe à l'exploitation.
-
-| Étape | Composant |
-|-------|-----------|
-| 3.1 | Module d'exploit : format standard (comme MSF modules) |
-| 3.2 | Payloads : reverse shell, bind shell, meterpreter-like |
-| 3.3 | Handler : listener multi-protocole (TCP, HTTP, DNS) |
-| 3.4 | Base d'exploits : catalogue versionné + recherche |
-| 3.5 | Post-exploitation : hashdump, persistence, pivot |
-
-### Phase 4 — OSINT & GRAPHE (Maltego-like)
-**Pourquoi 4e :** L'OSINT peut tourner en continu. Le graphe unifie toutes les données des phases 1-3 + données externes.
-
-| Étape | Composant |
-|-------|-----------|
-| 4.1 | Collecteurs OSINT : DNS, WHOIS, Shodan, certificats, réseaux sociaux |
-| 4.2 | Moteur de graphe : NetworkX → Neo4j (entités + relations) |
-| 4.3 | Transformations : entité → nouvelles entités (comme Maltego transforms) |
-| 4.4 | Visualisation : export JSON → Sigma.js / Cytoscape |
 
 ---
 
@@ -97,8 +91,10 @@ Plateforme de cybersécurité unifiée **pilotable par des agents IA**, combinan
 | Scan | **scapy** + sockets natifs |
 | OSINT | **httpx** (async HTTP) |
 | Graphe | **NetworkX** (mémoire) → **Neo4j** (persistant) |
+| Sandbox | **Docker** (via subprocess) |
 | Tests | **pytest** + pytest-asyncio |
-| Packaging | **uv** / pip |
+| CI/CD | **GitHub Actions** |
+| Docs | **MkDocs Material** |
 
 ---
 
@@ -108,14 +104,3 @@ Plateforme de cybersécurité unifiée **pilotable par des agents IA**, combinan
 - **Async-first** : toutes les I/O sont asynchrones
 - **API-first** : chaque fonctionnalité exposée via l'API REST avant la CLI
 - Tests unitaires obligatoires pour le core et les modules critiques
-
----
-
-## Prochaines actions immédiates
-1. Initialiser le projet Python (structure, dépendances)
-2. Coder le Core Engine (config, logging, plugin loader)
-3. Coder les modèles DB (Target, Scan, Service)
-4. Coder l'API REST squelette
-5. Implémenter le Scanner Nmap
-
-→ **Go Phase 1.**
