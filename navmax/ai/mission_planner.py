@@ -29,6 +29,10 @@ You have access to these NavMAX modules:
 MODULES AVAILABLE:
 - scanner: TCP/SYN/UDP port scanning, service fingerprinting, OS detection, vulnerability scanning
 - osint: DNS recon, WHOIS, SSL certificates, Shodan/Censys, subdomain enumeration, technology detection
+- ad: Active Directory & LDAP enumeration — mass extraction of users, groups, computers,
+  OUs, GPOs, domain trusts. Builds attack graphs (BloodHound-like), detects Kerberoastable/AS-REP
+  roastable accounts, password spraying, delegation abuse, ADCS misconfigurations,
+  privileged group analysis, and LDAP/S signing checks
 - exploit: 24 exploit modules including SSH bruteforce, Redis unauth, MongoDB unauth,
   MySQL/Postgres bruteforce, SMB enumeration, Docker API exploit, Kubernetes anonymous access,
   Elasticsearch unauth, Jenkins script console, SNMP public community, and more

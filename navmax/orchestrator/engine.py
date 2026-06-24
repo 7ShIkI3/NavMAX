@@ -171,6 +171,9 @@ class MissionOrchestrator:
                     ],
                 }
 
+        elif module == "ad" and params:
+            return await self._execute_ad_phase(params)
+
         elif module == "osint" and self.osint:
             target = params.get("target", "")
             if hasattr(self.osint, 'investigate_domain'):
@@ -199,6 +202,62 @@ class MissionOrchestrator:
             return {"status": "not_implemented", "module": "sandbox"}
 
         return {"status": "skipped", "reason": f"No handler for {module}"}
+
+    async def _execute_ad_phase(self, params: dict) -> dict:
+        """Exécute une phase d'énumération AD."""
+        from navmax.ad.connector import ADConfig, ADAuthMethod
+        from navmax.ad.enumerator import ADEnumerator
+
+        server = params.get("server", params.get("target", ""))
+        domain = params.get("domain", "")
+        username = params.get("username", "")
+        password = params.get("password", "")
+        use_ssl = params.get("use_ssl", True)
+
+        if not server or not domain:
+            return {
+                "status": "skipped",
+                "reason": "AD phase requires 'server' and 'domain' parameters",
+            }
+
+        config = ADConfig(
+            server=server,
+            domain=domain,
+            username=username or None,
+            password=password or None,
+            auth_method=(
+                ADAuthMethod.SIMPLE if username else ADAuthMethod.ANONYMOUS
+            ),
+            use_ssl=use_ssl,
+        )
+
+        connector = None  # type: ignore[assignment]
+        try:
+            from navmax.ad.connector import ADConnector
+            connector = ADConnector(config)
+            await connector.connect()
+
+            enumerator = ADEnumerator(connector)
+            domain_map = await enumerator.enumerate_all()
+
+            return {
+                "status": "completed",
+                "domain": domain,
+                "users": len(domain_map.users),
+                "groups": len(domain_map.groups),
+                "computers": len(domain_map.computers),
+                "ous": len(domain_map.ous),
+                "gpos": len(domain_map.gpos),
+                "trusts": len(domain_map.trusts),
+                "privileged_users": len(domain_map.privileged_users),
+                "kerberoastable_users": len(domain_map.kerberoastable_users),
+                "asrep_roastable_users": len(domain_map.asrep_roastable_users),
+                "domain_admins": len(domain_map.domain_admins),
+                "summary": domain_map.summary(),
+            }
+        finally:
+            if connector:
+                await connector.close()
 
     def _parse_ports(self, ports_str: str) -> list[int]:
         """Parse une chaîne de ports en liste."""
