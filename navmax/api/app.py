@@ -12,7 +12,7 @@ from navmax.core.config import config
 from navmax.core.logging import setup_logging, get_logger
 from navmax.db import create_all
 
-from .routes import targets, scans, proxy, exploit, osint, workspaces
+from .routes import targets, scans, proxy, exploit, osint, workspaces, ai
 
 logger = get_logger(__name__)
 
@@ -57,6 +57,7 @@ app.include_router(proxy.router, prefix="/api/v1/proxy", tags=["Proxy"])
 app.include_router(exploit.router, prefix="/api/v1/exploit", tags=["Exploit"])
 app.include_router(osint.router, prefix="/api/v1/osint", tags=["OSINT"])
 app.include_router(workspaces.router, prefix="/api/v1/workspaces", tags=["Workspaces"])
+app.include_router(ai.router, tags=["AI"])
 
 
 @app.get("/api/v1/health")

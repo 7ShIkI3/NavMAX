@@ -1,12 +1,12 @@
 [project]
 name = "navmax"
-version = "0.2.0"
-description = "Plateforme de cybersécurité unifiée pour agents IA — Scanner réseau, Proxy web, Exploitation, OSINT"
+version = "0.3.0"
+description = "Plateforme de cybersécurité offensive autonome pilotée par IA — Scanner réseau, Proxy MITM, Exploitation (24 exploits + AI Generator), OSINT & Graphe, Sandbox Docker, IA multi-provider, Évasion polymorphique, Rapports IA, SIEM/SOAR"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Raphaël Pascaud", email = "7ShIkI3@users.noreply.github.com"}]
 readme = "README.md"
-keywords = ["cybersecurity", "scanner", "proxy", "exploit", "osint", "ai-agent"]
+keywords = ["cybersecurity", "scanner", "proxy", "exploit", "osint", "ai-agent", "pentest", "red-team", "llm", "uncensored"]
 
 dependencies = [
     "fastapi>=0.115.0",
@@ -22,6 +22,9 @@ dependencies = [
     "python-multipart>=0.0.17",
     "cryptography>=44.0.0",
     "networkx>=3.4.0",
+    "aiohttp>=3.9.0",
+    "jinja2>=3.1.0",
+    "packaging>=24.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +33,14 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
+]
+local-ai = [
+    "llama-cpp-python>=0.3.0",
+]
+full = [
+    "navmax[dev,local-ai]",
+    "weasyprint>=62.0",
+    "python-docx>=1.1.0",
 ]
 
 [project.scripts]

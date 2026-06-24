@@ -1,0 +1,353 @@
+"""
+AIEngine — Orchestrateur multi-provider avec sélection automatique.
+
+Cœur du module IA de NavMAX. Combine :
+- Détection hardware automatique
+- Tous les providers (Ollama, llama.cpp, LM Studio, OpenAI, Anthropic, DeepSeek)
+- ModelSelector pour choisir le meilleur modèle par tâche
+- Fallback automatique : local → cloud, Heavy → Medium → Light
+- Mode airgap (désactive tous les providers cloud)
+
+Usage:
+    engine = AIEngine()
+    status = await engine.initialize()
+    result = await engine.generate("Analyse ce scan TCP", tier=ModelTier.MEDIUM)
+"""
+
+import os
+from typing import AsyncIterator, Optional
+import structlog
+
+from navmax.ai.providers.base import (
+    BaseProvider, ModelTier, ProviderType,
+    GenerateParams, GenerateResult,
+)
+from navmax.ai.hardware import detect_hardware, HardwareProfile
+from navmax.ai.selector import ModelSelector, SelectionResult
+
+logger = structlog.get_logger(__name__)
+
+# Singleton global
+_engine: Optional["AIEngine"] = None
+
+
+def get_engine() -> "AIEngine":
+    """Retourne l'instance singleton de AIEngine."""
+    global _engine
+    if _engine is None:
+        _engine = AIEngine()
+    return _engine
+
+
+class AIEngine:
+    """Moteur IA multi-provider avec sélection automatique de modèle.
+
+    Détecte le hardware, scanne les providers, et sélectionne
+    automatiquement le meilleur modèle pour chaque tâche.
+
+    Parameters:
+        airgap: Si True, désactive tous les providers cloud
+        prefer_uncensored: Si True, préfère les modèles abliterated
+    """
+
+    def __init__(self, airgap: bool = False, prefer_uncensored: bool = True):
+        self.airgap = airgap
+        self.prefer_uncensored = prefer_uncensored
+        self._providers: dict[ProviderType, BaseProvider] = {}
+        self._hw: Optional[HardwareProfile] = None
+        self._selector: Optional[ModelSelector] = None
+        self._initialized = False
+
+    # ── Initialization ──────────────────────────────────────────
+
+    async def initialize(self) -> dict:
+        """Initialise tous les providers et le sélecteur. Retourne un rapport."""
+        if self._initialized:
+            return {"status": "already_initialized"}
+
+        self._hw = detect_hardware()
+
+        # Initialiser tous les providers
+        status = {
+            "hardware": {
+                "ram_gb": self._hw.ram_total_gb,
+                "gpu": self._hw.gpu_name,
+                "max_local_tier": self._hw.max_local_tier,
+            },
+            "providers": {},
+            "airgap": self.airgap,
+        }
+
+        # Providers locaux
+        local_configs = [
+            ("ollama", self._init_ollama),
+            ("lmstudio", self._init_lmstudio),
+        ]
+        for name, init_fn in local_configs:
+            provider = await init_fn()
+            if provider and await provider.health_check():
+                self._providers[provider.provider_type] = provider
+                models = await provider.list_models()
+                status["providers"][name] = {
+                    "status": "available",
+                    "models_count": len(models),
+                    "models": [m.name for m in models[:10]],  # top 10
+                }
+            else:
+                status["providers"][name] = {"status": "unavailable"}
+
+        # llama.cpp (optionnel, nécessite un chemin de modèle)
+        if not self.airgap:
+            # Cloud providers
+            cloud_configs = [
+                ("openai", self._init_openai),
+                ("anthropic", self._init_anthropic),
+                ("deepseek", self._init_deepseek),
+            ]
+            for name, init_fn in cloud_configs:
+                provider = await init_fn()
+                if provider and await provider.health_check():
+                    self._providers[provider.provider_type] = provider
+                    status["providers"][name] = {"status": "available"}
+                else:
+                    status["providers"][name] = {"status": "unavailable"}
+        else:
+            status["providers"]["openai"] = {"status": "disabled (airgap)"}
+            status["providers"]["anthropic"] = {"status": "disabled (airgap)"}
+            status["providers"]["deepseek"] = {"status": "disabled (airgap)"}
+
+        # Initialiser le sélecteur
+        self._selector = ModelSelector(
+            hardware=self._hw,
+            prefer_uncensored=self.prefer_uncensored,
+            airgap=self.airgap,
+        )
+
+        if self._providers:
+            report = await self._selector.scan(self._providers)
+            status["selector"] = self._selector.get_status()
+            status["recommendations"] = report.recommendations
+
+        self._initialized = True
+        logger.info("ai_engine_initialized", **status["hardware"])
+        return status
+
+    async def _init_ollama(self) -> Optional[BaseProvider]:
+        try:
+            from navmax.ai.providers.ollama import OllamaProvider
+            return OllamaProvider()
+        except ImportError:
+            return None
+
+    async def _init_lmstudio(self) -> Optional[BaseProvider]:
+        try:
+            from navmax.ai.providers.lmstudio import LMStudioProvider
+            return LMStudioProvider()
+        except ImportError:
+            return None
+
+    async def _init_openai(self) -> Optional[BaseProvider]:
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            return None
+        try:
+            from navmax.ai.providers.openai_compat import OpenAICompatProvider
+            return OpenAICompatProvider(
+                provider_type=ProviderType.OPENAI,
+                base_url="https://api.openai.com/v1",
+                api_key=api_key,
+            )
+        except ImportError:
+            return None
+
+    async def _init_anthropic(self) -> Optional[BaseProvider]:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            return None
+        try:
+            from navmax.ai.providers.openai_compat import OpenAICompatProvider
+            return OpenAICompatProvider(
+                provider_type=ProviderType.ANTHROPIC,
+                base_url="https://api.anthropic.com",
+                api_key=api_key,
+            )
+        except ImportError:
+            return None
+
+    async def _init_deepseek(self) -> Optional[BaseProvider]:
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not api_key:
+            return None
+        try:
+            from navmax.ai.providers.openai_compat import OpenAICompatProvider
+            return OpenAICompatProvider(
+                provider_type=ProviderType.DEEPSEEK,
+                base_url="https://api.deepseek.com/v1",
+                api_key=api_key,
+            )
+        except ImportError:
+            return None
+
+    # ── Generation API ──────────────────────────────────────────
+
+    async def generate(self, prompt: str, *,
+                       tier: ModelTier = ModelTier.MEDIUM,
+                       system: Optional[str] = None,
+                       max_tokens: int = 2048,
+                       temperature: float = 0.7,
+                       json_mode: bool = False,
+                       provider: Optional[ProviderType] = None,
+                       model: Optional[str] = None) -> GenerateResult:
+        """Génère du texte avec sélection automatique du meilleur modèle.
+
+        Args:
+            prompt: Le prompt utilisateur
+            tier: Niveau de capacité requis (défaut: MEDIUM pour planification)
+            system: System prompt optionnel
+            max_tokens: Tokens max en sortie
+            temperature: Créativité (0.0 = déterministe, 1.0 = créatif)
+            json_mode: Force la sortie en JSON
+            provider: Force un provider spécifique
+            model: Force un modèle spécifique
+
+        Returns:
+            GenerateResult avec le texte généré et les métadonnées
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        params = GenerateParams(
+            prompt=prompt, system=system,
+            max_tokens=max_tokens, temperature=temperature,
+            json_mode=json_mode,
+        )
+
+        # Sélection du provider et modèle
+        if model and provider:
+            # Forçage explicite
+            prov = self._providers.get(provider)
+            if not prov:
+                raise RuntimeError(f"Provider {provider.value} not available")
+            params.model = model
+        elif model:
+            # Modèle spécifique — trouver quel provider le sert
+            prov, model_name = await self._find_model(model)
+            params.model = model_name
+        elif provider:
+            # Provider spécifique — laisser le sélecteur choisir le modèle
+            selection = await self._selector.select(
+                tier, provider=provider, prefer_local=not self.airgap
+            )
+            prov = self._providers[selection.provider]
+            params.model = selection.model
+        else:
+            # Sélection automatique complète
+            selection = await self._selector.select(
+                tier, prefer_local=not self.airgap,
+                prefer_uncensored=self.prefer_uncensored,
+            )
+            prov = self._providers[selection.provider]
+            params.model = selection.model
+
+        logger.info("ai_generate",
+                     tier=tier.value, model=params.model,
+                     provider=prov.provider_type.value)
+
+        return await prov.generate(params)
+
+    async def stream(self, prompt: str, *,
+                     tier: ModelTier = ModelTier.MEDIUM,
+                     system: Optional[str] = None,
+                     max_tokens: int = 2048,
+                     temperature: float = 0.7,
+                     provider: Optional[ProviderType] = None,
+                     model: Optional[str] = None) -> AsyncIterator[str]:
+        """Streaming — identique à generate() mais yield les chunks."""
+        if not self._initialized:
+            await self.initialize()
+
+        params = GenerateParams(
+            prompt=prompt, system=system,
+            max_tokens=max_tokens, temperature=temperature,
+        )
+
+        if model and provider:
+            prov = self._providers.get(provider)
+            if not prov:
+                raise RuntimeError(f"Provider {provider.value} not available")
+            params.model = model
+        elif model:
+            prov, model_name = await self._find_model(model)
+            params.model = model_name
+        elif provider:
+            selection = await self._selector.select(
+                tier, provider=provider, prefer_local=not self.airgap
+            )
+            prov = self._providers[selection.provider]
+            params.model = selection.model
+        else:
+            selection = await self._selector.select(
+                tier, prefer_local=not self.airgap,
+                prefer_uncensored=self.prefer_uncensored,
+            )
+            prov = self._providers[selection.provider]
+            params.model = selection.model
+
+        async for chunk in prov.stream(params):
+            yield chunk
+
+    async def _find_model(self, model_name: str) -> tuple[BaseProvider, str]:
+        """Trouve quel provider sert un modèle donné."""
+        for pt, prov in self._providers.items():
+            try:
+                models = await prov.list_models()
+                for m in models:
+                    if m.name == model_name:
+                        return prov, model_name
+            except Exception:
+                continue
+        raise RuntimeError(f"Model '{model_name}' not found in any provider")
+
+    # ── Status & Management ─────────────────────────────────────
+
+    async def get_status(self) -> dict:
+        """Retourne l'état complet du moteur IA."""
+        if not self._initialized:
+            await self.initialize()
+
+        return {
+            "initialized": self._initialized,
+            "airgap": self.airgap,
+            "hardware": {
+                "ram_gb": self._hw.ram_total_gb if self._hw else 0,
+                "gpu": self._hw.gpu_name if self._hw else None,
+                "max_local_tier": self._hw.max_local_tier if self._hw else None,
+            },
+            "providers": [
+                {
+                    "type": pt.value,
+                    "available": await prov.health_check(),
+                }
+                for pt, prov in self._providers.items()
+            ],
+            "selector": self._selector.get_status() if self._selector else None,
+        }
+
+    async def reload(self) -> dict:
+        """Réinitialise tous les providers (après changement de config)."""
+        self._providers.clear()
+        self._initialized = False
+        self._selector = None
+        return await self.initialize()
+
+    def get_selector(self) -> Optional[ModelSelector]:
+        """Accès direct au sélecteur pour des requêtes avancées."""
+        return self._selector
+
+    @property
+    def hardware(self) -> Optional[HardwareProfile]:
+        return self._hw
+
+    @property
+    def providers(self) -> dict[ProviderType, BaseProvider]:
+        return self._providers
