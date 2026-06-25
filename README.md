@@ -6,10 +6,10 @@
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-253%2F253-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.3.0-orange.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Tests](https://img.shields.io/badge/tests-403%2F403-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.4.0-orange.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 IA Autonome** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR***
+*Scanner réseau · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 IA Autonome** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC***
 
 </div>
 
@@ -17,7 +17,7 @@
 
 ## 🎯 Vision
 
-NavMAX est une plateforme de cybersécurité offensive **100% pilotable par IA**. Elle combine reconnaissance, exploitation, OSINT et reporting en un seul outil. L'IA intégrée planifie, exécute et rapporte — l'humain donne juste l'objectif.
+NavMAX est une plateforme de cybersécurité offensive **100% pilotable par IA**. Elle combine reconnaissance, exploitation, OSINT, Active Directory, firewall et reporting en un seul outil. L'IA intégrée planifie, exécute et rapporte — l'humain donne juste l'objectif.
 
 ```
 $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
@@ -28,7 +28,17 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 [phase_4] report  → Rapport HTML généré
 ```
 
-### 🆕 v0.3.0 — L'IA prend le contrôle
+### 🆕 v0.4.0 — Omni-Tool Infrastructure
+
+| Module | Avant (v0.3.0) | Maintenant (v0.4.0) |
+|---|---|---|
+| 🛡️ **AD/LDAP** | ❌ Aucun | ✅ **10 modules** — LDAP connector, enumerator, trust graph, attack paths, vuln scanner (Kerberoasting, AS-REP, Delegation, Privileged), password spray, SMB scanner, ADCS scanner (ESC1-9), BloodHound export |
+| 🔥 **Firewall** | ❌ Aucun | ✅ **6 modules** — FortiGate REST API (7 CVEs), StormShield SNS API (5 CVEs), rule analyzer (6 checks), AD×FW correlation |
+| 🏗️ **Infrastructure** | ❌ Aucun | ✅ **SOC continu** — impact reporter, remediation advisor (PowerShell), continuous monitor (baseline + drift detection) |
+| 📡 **API** | 16 endpoints | ✅ **28 endpoints** — +12 routes AD & Firewall |
+| 🧪 **Tests** | 253 | ✅ **403** |
+
+### 🧠 v0.3.0 — L'IA prend le contrôle
 
 | Module | Avant (v0.2.0) | Maintenant (v0.3.0) |
 |---|---|---|
@@ -72,6 +82,24 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 │              SQLite / PostgreSQL + AUDIT TRAIL               │
 │   Targets · Scans · Vulns · Graph · Workspaces · AuditLog   │
 └─────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                🛡️ AD / LDAP ATTACK SURFACE                    │
+│  Enumerator · Trust Graph · Attack Paths · Vuln Scanner      │
+│  Password Spray · SMB Scanner · ADCS ESC1-9 · BloodHound     │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                🔥 FIREWALL ATTACK SURFACE                      │
+│  FortiGate (7 CVEs) · StormShield (5 CVEs) · Rule Analyzer   │
+│  AD×FW Correlation · Base Provider Interface                 │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                🏗️ INFRASTRUCTURE SOC                           │
+│  Impact Reporter · Remediation Advisor (PS) · Continuous      │
+│  Monitor (baseline + drift detection + alerts)                │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -126,6 +154,60 @@ navmax ai models
 ```bash
 navmax scan 192.168.1.1 -p 1-1000 --contextual  # probes auto
 navmax scan 10.0.0.0/24 -p 22,80,443,3306,6379,8080
+```
+
+### 🛡️ Active Directory
+
+```bash
+# Énumération complète du domaine
+navmax ad enumerate --domain corp.local --dc 192.168.1.10 -u admin -p 'Passw0rd!'
+
+# Graphe de confiance + chemins d'attaque vers Domain Admin
+navmax ad trust-graph --domain corp.local
+
+# Scan de vulnérabilités AD (Kerberoasting, AS-REP, Delegation, Privileged)
+navmax ad vuln-scan --domain corp.local
+
+# Scan ADCS (ESC1 à ESC9)
+navmax ad adcs-scan --domain corp.local
+
+# Password spray
+navmax ad spray --domain corp.local --mode smart
+
+# Scan SMB
+navmax ad smb-scan --domain corp.local
+
+# Export BloodHound JSON
+navmax ad export-bloodhound --domain corp.local -o bloodhound.json
+```
+
+### 🔥 Firewall
+
+```bash
+# Analyse FortiGate (vulnérabilités CVE)
+navmax firewall fortigate --host 192.168.1.1 --token api-key
+
+# Analyse StormShield
+navmax firewall stormshield --host 192.168.1.254 --token api-key
+
+# Analyse des règles
+navmax firewall analyze --config firewall.json
+
+# Corrélation AD × Firewall (règles exposant des DCs, etc.)
+navmax firewall correlate --ad-report ad_report.json --fw-config firewall.json
+```
+
+### 🏗️ Infrastructure SOC
+
+```bash
+# Rapport d'impact métier
+navmax infra impact --vuln-report vulns.json --critical-assets assets.json
+
+# Plan de remédiation (PowerShell)
+navmax infra remediate --vuln-report vulns.json
+
+# Monitoring continu (baseline → drift detection)
+navmax infra monitor --domain corp.local --baseline baseline.json
 ```
 
 ### 🕸️ OSINT + Surveillance
@@ -209,6 +291,8 @@ SI airgap mode → cloud désactivé, 100% local
 
 ## 🔌 API REST
 
+### IA & Core
+
 | Méthode | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/ai/status` | État IA (providers, hardware, modèles) |
@@ -228,11 +312,55 @@ SI airgap mode → cloud désactivé, 100% local
 | `POST` | `/api/v1/workspaces/` | Créer workspace |
 | `POST` | `/api/v1/missions/execute` | Mission One-Click |
 
+### 🛡️ Active Directory
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/ad/enumerate` | Énumération domaine |
+| `POST` | `/api/v1/ad/trust-graph` | Graphe de confiance |
+| `GET` | `/api/v1/ad/attack-paths` | Chemins d'attaque vers DA |
+| `POST` | `/api/v1/ad/vuln-scan` | Scan vulnérabilités AD |
+| `POST` | `/api/v1/ad/spray` | Password spray |
+| `POST` | `/api/v1/ad/smb-scan` | Scan SMB |
+| `POST` | `/api/v1/ad/adcs-scan` | Scan ADCS (ESC1-9) |
+| `POST` | `/api/v1/ad/export-bloodhound` | Export BloodHound JSON |
+
+### 🔥 Firewall
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/firewall/fortigate` | Analyse FortiGate |
+| `POST` | `/api/v1/firewall/stormshield` | Analyse StormShield |
+| `POST` | `/api/v1/firewall/analyze` | Analyse des règles |
+| `POST` | `/api/v1/firewall/correlate` | Corrélation AD × FW |
+
 ---
 
 ## 📊 Fonctionnalités détaillées
 
-### 🧠 IA Engine (NOUVEAU v0.3.0)
+### 🛡️ AD / LDAP (NOUVEAU v0.4.0)
+- **LDAP Connector** : connexion SSL/TLS, binding, pagination
+- **Enumerator** : users, groups, computers, OUs, GPOs, trusts, ACLs
+- **Trust Graph** : NetworkX multi-domaine, chemins d'attaque, DA effective
+- **Attack Paths** : analyse des chemins critiques, risques, recommandations
+- **Vuln Scanner** : Kerberoasting, AS-REP Roasting, Unconstrained Delegation, Privileged Users
+- **Password Spray** : wordlist saisonnière, mode smart/auto, lockout protection
+- **SMB Scanner** : shares, permissions, null sessions, enumeration DCs/servers
+- **ADCS Scanner** : ESC1 à ESC9, templates vulnérables, CAs, findings détaillés
+- **BloodHound Export** : format JSON compatible BloodHound CE
+
+### 🔥 Firewall (NOUVEAU v0.4.0)
+- **FortiGate** : REST API admin, version detection, 7 CVEs (CVE-2022-40684 auth bypass, CVE-2023-27997 RCE, CVE-2023-33308 stack overflow, CVE-2024-21762 out-of-bounds write, CVE-2024-23113 format string, CVE-2024-23672 path traversal, CVE-2024-47575 info disclosure)
+- **StormShield** : SNS API, version detection, 5 CVEs (CVE-2020-11711 XSS, CVE-2020-11712 file upload, CVE-2020-11713 CSRF, CVE-2023-22237 buffer overflow, CVE-2023-36558 authentication bypass)
+- **Rule Analyzer** : 6 checks (any→any, high-risk ports, shadowed rules, disabled rules, overly permissive, unused rules)
+- **AD×FW Correlation** : règles exposant des DCs, comptes à privilèges, chemins critiques
+
+### 🏗️ Infrastructure SOC (NOUVEAU v0.4.0)
+- **Impact Reporter** : scoring métier (critique ≥8, haut ≥5, moyen ≥3, bas), P1-P4 priorités
+- **Remediation Advisor** : plan d'actions avec commandes PowerShell, IDs MITRE ATT&CK, priorisation
+- **Continuous Monitor** : capture baseline → check périodique → drift detection → alertes
+
+### 🧠 IA Engine (v0.3.0)
 - **6 providers** : Ollama, llama.cpp (GPU), LM Studio, OpenAI, Anthropic, DeepSeek
 - **3 tiers** : Light (≤3B), Medium (7-8B), Heavy (70B+)
 - **Auto-détection hardware** : RAM, GPU, CPU → sélection automatique du tier
@@ -241,7 +369,7 @@ SI airgap mode → cloud désactivé, 100% local
 - **Fallback automatique** : local → cloud, Heavy → Medium → Light
 - **Mode airgap** : 100% offline (modèles locaux uniquement)
 
-### 📋 Mission Planner (NOUVEAU)
+### 📋 Mission Planner (v0.3.0)
 - Objectif NL → JSON phases avec dépendances topologiques
 - Supporte les contraintes, services connus, vulnérabilités connues
 - Fallback automatique si l'IA produit du JSON invalide
@@ -267,12 +395,12 @@ SI airgap mode → cloud désactivé, 100% local
 - 4 encodeurs (Shikata-ga-nai, AES-CTR, substitution, multi-layer)
 - Sandbox Docker, payloads, handler, post-exploitation
 
-### 📄 Reporting & Intégration (NOUVEAU)
+### 📄 Reporting & Intégration (v0.3.0)
 - **AI Report Generator** : HTML + Markdown avec findings, sévérité, CVE
 - **TheHive** + **MISP** connectors
 - **IntegrationHub** : envoi simultané à tous les SIEM/SOAR
 
-### 📊 Audit (NOUVEAU)
+### 📊 Audit (v0.3.0)
 - **AuditLogger** : chaque action horodatée, journalisée, liée à une mission
 - Context manager `async with audit.track(...)`
 - Status : started → completed / failed / rolled_back
@@ -283,7 +411,7 @@ SI airgap mode → cloud désactivé, 100% local
 
 ```bash
 pytest tests/ -v
-# 253 passed
+# 403 passed
 ```
 
 ---
@@ -293,33 +421,53 @@ pytest tests/ -v
 ```
 NavMAX/
 ├── navmax/
-│   ├── ai/                # 🧠 IA Engine (NOUVEAU)
+│   ├── ai/                # 🧠 IA Engine (v0.3.0)
 │   │   ├── engine.py      #   Orchestrateur multi-provider
 │   │   ├── selector.py    #   ModelSelector × catalogue × fallback
 │   │   ├── models_catalog.py  # 27 modèles (dont 4 abliterated)
 │   │   ├── mission_planner.py # NL → phases JSON
 │   │   ├── hardware.py    #   Détection RAM/GPU/CPU auto
 │   │   └── providers/     #   Ollama, llama.cpp, LM Studio, OpenAI, Anthropic, DeepSeek
+│   ├── ad/                # 🛡️ Active Directory (NOUVEAU v0.4.0)
+│   │   ├── connector.py   #   LDAP SSL/TLS + binding
+│   │   ├── enumerator.py  #   Users, groups, computers, OUs, GPOs, trusts
+│   │   ├── trust_graph.py #   NetworkX multi-domaine + chemins d'attaque
+│   │   ├── attack_paths.py    # Analyse chemins critiques
+│   │   ├── vuln_scanner.py    # Kerberoasting, AS-REP, Delegation, Privileged
+│   │   ├── password_spray.py  # Smart spray + lockout protection
+│   │   ├── smb_scanner.py     # Shares, permissions, null sessions
+│   │   ├── adcs_scanner.py    # ESC1-9 + templates + CAs
+│   │   └── bloodhound_export.py  # JSON BloodHound CE
+│   ├── firewall/          # 🔥 Firewall (NOUVEAU v0.4.0)
+│   │   ├── base.py        #   Interface provider abstraite
+│   │   ├── fortigate.py   #   REST API + 7 CVEs
+│   │   ├── stormshield.py #   SNS API + 5 CVEs
+│   │   ├── rule_analyzer.py   # 6 checks de règles
+│   │   └── correlation.py     # AD × FW correlation
+│   ├── infrastructure/    # 🏗️ SOC continu (NOUVEAU v0.4.0)
+│   │   ├── impact_reporter.py     # Scoring métier + priorités
+│   │   ├── remediation_advisor.py # Plan PS + MITRE ATT&CK
+│   │   └── continuous_monitor.py  # Baseline + drift + alertes
 │   ├── scanner/
-│   │   ├── contextual.py  #   Scan adaptatif (NOUVEAU)
-│   │   └── vuln_db.py     #   17 signatures CVE (NOUVEAU)
+│   │   ├── contextual.py  #   Scan adaptatif
+│   │   └── vuln_db.py     #   17 signatures CVE
 │   ├── proxy/             #   MITM, fuzzer, crawler, fuzzer structurel
 │   ├── exploit/
-│   │   ├── ai_generator.py #  IA génère exploits (NOUVEAU)
-│   │   ├── auto_pivot.py  #   Lateral movement auto (NOUVEAU)
-│   │   ├── evasion.py     #   7 techniques polymorphiques (NOUVEAU)
+│   │   ├── ai_generator.py #  IA génère exploits
+│   │   ├── auto_pivot.py  #   Lateral movement auto
+│   │   ├── evasion.py     #   7 techniques polymorphiques
 │   │   └── modules/       #   24 modules d'exploit
 │   ├── osint/
-│   │   ├── monitor.py     #   Abonnement + alertes (NOUVEAU)
-│   │   └── graph/semantic_search.py  # NL → graphe (NOUVEAU)
-│   ├── orchestrator/      # 🚀 One-Click mission (NOUVEAU)
-│   ├── reporting/         # 📄 Rapports IA HTML/MD (NOUVEAU)
-│   ├── integrations/      # 🔗 TheHive, MISP, Hub (NOUVEAU)
+│   │   ├── monitor.py     #   Abonnement + alertes
+│   │   └── graph/semantic_search.py  # NL → graphe
+│   ├── orchestrator/      # 🚀 One-Click mission
+│   ├── reporting/         # 📄 Rapports IA HTML/MD
+│   ├── integrations/      # 🔗 TheHive, MISP, Hub
 │   ├── core/              # Config, logging, plugins, audit
 │   ├── db/                # SQLAlchemy async models
-│   ├── api/               # FastAPI routes REST
+│   ├── api/               # FastAPI routes REST (28 endpoints)
 │   └── sdk/               # Client Python async
-├── tests/                 # 253 tests
+├── tests/                 # 403 tests
 ├── .github/workflows/     # CI/CD
 └── pyproject.toml
 ```
