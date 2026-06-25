@@ -6,10 +6,10 @@
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-403%2F403-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.4.0-orange.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Tests](https://img.shields.io/badge/tests-586%2F586-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.4.1-orange.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 IA Autonome** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC***
+*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK***
 
 </div>
 
@@ -27,6 +27,20 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 [phase_3] exploit → Redis unauth sur 10.0.0.10
 [phase_4] report  → Rapport HTML généré
 ```
+
+### 🆕 v0.4.1 — ReAct Agent & Nuclei
+
+| Module | Avant (v0.4.0) | Maintenant (v0.4.1) |
+|---|---|---|
+| 🧠 **ReAct Agent** | Mission Planner (NL→JSON) | ✅ **Boucle agentique** Observe→Think→Act avec 6 tools (scan_ports, scan_vulnerabilities, osint_investigate, exploit_check, ad_enumerate, generate_report) |
+| 🔍 **Nuclei Scanner** | 17 signatures CVE codées en dur | ✅ **10 000+ templates** communautaires, scanning massif parallélisé |
+| 🌐 **mitmproxy** | Proxy custom basique | ✅ **Proxy MITM complet** avec interception TLS, capture de flux, replay, export HAR |
+| ⚙️ **Celery Tasks** | ❌ Aucun | ✅ **Task queue Redis** pour scans async avec progression SSE temps réel |
+| 📊 **CVSS 3.1 + SARIF** | ❌ Aucun | ✅ **Scoring programmatique** CVSS 3.1 + export SARIF 2.1.0 compatible GitHub Code Scanning |
+| 🎯 **MITRE ATT&CK** | ❌ Aucun | ✅ **Mapping automatique** CVE → techniques MITRE ATT&CK |
+| 🕸️ **Playwright Spider** | Crawler basique | ✅ **Crawler SPA/JavaScript** pour apps React/Vue/Angular |
+| 🔐 **Auth JWT + RBAC** | ❌ Aucune | ✅ **Admin/Operator/Viewer** avec JWT + rate limiting |
+| 🧪 **Tests** | 403 | ✅ **586** |
 
 ### 🆕 v0.4.0 — Omni-Tool Infrastructure
 
@@ -60,46 +74,48 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     🧠 AI ENGINE                              │
-│  6 providers · 3 tiers (Light/Medium/Heavy) · Auto-select    │
-│  Ollama · llama.cpp · LM Studio · OpenAI · Anthropic · DeepSeek│
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                   🚀 MISSION ORCHESTRATOR                      │
-│     One-Click: Plan → Execute → Pivot → Report                │
-└────┬──────────┬──────────┬──────────┬───────────┬────────────┘
-     │          │          │          │           │
-┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────────┐
-│ SCANNER │ │  PROXY │ │ EXPLOIT│ │  OSINT  │ │ REPORTING  │
-│Context. │ │ MITM   │ │AI Gen  │ │Monitor  │ │HTML/MD     │
-│Vuln DB  │ │Fuzzer  │ │Pivot   │ │Semantic │ │SIEM/SOAR   │
-│17 CVE   │ │Crawler │ │Évasion │ │Graph    │ │TheHive/MISP│
-└────┬────┘ └───┬────┘ └───┬────┘ └────┬────┘ └────────────┘
-     │          │          │           │
-┌────▼──────────▼──────────▼───────────▼──────────────────────┐
-│              SQLite / PostgreSQL + AUDIT TRAIL               │
-│   Targets · Scans · Vulns · Graph · Workspaces · AuditLog   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           🧠 ReAct Agent                                  │
+│   Boucle agentique : Observe → Think → Act (6 tools)                     │
+│   scan_ports · scan_vulnerabilities · osint_investigate                  │
+│   exploit_check · ad_enumerate · generate_report                         │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼───────────────────────────────────────┐
+│                        ⚙️ CELERY TASK QUEUE                              │
+│              Redis · Async Workers · SSE Real-time Progression            │
+└────┬──────────┬──────────┬──────────┬──────────┬───────────┬────────────┘
+     │          │          │          │          │           │
+┌────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────────┐
+│SCANNER │ │  PROXY │ │EXPLOIT │ │ OSINT  │ │REPORT  │ │   AUTH     │
+│Nuclei  │ │mitm    │ │AI Gen  │ │Monitor │ │CVSS 3.1│ │JWT + RBAC  │
+│10k CVE │ │Playwr. │ │Pivot   │ │Semantic│ │SARIF   │ │Admin/Op/   │
+│Context.│ │Spider  │ │Évasion │ │Graph   │ │MITRE   │ │ Viewer     │
+│Nmap    │ │        │ │        │ │        │ │ATT&CK  │ │            │
+└────┬───┘ └───┬────┘ └───┬────┘ └───┬────┘ └───┬────┘ └────────────┘
+     │         │          │          │          │
+┌────▼─────────▼──────────▼──────────▼──────────▼─────────────────────────┐
+│              SQLite / PostgreSQL + AUDIT TRAIL + REDIS                    │
+│   Targets · Scans · Vulns · Graph · Workspaces · AuditLog · Tasks       │
+└──────────────────────────────────────────────────────────────────────────┘
 
-┌──────────────────────────────────────────────────────────────┐
-│                🛡️ AD / LDAP ATTACK SURFACE                    │
-│  Enumerator · Trust Graph · Attack Paths · Vuln Scanner      │
-│  Password Spray · SMB Scanner · ADCS ESC1-9 · BloodHound     │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                🔥 FIREWALL ATTACK SURFACE                      │
-│  FortiGate (7 CVEs) · StormShield (5 CVEs) · Rule Analyzer   │
-│  AD×FW Correlation · Base Provider Interface                 │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                🏗️ INFRASTRUCTURE SOC                           │
-│  Impact Reporter · Remediation Advisor (PS) · Continuous      │
-│  Monitor (baseline + drift detection + alerts)                │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     🛡️ AD / LDAP ATTACK SURFACE                          │
+│  Enumerator · Trust Graph · Attack Paths · Vuln Scanner                  │
+│  Password Spray · SMB Scanner · ADCS ESC1-9 · BloodHound                 │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼───────────────────────────────────────┐
+│                        🔥 FIREWALL ATTACK SURFACE                         │
+│  FortiGate (7 CVEs) · StormShield (5 CVEs) · Rule Analyzer               │
+│  AD×FW Correlation · Base Provider Interface                             │
+└──────────────────────────────────┬───────────────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼───────────────────────────────────────┐
+│                        🏗️ INFRASTRUCTURE SOC                              │
+│  Impact Reporter · Remediation Advisor (PS) · Continuous                  │
+│  Monitor (baseline + drift detection + alerts)                            │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -112,7 +128,14 @@ cd NavMAX
 uv pip install -e .
 ```
 
-**Prérequis :** Python 3.11+
+**Prérequis :** Python 3.11+, Redis (pour Celery)
+
+### Dépendances principales
+
+```
+ldap3 · impacket · mitmproxy · python-nmap · shodan · censys
+redis · celery · cvss · neo4j · playwright · python-jose · passlib · slowapi
+```
 
 ### IA locale (optionnel)
 
@@ -126,6 +149,16 @@ ollama pull llama3.2:3b                            # Light
 set DEEPSEEK_API_KEY=sk-...
 ```
 
+### Celery (pour scans async)
+
+```bash
+# Démarrer le worker Celery
+celery -A navmax.tasks worker --loglevel=info
+
+# Démarrer le beat scheduler (optionnel)
+celery -A navmax.tasks beat --loglevel=info
+```
+
 ---
 
 ## 🚀 Utilisation
@@ -134,6 +167,32 @@ set DEEPSEEK_API_KEY=sk-...
 
 ```bash
 navmax mission "Audite la sécurité du réseau 10.0.0.0/24 et trouve un chemin vers la BDD"
+```
+
+### 🧠 ReAct Agent (NOUVEAU v0.4.1)
+
+```bash
+# Agent autonome : Observe → Think → Act
+navmax react "Trouve les vulnérabilités critiques sur 10.0.0.0/24"
+
+# Avec un objectif précis
+navmax react "Énumère le domaine Active Directory et trouve un chemin vers Domain Admin"
+
+# Scan + exploitation + rapport en une commande
+navmax react "Scan 192.168.1.0/24, exploite les failles trouvées et génère un rapport SARIF"
+```
+
+### 🔍 Nuclei Scanner (NOUVEAU v0.4.1)
+
+```bash
+# Scan avec tous les templates (10 000+ CVEs)
+navmax nuclei scan https://target.com --severity critical,high
+
+# Scan avec templates spécifiques
+navmax nuclei scan https://target.com -t cves,exposures -o results.json
+
+# Scan réseau complet
+navmax nuclei scan 10.0.0.0/24 --severity critical --concurrency 50
 ```
 
 ### 🧠 IA
@@ -228,19 +287,34 @@ navmax payload -t reverse_shell -f python -h 10.0.0.1 -p 4444
 navmax payload mutate exploit.py --iterations 5   # polymorphisme
 ```
 
-### 🌐 Proxy MITM
+### 🌐 Proxy MITM (mitmproxy — NOUVEAU v0.4.1)
 
 ```bash
-navmax proxy -p 8080 --intercept
-navmax webscan http://target.com/page?id=1
-navmax fuzz http://target.com/search?q=test -c xss,sqli
+# Proxy MITM avec interception TLS
+navmax proxy --port 8080 --intercept --tls
+
+# Capture et replay de flux
+navmax proxy --port 8080 --capture --export-har session.har
+
+# Replay d'une session enregistrée
+navmax proxy replay session.har --rate 1.0
+
+# Playwright Spider — Crawler SPA (React/Vue/Angular)
+navmax proxy spider https://app.target.com --depth 3 --headless
 ```
 
 ### 📄 Rapports
 
 ```bash
-navmax report mission-123 --format html  # rapport IA structuré
+# Rapport IA structuré (HTML/Markdown)
+navmax report mission-123 --format html
 navmax report mission-123 --format md
+
+# Export SARIF 2.1.0 (compatible GitHub Code Scanning)
+navmax report mission-123 --format sarif --output scan.sarif
+
+# Scoring CVSS 3.1
+navmax report mission-123 --format cvss
 ```
 
 ### 🔗 Intégrations SIEM/SOAR
@@ -312,6 +386,17 @@ SI airgap mode → cloud désactivé, 100% local
 | `POST` | `/api/v1/workspaces/` | Créer workspace |
 | `POST` | `/api/v1/missions/execute` | Mission One-Click |
 
+### 🆕 v0.4.1 — ReAct & Nuclei & Auth
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/scan/nuclei` | Scan Nuclei (10k+ templates CVE) |
+| `GET` | `/api/v1/scans/{id}/status` | Statut scan async (Celery) |
+| `GET` | `/api/v1/scans/{id}/stream` | Progression temps réel (SSE) |
+| `POST` | `/api/v1/auth/login` | Authentification JWT |
+| `POST` | `/api/v1/auth/register` | Création compte |
+| `GET` | `/api/v1/auth/me` | Profil utilisateur courant |
+
 ### 🛡️ Active Directory
 
 | Méthode | Endpoint | Description |
@@ -338,7 +423,63 @@ SI airgap mode → cloud désactivé, 100% local
 
 ## 📊 Fonctionnalités détaillées
 
-### 🛡️ AD / LDAP (NOUVEAU v0.4.0)
+### 🆕 v0.4.1
+
+#### 🧠 ReAct Agent
+- **Boucle agentique** Observe→Think→Act avec raisonnement step-by-step
+- **6 tools intégrés** : scan_ports, scan_vulnerabilities, osint_investigate, exploit_check, ad_enumerate, generate_report
+- **Mémoire persistante** : conserve le contexte entre les tours
+- **Planification dynamique** : ajuste le plan en fonction des résultats intermédiaires
+- Remplace le Mission Planner (v0.3.0) avec une approche plus flexible
+
+#### 🔍 Nuclei Scanner
+- **10 000+ templates** CVE maintenus par la communauté ProjectDiscovery
+- Scan parallélisé avec contrôle de concurrence
+- Filtrage par sévérité (critical, high, medium, low, info)
+- Export multi-format (JSON, SARIF, HTML, Markdown)
+- Mise à jour automatique des templates (`nuclei -update`)
+
+#### 🌐 mitmproxy
+- **Interception TLS** : décryptage transparent du trafic HTTPS
+- **Capture de flux** : enregistrement complet des requêtes/réponses
+- **Replay** : rejeu de sessions à débit contrôlé
+- **Export HAR** : compatible avec les outils d'analyse web standards
+- **Scriptable** : modifications à la volée via scripts Python
+
+#### ⚙️ Celery Tasks
+- **Task queue Redis** pour l'exécution asynchrone des scans
+- **Progression SSE** : statuts temps réel via Server-Sent Events
+- **File d'attente prioritaire** : tâches critiques passent avant
+- **Workers parallèles** : scaling horizontal
+- **Persistance** : reprise après redémarrage
+
+#### 📊 CVSS 3.1 + SARIF
+- **CVSS 3.1** : scoring programmatique (Base / Temporal / Environmental)
+- **SARIF 2.1.0** : export compatible GitHub Code Scanning et outils CI/CD
+- **Mapping CVE→score** : enrichissement automatique des vulnérabilités
+- **Intégration continue** : validation dans les pipelines GitHub Actions
+
+#### 🎯 MITRE ATT&CK
+- **Mapping automatique** CVE → techniques et tactiques MITRE ATT&CK
+- **Tableau de bord** : visualisation des techniques exploitées par phase
+- **Graphe de progression** : suivi de la couverture ATT&CK par mission
+- **Recommandations** : identification des techniques manquantes
+
+#### 🕸️ Playwright Spider
+- **Crawler SPA** : support natif des applications React/Vue/Angular
+- **Exécution JavaScript** : rendu complet des pages dynamiques
+- **Détection de formulaires** : identification des points d'entrée
+- **Capture d'écran** : preuve visuelle des pages crawlees
+- **Mode headless/full browser** : selon les besoins
+
+#### 🔐 Auth JWT + RBAC
+- **JWT** : authentification sans état avec refresh tokens
+- **RBAC** : 3 rôles (Admin, Operator, Viewer)
+- **Rate limiting** : protection contre le bruteforce (SlowAPI)
+- **Hachage** : mots de passe via passlib (bcrypt)
+- **Routes protégées** : middleware de vérification automatique
+
+### 🛡️ AD / LDAP (v0.4.0)
 - **LDAP Connector** : connexion SSL/TLS, binding, pagination
 - **Enumerator** : users, groups, computers, OUs, GPOs, trusts, ACLs
 - **Trust Graph** : NetworkX multi-domaine, chemins d'attaque, DA effective
@@ -349,13 +490,13 @@ SI airgap mode → cloud désactivé, 100% local
 - **ADCS Scanner** : ESC1 à ESC9, templates vulnérables, CAs, findings détaillés
 - **BloodHound Export** : format JSON compatible BloodHound CE
 
-### 🔥 Firewall (NOUVEAU v0.4.0)
+### 🔥 Firewall (v0.4.0)
 - **FortiGate** : REST API admin, version detection, 7 CVEs (CVE-2022-40684 auth bypass, CVE-2023-27997 RCE, CVE-2023-33308 stack overflow, CVE-2024-21762 out-of-bounds write, CVE-2024-23113 format string, CVE-2024-23672 path traversal, CVE-2024-47575 info disclosure)
 - **StormShield** : SNS API, version detection, 5 CVEs (CVE-2020-11711 XSS, CVE-2020-11712 file upload, CVE-2020-11713 CSRF, CVE-2023-22237 buffer overflow, CVE-2023-36558 authentication bypass)
 - **Rule Analyzer** : 6 checks (any→any, high-risk ports, shadowed rules, disabled rules, overly permissive, unused rules)
 - **AD×FW Correlation** : règles exposant des DCs, comptes à privilèges, chemins critiques
 
-### 🏗️ Infrastructure SOC (NOUVEAU v0.4.0)
+### 🏗️ Infrastructure SOC (v0.4.0)
 - **Impact Reporter** : scoring métier (critique ≥8, haut ≥5, moyen ≥3, bas), P1-P4 priorités
 - **Remediation Advisor** : plan d'actions avec commandes PowerShell, IDs MITRE ATT&CK, priorisation
 - **Continuous Monitor** : capture baseline → check périodique → drift detection → alertes
@@ -411,7 +552,7 @@ SI airgap mode → cloud désactivé, 100% local
 
 ```bash
 pytest tests/ -v
-# 403 passed
+# 586 passed
 ```
 
 ---
@@ -425,10 +566,10 @@ NavMAX/
 │   │   ├── engine.py      #   Orchestrateur multi-provider
 │   │   ├── selector.py    #   ModelSelector × catalogue × fallback
 │   │   ├── models_catalog.py  # 27 modèles (dont 4 abliterated)
-│   │   ├── mission_planner.py # NL → phases JSON
+│   │   ├── react_agent.py #   🔁 ReAct Agent (NOUVEAU v0.4.1)
 │   │   ├── hardware.py    #   Détection RAM/GPU/CPU auto
 │   │   └── providers/     #   Ollama, llama.cpp, LM Studio, OpenAI, Anthropic, DeepSeek
-│   ├── ad/                # 🛡️ Active Directory (NOUVEAU v0.4.0)
+│   ├── ad/                # 🛡️ Active Directory (v0.4.0)
 │   │   ├── connector.py   #   LDAP SSL/TLS + binding
 │   │   ├── enumerator.py  #   Users, groups, computers, OUs, GPOs, trusts
 │   │   ├── trust_graph.py #   NetworkX multi-domaine + chemins d'attaque
@@ -438,20 +579,24 @@ NavMAX/
 │   │   ├── smb_scanner.py     # Shares, permissions, null sessions
 │   │   ├── adcs_scanner.py    # ESC1-9 + templates + CAs
 │   │   └── bloodhound_export.py  # JSON BloodHound CE
-│   ├── firewall/          # 🔥 Firewall (NOUVEAU v0.4.0)
+│   ├── firewall/          # 🔥 Firewall (v0.4.0)
 │   │   ├── base.py        #   Interface provider abstraite
 │   │   ├── fortigate.py   #   REST API + 7 CVEs
 │   │   ├── stormshield.py #   SNS API + 5 CVEs
 │   │   ├── rule_analyzer.py   # 6 checks de règles
 │   │   └── correlation.py     # AD × FW correlation
-│   ├── infrastructure/    # 🏗️ SOC continu (NOUVEAU v0.4.0)
+│   ├── infrastructure/    # 🏗️ SOC continu (v0.4.0)
 │   │   ├── impact_reporter.py     # Scoring métier + priorités
 │   │   ├── remediation_advisor.py # Plan PS + MITRE ATT&CK
 │   │   └── continuous_monitor.py  # Baseline + drift + alertes
 │   ├── scanner/
-│   │   ├── contextual.py  #   Scan adaptatif
-│   │   └── vuln_db.py     #   17 signatures CVE
-│   ├── proxy/             #   MITM, fuzzer, crawler, fuzzer structurel
+│   │   ├── contextual.py      #   Scan adaptatif
+│   │   ├── nuclei_scanner.py  #   🔍 Nuclei 10k+ templates (NOUVEAU v0.4.1)
+│   │   ├── nmap_scanner.py    #   🔍 Wrapper async nmap (NOUVEAU v0.4.1)
+│   │   └── vuln_db.py         #   17 signatures CVE
+│   ├── proxy/
+│   │   ├── mitm.py            #   🌐 mitmproxy (NOUVEAU v0.4.1)
+│   │   └── playwright_spider.py # 🕸️ Crawler SPA (NOUVEAU v0.4.1)
 │   ├── exploit/
 │   │   ├── ai_generator.py #  IA génère exploits
 │   │   ├── auto_pivot.py  #   Lateral movement auto
@@ -460,14 +605,18 @@ NavMAX/
 │   ├── osint/
 │   │   ├── monitor.py     #   Abonnement + alertes
 │   │   └── graph/semantic_search.py  # NL → graphe
+│   ├── tasks/             # ⚙️ Celery (NOUVEAU v0.4.1)
 │   ├── orchestrator/      # 🚀 One-Click mission
-│   ├── reporting/         # 📄 Rapports IA HTML/MD
+│   ├── reporting/
+│   │   ├── cvss_scorer.py     # 📊 CVSS 3.1 (NOUVEAU v0.4.1)
+│   │   ├── sarif_exporter.py  # 📊 SARIF 2.1.0 (NOUVEAU v0.4.1)
+│   │   └── ai_report.py      # Rapports IA HTML/MD
 │   ├── integrations/      # 🔗 TheHive, MISP, Hub
 │   ├── core/              # Config, logging, plugins, audit
 │   ├── db/                # SQLAlchemy async models
-│   ├── api/               # FastAPI routes REST (28 endpoints)
+│   ├── api/               # FastAPI routes REST (34+ endpoints)
 │   └── sdk/               # Client Python async
-├── tests/                 # 403 tests
+├── tests/                 # 586 tests
 ├── .github/workflows/     # CI/CD
 └── pyproject.toml
 ```
