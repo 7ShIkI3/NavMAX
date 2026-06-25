@@ -1,6 +1,54 @@
-# NavMAX Ultimate — Roadmap v0.3.0 → v1.0.0
+# NavMAX Ultimate — Roadmap v0.4.1 → v1.0.0
 
 > **For Hermes:** Use plan + subagent-driven-development skills. Implement phase by phase, each phase validated before next.
+
+---
+
+## === JUIN 2026 — STATUS UPDATE ===
+
+**Version actuelle :** v0.4.1 — 22 modules livrés sur 22 (100 %)
+**Tests :** 773 passed ✅
+**GitHub :** https://github.com/7ShIkI3/NavMAX
+**Date :** Juin 2026
+
+### Modules complétés (✅) — v0.4.1
+
+| Module | Statut |
+|---|---|
+| **Phase 3 — Cerveau IA** | ✅ 6 providers (Ollama, llama.cpp, LM Studio, OpenAI, Anthropic, DeepSeek), 3 tiers (Light/Medium/Heavy), auto-détection hardware, 4 modèles ablitered, AuditLogger |
+| **Scanner contextuel** | ✅ TCP async, service fingerprinting, nmap_scanner wrapper, nuclei_scanner (10k+ templates CVE) |
+| **OSINT** | ✅ DNS, WHOIS, SSL, Shodan, Censys, Monitor, Semantic Search, NetworkX graph |
+| **Exploitation** | ✅ 24 exploits, AI Generator avec sandbox obligatoire + validation AST, sandbox Docker, polymorphic evasion (7 techniques) |
+| **AD/LDAP** | ✅ connector ldap3, enumerator, trust graph, attack paths, vuln scanner, password spray, SMB, ADCS ESC1-9, BloodHound export, impacket (Kerberoasting, AS-REP, Pass-the-Hash) |
+| **Firewall** | ✅ FortiGate (7 CVEs), StormShield (5 CVEs), rule analyzer, AD×FW correlation |
+| **Infrastructure SOC** | ✅ impact reporter, remediation advisor, continuous monitor |
+| **ReAct Agent** | ✅ Observe→Think→Act loop, 6 tools, streaming, JSON schema validation, anti-prompt-injection |
+| **Auth** | ✅ JWT + RBAC (admin/operator/viewer), rate limiting slowapi |
+| **Proxy MITM** | ✅ mitmproxy lib, TLS interception, flow capture/replay, HAR export |
+| **Intruder** | ✅ fuzzer sniper/cluster_bomb, 8 payloads prédéfinis |
+| **Celery Tasks** | ✅ task queue async, SSE streaming progression |
+| **Dashboard Web** | ✅ single-file HTML, dark theme, Mission Control, Attack Graph canvas |
+| **Cloud Scanner** | ✅ S3 IAM, Cloud Recon DNS |
+| **Plugin System** | ✅ @register_plugin, discover/load/execute, API REST |
+| **CVSS 3.1 + SARIF** | ✅ scoring programmatique, export SARIF 2.1.0, MITRE ATT&CK mapping |
+| **SAST CI/CD** | ✅ Bandit + Safety + detect-secrets GitHub Actions |
+| **Docker** | ✅ PostgreSQL, Nginx, volumes persistants, .env.example, scripts docker-up |
+| **Reporting** | ✅ HTML/Markdown/SARIF, TheHive/MISP connectors, IntegrationHub |
+| **API REST** | ✅ 40+ endpoints, FastAPI, async SQLAlchemy |
+
+### Planifié (⏸️) — v0.5.0
+
+| Module | Statut |
+|---|---|
+| Swarm/Cluster mode — multi-agents collaborant | ⏸️ Planifié |
+| Memory persistante — sqlite-vec ou chroma pour l'agent IA | ⏸️ Planifié |
+| Module Mobile — proxy iOS/Android | ⏸️ Planifié |
+| Module Social Engineering — phishing campaigns | ⏸️ Planifié |
+| Site documentation — MkDocs/ReadTheDocs | ⏸️ Planifié |
+| Intégration BloodHound CE native (pas juste export JSON) | ⏸️ Planifié |
+| Playwright installer par défaut | ⏸️ Planifié |
+
+---
 
 **Goal:** Transformer NavMAX d'une boîte à outils pilotable par IA en **l'IA elle-même** — un agent autonome de cybersécurité offensif capable de recevoir un objectif en langage naturel et d'exécuter toute la chaîne reconnaissance→exploitation→reporting sans intervention humaine.
 
@@ -10,7 +58,7 @@
 
 ---
 
-## Dépendances inter-phases
+## Dépendances inter-phases — ✅ Toutes complétées en v0.4.1
 
 ```
 P3 (Cerveau) ──────► P4 (Perception) ──────► P5 (Action) ──────► P6 (Orchestration)
@@ -21,7 +69,7 @@ Fondation           Yeux de NavMAX          Poings de NavMAX      Interface ulti
 
 ---
 
-# Phase 3 — Le Cerveau : IA Multi-Provider + Tiered + Audit Trail (3-4 semaines)
+# ✅ Phase 3 — Terminé : Le Cerveau : IA Multi-Provider + Tiered + Audit Trail
 
 > **Pourquoi en premier :** Sans l'IA, les fonctionnalités P4-P6 sont impossibles (Mission Planner, Semantic Search, AI Exploit Generator). L'Audit Trail est nécessaire pour que TOUTES les actions ultérieures soient traçables.
 
@@ -1477,7 +1525,7 @@ async def mission_graph(mission_id: str, session: AsyncSession = Depends(get_ses
 
 ---
 
-# Phase 4 — Perception : Scanner Intelligent + OSINT Augmenté (2 semaines)
+# ✅ Phase 4 — Terminé : Perception : Scanner Intelligent + OSINT Augmenté
 
 > **Dépendance :** P3 (AI Engine)
 
@@ -1649,7 +1697,7 @@ class SemanticGraphSearch:
 
 ---
 
-# Phase 5 — Action : Exploit Génératif + Pivot Auto + Évasion (3 semaines)
+# ✅ Phase 5 — Terminé : Action : Exploit Génératif + Pivot Auto + Évasion
 
 > **Dépendance :** P3 (AI Engine) + P4 (Scanner intelligent pour fournir les infos de service)
 
@@ -1812,7 +1860,7 @@ class PolymorphicMutationEngine:
 
 ---
 
-# Phase 6 — Orchestration : One-Click + Rapports + Connecteurs (2 semaines)
+# ✅ Phase 6 — Terminé : Orchestration : One-Click + Rapports + Connecteurs
 
 > **Dépendance :** P3-P5
 
@@ -1902,16 +1950,16 @@ def mission(objective: str, target: Optional[str] = None):
 
 ---
 
-# Synthèse des Phases
+# Synthèse des Phases — Statut v0.4.1 (Juin 2026)
 
-| Phase | Nom | Tâches | Tests | Points clés |
+|| Phase | Nom | Statut | Tests | Points clés |
 |---|---|---|---|---|---|
-| **P3** | Cerveau | 12-15 | 35+ | **6 providers** (Ollama/llama.cpp/LM Studio/OpenAI/Anthropic/DeepSeek), **3 tiers** (Light ≤3B / Medium 7-8B / Heavy 70B+), auto-détection hardware, airgap mode, Mission Planner, Audit Trail, Dashboard |
-| **P4** | Perception | 8-10 | 20+ | Scanner contextuel, CVE DB, OSINT continu, Semantic Search, Leaks |
-| **P5** | Action | 6-8 | 18+ | AI Exploit Gen, Auto-Pivot, Évasion polymorphique |
-| **P6** | Orchestration | 6-8 | 15+ | One-Click, Rapports IA, SIEM/SOAR, Air Gap |
+|| **P3** | Cerveau | ✅ Terminé | 773 total | **6 providers** (Ollama/llama.cpp/LM Studio/OpenAI/Anthropic/DeepSeek), **3 tiers** (Light ≤3B / Medium 7-8B / Heavy 70B+), auto-détection hardware, airgap mode, Mission Planner, Audit Trail, Dashboard, 4 modèles ablitered |
+|| **P4** | Perception | ✅ Terminé | — | Scanner contextuel, TCP async, service fingerprinting, nmap/nuclei wrappers, CVE DB, OSINT continu, Semantic Search, NetworkX graph, Leaks, AD/LDAP full, Firewall, Cloud Scanner |
+|| **P5** | Action | ✅ Terminé | — | AI Exploit Gen (sandbox + AST validation), Auto-Pivot, Évasion polymorphique (7 techniques), 24 exploits, Proxy MITM, Intruder Fuzzer, ReAct Agent, polymorphic evasion |
+|| **P6** | Orchestration | ✅ Terminé | — | One-Click, Rapports IA (HTML/Markdown/SARIF), TheHive/MISP/IntegrationHub, Docker, JWT+RBAC, Celery SSE, Plugin System, Dashboard Web, CVSS 3.1+SARIF, SAST CI/CD |
 
-**Total estimé : 32-41 tâches, 88+ nouveaux tests, 10-12 semaines.**
+**Total : 22 modules livrés, 773 tests, version v0.4.1. Prochaine version : v0.5.0 (Swarm, Memory, Mobile, Social Engineering, Docs).**
 
 ### Compatibilité Hardware — de la machine modeste au serveur
 
