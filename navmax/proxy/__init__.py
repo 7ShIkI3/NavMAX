@@ -14,6 +14,14 @@ from .interceptor import Interceptor, InterceptedFlow, FlowAction, FlowStatus
 from .repeater import Repeater, RepeaterRequest, RepeaterResponse
 from .scanner import WebScanner, Vulnerability
 from .fuzzer import Fuzzer, FuzzResult, FuzzReport
+from .intruder import (
+    Intruder,
+    IntruderResult,
+    IntruderReport,
+    IntruderFilters,
+    PREDEFINED_PAYLOADS,
+    quick_attack,
+)
 
 __all__ = [
     "ProxyServer",
@@ -29,4 +37,10 @@ __all__ = [
     "Fuzzer",
     "FuzzResult",
     "FuzzReport",
+    "Intruder",
+    "IntruderResult",
+    "IntruderReport",
+    "IntruderFilters",
+    "PREDEFINED_PAYLOADS",
+    "quick_attack",
 ]

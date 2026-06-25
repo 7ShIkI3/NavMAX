@@ -243,10 +243,12 @@ class PluginManager:
             # Lire le manifeste
             try:
                 manifest = json.loads(manifest_path.read_text("utf-8"))
-            except (json.JSONDecodeError, OSError):
+                if not isinstance(manifest, dict):
+                    continue
+                name = manifest.get("name", entry.name)
+            except (json.JSONDecodeError, OSError, AttributeError, TypeError):
                 continue
 
-            name = manifest.get("name", entry.name)
             descriptor = PluginDescriptor(
                 name=name,
                 version=manifest.get("version", "0.0.0"),
@@ -267,15 +269,20 @@ class PluginManager:
         """Charge un plugin préalablement découvert par son *name*.
 
         Étapes :
-        1. Recherche le descripteur (découvert ou issu du registre global).
-        2. Importe ``plugin.py``.
-        3. Instancie la classe enregistrée via ``@register_plugin``.
-        4. Appelle ``initialize()``.
-        5. Stocke l'instance dans ``_loaded``.
+        1. Si déjà chargé, retourne l'instance existante.
+        2. Recherche le descripteur (découvert ou issu du registre global).
+        3. Importe ``plugin.py``.
+        4. Instancie la classe enregistrée via ``@register_plugin``.
+        5. Appelle ``initialize()``.
+        6. Stocke l'instance dans ``_loaded``.
 
         Returns:
             L'instance du plugin, ou ``None`` en cas d'échec.
         """
+        # 0. Déjà chargé ?
+        if name in self._loaded:
+            return self._loaded[name]
+
         # 1. Descripteur connu ?
         desc = self._descriptors.get(name)
         if desc is None:
