@@ -5,6 +5,7 @@ Envoie les alertes NavMAX (découvertes, exploits réussis) vers
 des systèmes de gestion d'incidents.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Optional
 import structlog
@@ -43,6 +44,10 @@ class TheHiveConnector:
         Returns:
             ID de l'alerte créée, ou None si échec.
         """
+        if not self.base_url or not self.api_key:
+            logger.warning("thehive_non_configure", message="TheHive non configuré — alerte ignorée")
+            return None
+
         import aiohttp
 
         payload = {
@@ -82,11 +87,13 @@ class TheHiveConnector:
                     else:
                         logger.warning("thehive_error", status=resp.status)
                         return None
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error("thehive_connection_failed", error=str(e))
             return None
 
     async def health_check(self) -> bool:
+        if not self.base_url or not self.api_key:
+            return False
         import aiohttp
         try:
             async with aiohttp.ClientSession() as s:
@@ -94,7 +101,7 @@ class TheHiveConnector:
                 async with s.get(f"{self.base_url}/api/v1/status",
                                  headers=headers, timeout=10) as resp:
                     return resp.status == 200
-        except Exception:
+        except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
 
@@ -117,6 +124,10 @@ class MISPConnector:
         Returns:
             ID de l'événement, ou None si échec.
         """
+        if not self.base_url or not self.api_key:
+            logger.warning("misp_non_configure", message="MISP non configuré — événement ignoré")
+            return None
+
         import aiohttp
 
         payload = {
@@ -165,11 +176,13 @@ class MISPConnector:
                     else:
                         logger.warning("misp_error", status=resp.status)
                         return None
-        except Exception as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error("misp_connection_failed", error=str(e))
             return None
 
     async def health_check(self) -> bool:
+        if not self.base_url or not self.api_key:
+            return False
         import aiohttp
         try:
             async with aiohttp.ClientSession() as s:
@@ -177,7 +190,7 @@ class MISPConnector:
                 async with s.get(f"{self.base_url}/events/index",
                                  headers=headers, timeout=10) as resp:
                     return resp.status == 200
-        except Exception:
+        except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
 
@@ -216,7 +229,7 @@ class IntegrationHub:
                 else:
                     rid = None
                 results[name] = rid
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError) as e:
                 logger.error("connector_failed", name=name, error=str(e))
                 results[name] = None
         return results

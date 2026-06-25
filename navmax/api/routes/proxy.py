@@ -83,6 +83,7 @@ async def proxy_start(req: ProxyStartRequest) -> dict:
         interceptor=_interceptor,
     )
     asyncio.create_task(_proxy_server.start())
+    logger.info("proxy_démarré", host=req.host, port=req.port)
     return {"status": "started", "host": req.host, "port": req.port}
 
 
@@ -93,6 +94,7 @@ async def proxy_stop() -> dict:
     if _proxy_server:
         await _proxy_server.stop()
         _proxy_server = None
+        logger.info("proxy_arrêté")
         return {"status": "stopped"}
     return {"status": "not_running"}
 
@@ -173,6 +175,7 @@ async def decide_flow(flow_id: str, decision: FlowDecision) -> dict:
 @router.post("/scan")
 async def scan_url(req: ScanRequest) -> dict:
     """Scanne une URL pour les vulnérabilités web."""
+    logger.info("proxy_scan_web_lancé", url=req.url, method=req.method)
     vulns = await _web_scanner.scan_url(
         url=req.url,
         method=req.method,
@@ -180,6 +183,7 @@ async def scan_url(req: ScanRequest) -> dict:
         body=req.body,
     )
 
+    logger.info("proxy_scan_web_terminé", url=req.url, vulns_count=len(vulns))
     return {
         "url": req.url,
         "vulnerability_count": len(vulns),
@@ -205,6 +209,7 @@ async def scan_url(req: ScanRequest) -> dict:
 @router.post("/fuzz")
 async def fuzz_url(req: FuzzRequest) -> dict:
     """Fuzze une URL avec des payloads d'attaque."""
+    logger.info("proxy_fuzz_lancé", url=req.url, method=req.method)
     report = await _fuzzer.fuzz_url(
         url=req.url,
         method=req.method,
@@ -212,6 +217,7 @@ async def fuzz_url(req: FuzzRequest) -> dict:
         body=req.body,
     )
 
+    logger.info("proxy_fuzz_terminé", url=req.url, anomalies=report.anomaly_count)
     return {
         "url": req.url,
         "total_tests": report.total_tests,

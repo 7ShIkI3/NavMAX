@@ -169,6 +169,19 @@ class MissionPlanner:
     def __init__(self, engine: AIEngine):
         self.engine = engine
 
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitise l'entrée utilisateur pour prévenir les injections de prompt."""
+        if len(text) > 8000:
+            text = text[:8000]
+        dangerous_patterns = [
+            "<|endoftext|>", "<|im_end|>", "<|im_start|>",
+            "###SYSTEM###", "---SYSTEM---", "IGNORE PREVIOUS INSTRUCTIONS",
+            "\x00", "\x1b",
+        ]
+        for pattern in dangerous_patterns:
+            text = text.replace(pattern, "")
+        return text.strip()
+
     async def plan(self, objective: str, *,
                    target: Optional[str] = None,
                    known_services: Optional[list[dict]] = None,
@@ -186,6 +199,11 @@ class MissionPlanner:
         Returns:
             MissionPlan avec les phases ordonnancées
         """
+        # Sanitise les entrées utilisateur avant tout usage dans les prompts
+        objective = self._sanitize_input(objective)
+        if constraints:
+            constraints = self._sanitize_input(constraints)
+
         # Construire le prompt enrichi
         facts = []
         if target:
@@ -195,7 +213,7 @@ class MissionPlanner:
                 f"  - {s.get('host', '?')}:{s.get('port', '?')} {s.get('service', '?')}"
                 for s in known_services[:10]
             ]
-            facts.append(f"Already discovered services:\n" + "\n".join(svc_lines))
+            facts.append("Already discovered services:\n" + "\n".join(svc_lines))
         if known_vulns:
             facts.append(f"Known vulnerabilities: {', '.join(known_vulns[:5])}")
         if constraints:
@@ -210,7 +228,7 @@ class MissionPlanner:
             facts_section=facts_section,
         )
 
-        logger.info("planning_mission", objective=objective, target=target)
+        logger.info("mission_planning", input_length=len(objective), target=target)
 
         # Générer le plan via l'IA (tier MEDIUM pour la planification)
         result = await self.engine.generate(

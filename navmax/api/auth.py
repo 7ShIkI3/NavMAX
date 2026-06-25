@@ -35,6 +35,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60  # 1 heure
 # Clé secrète — en prod, utiliser une variable d'environnement NAVMAX_JWT_SECRET
 SECRET_KEY: str = config.jwt_secret or "ch@ng3-me-1n-pr0duct10n-2024-navmax"
 
+if len(SECRET_KEY) < 32:
+    raise ValueError(
+        "NAVMAX_JWT_SECRET doit faire au moins 32 caractères pour la sécurité"
+    )
+
 # ---------------------------------------------------------------------------
 # Password hashing
 # ---------------------------------------------------------------------------
@@ -199,6 +204,7 @@ async def get_current_user(
     payload = decode_access_token(credentials.credentials)
     username: str | None = payload.get("sub")
     if username is None:
+        logger.warning("auth_échec", raison="sub_manquant_dans_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide : 'sub' manquant",
@@ -206,17 +212,20 @@ async def get_current_user(
 
     user = get_user(username)
     if user is None:
+        logger.warning("auth_échec", user=username, raison="utilisateur_introuvable")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Utilisateur introuvable",
         )
 
     if user.disabled:
+        logger.warning("auth_échec", user=username, raison="compte_désactivé")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Compte désactivé",
         )
 
+    logger.info("auth_succès", user=username)
     return user
 
 
@@ -311,20 +320,21 @@ async def login(req: LoginRequest):
     """
     user = get_user(req.username)
     if user is None:
-        logger.warning("tentative_connexion_inconnu", username=req.username)
+        logger.warning("auth_échec", user=req.username, raison="credentials_invalides")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nom d'utilisateur ou mot de passe incorrect",
         )
 
     if not verify_password(req.password, user.hashed_password):
-        logger.warning("tentative_connexion_mauvais_mdp", username=req.username)
+        logger.warning("auth_échec", user=req.username, raison="credentials_invalides")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nom d'utilisateur ou mot de passe incorrect",
         )
 
     if user.disabled:
+        logger.warning("auth_échec", user=req.username, raison="compte_désactivé")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Compte désactivé",
@@ -337,7 +347,7 @@ async def login(req: LoginRequest):
         }
     )
 
-    logger.info("connexion_réussie", username=req.username, role=user.role)
+    logger.info("auth_succès", user=req.username, role=user.role)
     return TokenResponse(access_token=token, role=user.role)
 
 

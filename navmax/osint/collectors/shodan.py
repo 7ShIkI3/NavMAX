@@ -43,10 +43,11 @@ class ShodanCollector:
     async def lookup_ip(self, ip: str) -> ShodanResult:
         """Récupère les infos Shodan pour une IP."""
         if not self.api_key:
+            logger.warning("shodan_api_key_manquante", message="Résultats OSINT Shodan ignorés")
             return ShodanResult(ip=ip, error="Clé API Shodan non configurée (NAVMAX_SHODAN_API_KEY)")
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
                 resp = await client.get(
                     f"{self.BASE_URL}/shodan/host/{ip}",
                     params={"key": self.api_key},
@@ -79,7 +80,7 @@ class ShodanCollector:
                     services=services,
                     last_update=data.get("last_update", ""),
                 )
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError) as e:
             return ShodanResult(ip=ip, error=str(e))
 
 
@@ -105,13 +106,14 @@ class CensysCollector:
     async def lookup_ip(self, ip: str) -> CensysResult:
         """Recherche Censys pour une IP."""
         if not self.api_id:
+            logger.warning("censys_api_key_manquante", message="Résultats OSINT Censys ignorés")
             return CensysResult(ip=ip, error="API Censys non configurée")
 
         try:
             import base64
             auth = base64.b64encode(f"{self.api_id}:{self.api_secret}".encode()).decode()
 
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
                 resp = await client.get(
                     f"{self.BASE_URL}/hosts/{ip}",
                     headers={"Authorization": f"Basic {auth}"},
@@ -135,7 +137,7 @@ class CensysCollector:
                     location=f"{data.get('location', {}).get('country', '')} {data.get('location', {}).get('city', '')}",
                     autonomous_system=data.get("autonomous_system", {}).get("description", ""),
                 )
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError) as e:
             return CensysResult(ip=ip, error=str(e))
 
 
@@ -187,5 +189,5 @@ class CrtShCollector:
                     subdomains=sorted(subdomains_set),
                     certificates=certs,
                 )
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError) as e:
             return CrtShResult(domain=domain, error=str(e))

@@ -21,6 +21,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from navmax.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 # ── registre global (peuplé par le décorateur @register_plugin) ──────────────
 _PLUGIN_REGISTRY: dict[str, type["PluginBase"]] = {}
 
@@ -302,7 +306,8 @@ class PluginManager:
 
         try:
             mod = _load_module_from_path(plugin_py)
-        except (ImportError, FileNotFoundError) as exc:
+        except (ImportError, AttributeError, FileNotFoundError) as exc:
+            logger.error("plugin_chargement_erreur", plugin=name, error=str(exc))
             # fallback : peut-être que la classe vient du registre déjà importé
             if name in _PLUGIN_REGISTRY:
                 cls = _PLUGIN_REGISTRY[name]
@@ -321,7 +326,8 @@ class PluginManager:
         instance = plugin_cls()
         try:
             await instance.initialize()
-        except Exception:
+        except (ImportError, AttributeError, RuntimeError, OSError) as e:
+            logger.error("plugin_initialisation_erreur", plugin=name, error=str(e))
             return None
 
         self._loaded[name] = instance
@@ -392,8 +398,9 @@ class PluginManager:
             return False
         try:
             await instance.cleanup()
-        except Exception:
-            pass  # ne pas bloquer le déchargement
+        except (ImportError, AttributeError, RuntimeError, OSError) as e:
+            logger.warning("plugin_cleanup_erreur", plugin=name, error=str(e))
+            # ne pas bloquer le déchargement
         # Mettre à jour le descripteur si présent
         desc = self._descriptors.get(name)
         if desc is not None:
@@ -421,7 +428,8 @@ class PluginManager:
         try:
             result = await instance.execute(**kwargs)
             return result
-        except Exception as exc:
+        except (RuntimeError, ValueError, OSError, AttributeError) as exc:
+            logger.error("plugin_execution_erreur", plugin=name, error=str(exc))
             return {"status": "error", "message": str(exc)}
 
     # ── hooks pour le registre global ───────────────────────────────────────

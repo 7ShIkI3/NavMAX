@@ -18,8 +18,10 @@ from pydantic import BaseModel, Field
 
 from navmax.ai.engine import get_engine
 from navmax.ai.providers.base import ModelTier, ProviderType
+from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
+logger = get_logger(__name__)
 
 
 # ── Schemas ──────────────────────────────────────────────────────
@@ -86,6 +88,13 @@ async def ai_generate(req: GenerateRequest):
             provider=provider,
             model=req.model,
         )
+        logger.info(
+            "ai_génération_réussie",
+            model=result.model,
+            provider=result.provider.value,
+            tier=tier.value,
+            tokens=result.tokens_used,
+        )
         return GenerateResponse(
             text=result.text,
             model=result.model,
@@ -96,6 +105,7 @@ async def ai_generate(req: GenerateRequest):
             finish_reason=result.finish_reason,
         )
     except RuntimeError as e:
+        logger.error("ai_génération_échouée", erreur=str(e), tier=tier.value)
         raise HTTPException(503, str(e))
 
 
@@ -173,6 +183,8 @@ async def list_models():
 @router.post("/reload")
 async def reload_engine():
     """Réinitialise tous les providers (après changement de config ou install de modèle)."""
+    logger.info("ai_engine_rechargement")
     engine = get_engine()
     status = await engine.reload()
+    logger.info("ai_engine_rechargé")
     return status

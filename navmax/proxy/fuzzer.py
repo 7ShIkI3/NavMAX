@@ -260,7 +260,7 @@ class Fuzzer:
                 "length": len(resp.content),
                 "headers": dict(resp.headers),
             }
-        except Exception:
+        except (httpx.TimeoutException, httpx.RequestError, OSError):
             return {"status": 0, "length": 0, "headers": {}}
 
     async def _fuzz_param(
@@ -357,7 +357,7 @@ class Fuzzer:
                 headers=extra_headers,
             )
             elapsed = time.monotonic() - t0
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
             return FuzzResult(
                 url=url,
                 injection_point=injection_type,

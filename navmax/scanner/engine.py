@@ -136,17 +136,37 @@ async def run_scan(scan_id: str) -> None:
             await db.commit()
             logger.info("scan_terminé", scan_id=scan_id, open=len(open_results))
 
+        except asyncio.TimeoutError:
+            logger.warning("scan_timeout", scan_id=scan_id)
+            scan.status = "failed"
+            scan.error_message = "Timeout dépassé"
+            scan.finished_at = datetime.now(timezone.utc)
+            await db.commit()
+        except (ConnectionRefusedError, ConnectionResetError, OSError) as e:
+            logger.warning("scan_erreur_réseau", scan_id=scan_id, error=str(e))
+            scan.status = "failed"
+            scan.error_message = f"Erreur réseau : {e}"
+            scan.finished_at = datetime.now(timezone.utc)
+            await db.commit()
         except Exception as e:
-            logger.error("scan_échec", scan_id=scan_id, erreur=str(e))
+            logger.exception("scan_erreur_inattendue", scan_id=scan_id)
             scan.status = "failed"
             scan.error_message = str(e)
             scan.finished_at = datetime.now(timezone.utc)
             await db.commit()
 
 
+def _on_scan_task_done(task: asyncio.Task, scan_id: str) -> None:
+    """Callback de fin de tâche — log les erreurs non gérées."""
+    exc = task.exception() if not task.cancelled() else None
+    if exc:
+        logger.error("scan_task_exception_non_gérée", scan_id=scan_id, error=repr(exc))
+
+
 async def run_scan_background(scan_id: str) -> None:
     """
     Lance un scan en arrière-plan dans la boucle d'événements.
     """
-    asyncio.create_task(run_scan(scan_id))
+    task = asyncio.create_task(run_scan(scan_id))
+    task.add_done_callback(lambda t: _on_scan_task_done(t, scan_id))
     logger.info("scan_arrière_plan", scan_id=scan_id)

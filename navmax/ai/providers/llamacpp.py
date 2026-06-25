@@ -80,7 +80,12 @@ class LlamaCppProvider(BaseProvider):
 
     async def generate(self, params: GenerateParams) -> GenerateResult:
         t0 = time.monotonic()
-        self._load_model()
+        try:
+            self._load_model()
+        except (ImportError, OSError, RuntimeError) as e:
+            logger.error("llamacpp_load_model_failed",
+                         path=str(self.model_path), error=str(e))
+            raise RuntimeError(f"Impossible de charger le modèle llama.cpp: {e}") from e
 
         prompt = params.prompt
         if params.system:
@@ -94,13 +99,18 @@ class LlamaCppProvider(BaseProvider):
         if params.json_mode:
             stop = (stop or []) + ["}"]
 
-        result = self._model(
-            prompt,
-            max_tokens=params.max_tokens,
-            temperature=params.temperature,
-            stop=stop,
-            echo=False,
-        )
+        try:
+            result = self._model(
+                prompt,
+                max_tokens=params.max_tokens,
+                temperature=params.temperature,
+                stop=stop,
+                echo=False,
+            )
+        except (ValueError, RuntimeError) as e:
+            logger.error("llamacpp_generate_failed",
+                         model=self.model_path.stem, error=str(e))
+            raise RuntimeError(f"Erreur de génération llama.cpp: {e}") from e
 
         elapsed = time.monotonic() - t0
         text = result["choices"][0]["text"]
@@ -116,7 +126,12 @@ class LlamaCppProvider(BaseProvider):
         )
 
     async def stream(self, params: GenerateParams) -> AsyncIterator[str]:
-        self._load_model()
+        try:
+            self._load_model()
+        except (ImportError, OSError, RuntimeError) as e:
+            logger.error("llamacpp_load_model_failed",
+                         path=str(self.model_path), error=str(e))
+            raise RuntimeError(f"Impossible de charger le modèle llama.cpp: {e}") from e
 
         prompt = params.prompt
         if params.system:
@@ -126,16 +141,21 @@ class LlamaCppProvider(BaseProvider):
                 f"<|assistant|>\n"
             )
 
-        for chunk in self._model(
-            prompt,
-            max_tokens=params.max_tokens,
-            temperature=params.temperature,
-            stream=True,
-            echo=False,
-        ):
-            text = chunk["choices"][0].get("text", "")
-            if text:
-                yield text
+        try:
+            for chunk in self._model(
+                prompt,
+                max_tokens=params.max_tokens,
+                temperature=params.temperature,
+                stream=True,
+                echo=False,
+            ):
+                text = chunk["choices"][0].get("text", "")
+                if text:
+                    yield text
+        except (ValueError, RuntimeError) as e:
+            logger.error("llamacpp_stream_failed",
+                         model=self.model_path.stem, error=str(e))
+            raise RuntimeError(f"Erreur de streaming llama.cpp: {e}") from e
 
     def count_tokens(self, text: str, model: str = "") -> int:
         self._load_model()

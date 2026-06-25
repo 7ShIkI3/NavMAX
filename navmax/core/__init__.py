@@ -11,6 +11,20 @@ from .plugin_manager import (
     register_plugin,
     make_plugin_api_routes,
 )
+from .exceptions import (
+    NavMaxError,
+    ConfigurationError,
+    ValidationError,
+    NetworkError,
+    NetworkTimeoutError,
+    ScanError,
+    ExploitError,
+    ProxyError,
+    ADError,
+    AIError,
+    PluginError,
+)
+from .retry import async_retry
 
 __all__ = [
     "Config",
@@ -22,4 +36,18 @@ __all__ = [
     "PluginDescriptor",
     "register_plugin",
     "make_plugin_api_routes",
+    # Exceptions
+    "NavMaxError",
+    "ConfigurationError",
+    "ValidationError",
+    "NetworkError",
+    "NetworkTimeoutError",
+    "ScanError",
+    "ExploitError",
+    "ProxyError",
+    "ADError",
+    "AIError",
+    "PluginError",
+    # Utilities
+    "async_retry",
 ]

@@ -234,7 +234,7 @@ class NmapScanner:
                 if "mac" in host_data["addresses"]:
                     result.mac_address = host_data["addresses"]["mac"]
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error("nmap_scan_error", host=host, error=str(e))
             result.error = str(e)
 
@@ -309,24 +309,32 @@ class NmapScanner:
             try:
                 r, w = await asyncio.wait_for(
                     asyncio.open_connection(host, port), timeout=min(timeout, 5))
+            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+                return port, None
+
+            banner = b""
+            try:
                 # Banner grab
                 w.write(b"\r\n")
                 await w.drain()
-                banner = b""
                 try:
                     banner = await asyncio.wait_for(r.read(1024), timeout=2)
                 except asyncio.TimeoutError:
                     pass
+            finally:
                 w.close()
-                return port, {
-                    "port": port,
-                    "protocol": "tcp",
-                    "state": "open",
-                    "banner": banner.decode("utf-8", errors="replace").strip(),
-                    "service": self._guess_service(port, banner.decode("utf-8", errors="replace")),
-                }
-            except Exception:
-                return port, None
+                try:
+                    await w.wait_closed()
+                except OSError:
+                    pass
+
+            return port, {
+                "port": port,
+                "protocol": "tcp",
+                "state": "open",
+                "banner": banner.decode("utf-8", errors="replace").strip(),
+                "service": self._guess_service(port, banner.decode("utf-8", errors="replace")),
+            }
 
         tasks = [check_port(p) for p in ports]
         results = await asyncio.gather(*tasks)

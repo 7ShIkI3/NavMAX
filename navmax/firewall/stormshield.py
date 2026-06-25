@@ -22,6 +22,7 @@ Usage:
 
 import asyncio
 from typing import Optional, Any
+import httpx
 import structlog
 
 from .base import (
@@ -126,8 +127,6 @@ class StormShieldConnector(FirewallConnector):
             True si connecté avec succès
         """
         try:
-            import httpx
-
             self._client = httpx.AsyncClient(
                 base_url=f"https://{self.host}/api/v1",
                 verify=self.verify_ssl,
@@ -153,7 +152,7 @@ class StormShieldConnector(FirewallConnector):
                              status=resp.status_code)
                 return False
 
-        except Exception as e:
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
             logger.error("stormshield_connect_failed",
                          host=self.host, error=str(e))
             return False
@@ -209,7 +208,7 @@ class StormShieldConnector(FirewallConnector):
                 "version": system.get("version", ""),
                 "serial": system.get("serial", ""),
             }
-        except Exception:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError):
             try:
                 version_text = await self._api_get_raw("/version")
                 return {
@@ -218,7 +217,7 @@ class StormShieldConnector(FirewallConnector):
                     "version": version_text.strip(),
                     "serial": "",
                 }
-            except Exception:
+            except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError):
                 return {"hostname": self.host, "model": "", "version": "", "serial": ""}
 
     async def get_rules(self) -> list[FirewallRule]:
@@ -265,7 +264,7 @@ class StormShieldConnector(FirewallConnector):
                     description=raw_rule.get("comment", ""),
                     raw=raw_rule,
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.error("stormshield_get_rules",
                          host=self.host, error=str(e))
 
@@ -292,7 +291,7 @@ class StormShieldConnector(FirewallConnector):
                     type=raw_iface.get("type", "physical"),
                     vlan_id=int(raw_iface.get("vlan_id", 0)),
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.warning("stormshield_get_interfaces",
                            host=self.host, error=str(e))
 
@@ -321,7 +320,7 @@ class StormShieldConnector(FirewallConnector):
                     value=value,
                     type=obj_type,
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.warning("stormshield_get_addresses",
                            host=self.host, error=str(e))
 
@@ -344,7 +343,7 @@ class StormShieldConnector(FirewallConnector):
                     type=raw_admin.get("type", "local"),
                     profile=raw_admin.get("profile", ""),
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.warning("stormshield_get_users",
                            host=self.host, error=str(e))
 

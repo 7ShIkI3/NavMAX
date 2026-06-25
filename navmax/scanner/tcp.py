@@ -38,13 +38,20 @@ async def _scan_single_port(
                 asyncio.open_connection(ip, port),
                 timeout=timeout,
             )
-            latency = (time.monotonic() - t0) * 1000
+        except asyncio.TimeoutError:
+            return PortResult(port=port, protocol="tcp", state="filtered", latency_ms=None)
+        except (ConnectionRefusedError, OSError):
+            # ECONNREFUSED → port fermé (rare car le firewall bloque souvent)
+            return PortResult(port=port, protocol="tcp", state="closed", latency_ms=None)
 
-            # Banner grabbing
-            banner = None
-            service_name = None
-            version = None
+        latency = (time.monotonic() - t0) * 1000
 
+        # Banner grabbing — le writer est fermé dans le finally
+        banner = None
+        service_name = None
+        version = None
+
+        try:
             try:
                 # Certains services envoient une bannière immédiatement
                 banner_bytes = await asyncio.wait_for(reader.read(1024), timeout=min(timeout, 1.0))
@@ -53,31 +60,22 @@ async def _scan_single_port(
                     service_name, version = _parse_banner(banner)
             except (asyncio.TimeoutError, ConnectionError, OSError):
                 pass  # Pas de bannière, normal
-
+        finally:
             writer.close()
             try:
                 await writer.wait_closed()
             except OSError:
                 pass
 
-            return PortResult(
-                port=port,
-                protocol="tcp",
-                state="open",
-                service=service_name,
-                banner=banner,
-                version=version,
-                latency_ms=round(latency, 1),
-            )
-
-        except asyncio.TimeoutError:
-            return PortResult(port=port, protocol="tcp", state="filtered", latency_ms=None)
-        except (ConnectionRefusedError, OSError):
-            # ECONNREFUSED → port fermé (rare car le firewall bloque souvent)
-            return PortResult(port=port, protocol="tcp", state="closed", latency_ms=None)
-        except Exception as e:
-            logger.debug("erreur_port", ip=ip, port=port, erreur=str(e))
-            return PortResult(port=port, protocol="tcp", state="filtered", latency_ms=None)
+        return PortResult(
+            port=port,
+            protocol="tcp",
+            state="open",
+            service=service_name,
+            banner=banner,
+            version=version,
+            latency_ms=round(latency, 1),
+        )
 
 
 async def tcp_connect_scan(

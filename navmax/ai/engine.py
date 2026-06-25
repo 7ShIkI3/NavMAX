@@ -14,6 +14,7 @@ Usage:
     result = await engine.generate("Analyse ce scan TCP", tier=ModelTier.MEDIUM)
 """
 
+import asyncio
 import os
 from typing import AsyncIterator, Optional
 import structlog
@@ -253,7 +254,14 @@ class AIEngine:
                      tier=tier.value, model=params.model,
                      provider=prov.provider_type.value)
 
-        return await prov.generate(params)
+        try:
+            return await asyncio.wait_for(prov.generate(params), timeout=180.0)
+        except asyncio.TimeoutError:
+            logger.error("ai_generate_timeout",
+                         provider=prov.provider_type.value, model=params.model)
+            raise RuntimeError(
+                f"Provider '{prov.provider_type.value}' timed out after 180s"
+            )
 
     async def stream(self, prompt: str, *,
                      tier: ModelTier = ModelTier.MEDIUM,
@@ -304,7 +312,9 @@ class AIEngine:
                 for m in models:
                     if m.name == model_name:
                         return prov, model_name
-            except Exception:
+            except (OSError, RuntimeError, ValueError) as e:
+                logger.warning("provider_list_models_failed",
+                               provider=pt.value, error=str(e))
                 continue
         raise RuntimeError(f"Model '{model_name}' not found in any provider")
 

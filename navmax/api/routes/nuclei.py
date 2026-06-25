@@ -79,6 +79,7 @@ async def scan_nuclei(
                 },
             )
 
+    logger.info("nuclei_scan_lancé", target=target, templates=template_list, severity=severity_list)
     try:
         findings = await scanner.scan(
             target=target,
@@ -87,16 +88,25 @@ async def scan_nuclei(
             timeout=timeout,
         )
     except NucleiTimeoutError as e:
+        logger.warning("nuclei_scan_timeout", target=target, erreur=str(e))
         raise HTTPException(
             status_code=504,
             detail={"error": "nuclei_timeout", "message": str(e)},
         )
-    except Exception as e:
-        logger.error("nuclei_scan_error", target=target, error=str(e))
+    except NucleiNotFoundError as e:
+        logger.error("nuclei_non_trouvé", erreur=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "nuclei_not_found", "message": str(e)},
+        )
+    except Exception as e:  # noqa: BLE001 — erreurs d'exécution nuclei imprévisibles
+        logger.error("nuclei_scan_erreur", target=target, erreur=str(e))
         raise HTTPException(
             status_code=500,
             detail={"error": "nuclei_scan_failed", "message": str(e)},
         )
+
+    logger.info("nuclei_scan_terminé", target=target, findings_count=len(findings))
 
     findings_dicts = [
         {
@@ -140,12 +150,20 @@ async def install_nuclei_templates() -> dict:
 
     try:
         await NucleiScanner.install_templates()
-    except Exception as e:
+    except OSError as exc:
+        logger.error("nuclei_install_templates_erreur_os", erreur=str(exc))
         raise HTTPException(
             status_code=500,
-            detail={"error": "template_install_failed", "message": str(e)},
-        )
+            detail={"error": "template_install_failed", "message": str(exc)},
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs réseau/git imprévisibles
+        logger.error("nuclei_install_templates_erreur", erreur=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "template_install_failed", "message": str(exc)},
+        ) from exc
 
+    logger.info("nuclei_templates_mis_à_jour")
     return {"status": "ok", "message": "Templates nuclei mis à jour avec succès."}
 
 

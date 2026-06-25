@@ -33,7 +33,7 @@ class TaskManager:
             celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
             logger.info("task_annulee", task_id=task_id)
             return True
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.error("task_annulation_echouee", task_id=task_id, error=str(e))
             return False
 
@@ -75,7 +75,7 @@ class TaskManager:
                     tasks.append(TaskManager._format_task(t, worker_name))
 
             return tasks
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("list_active_echouee", error=str(e))
             return []
 
@@ -105,7 +105,7 @@ class TaskManager:
                     })
 
             return tasks
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("list_scheduled_echouee", error=str(e))
             return []
 
@@ -126,7 +126,7 @@ class TaskManager:
                     tasks.append(TaskManager._format_task(t, worker_name))
 
             return tasks
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("list_reserved_echouee", error=str(e))
             return []
 
@@ -190,7 +190,7 @@ class TaskManager:
                 "successful": result.successful(),
                 "failed": result.failed(),
             }
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, AttributeError) as e:
             logger.error("get_task_status_erreur", task_id=task_id, error=str(e))
             return None
 
@@ -240,7 +240,7 @@ class TaskManager:
                 workers.append(worker_info)
 
             return workers
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("list_workers_echouee", error=str(e))
             return []
 
@@ -255,7 +255,7 @@ class TaskManager:
             i = celery_app.control.inspect()
             result = i.ping() or {}
             return result
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("ping_workers_echouee", error=str(e))
             return {}
 
@@ -275,7 +275,7 @@ class TaskManager:
             for tasks in registered.values():
                 all_tasks.update(t.name if hasattr(t, "name") else str(t) for t in tasks)
             return sorted(all_tasks)
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError) as e:
             logger.error("registered_tasks_echouee", error=str(e))
             return list(celery_app.tasks.keys())
 

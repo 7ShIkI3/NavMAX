@@ -80,6 +80,7 @@ async def update_target(target_id: str, body: TargetUpdate, db: AsyncSession = D
         setattr(target, key, val)
     await db.commit()
     await db.refresh(target)
+    logger.info("cible_mise_à_jour", id=target_id)
     return target
 
 

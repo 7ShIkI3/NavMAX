@@ -30,6 +30,7 @@ async def create_workspace(req: WorkspaceCreate, session: AsyncSession = Depends
     """Crée un nouveau workspace."""
     mgr = WorkspaceManager(session)
     ws = await mgr.create(req.name, req.description)
+    logger.info("workspace_créé", id=ws.id, name=ws.name)
     return {"id": ws.id, "name": ws.name, "description": ws.description}
 
 
@@ -66,6 +67,7 @@ async def update_workspace(workspace_id: str, req: WorkspaceUpdate, session: Asy
     ws = await mgr.update(workspace_id, req.name, req.description)
     if not ws:
         raise HTTPException(404, "Workspace introuvable")
+    logger.info("workspace_mis_à_jour", id=workspace_id)
     return {"id": ws.id, "name": ws.name, "description": ws.description}
 
 
@@ -76,6 +78,7 @@ async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(ge
     ok = await mgr.delete(workspace_id)
     if not ok:
         raise HTTPException(404, "Workspace introuvable")
+    logger.info("workspace_supprimé", id=workspace_id)
     return {"deleted": True}
 
 

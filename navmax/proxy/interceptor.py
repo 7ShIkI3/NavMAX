@@ -100,7 +100,7 @@ class Interceptor:
         for cb in self._on_flow_callbacks:
             try:
                 await cb(flow)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError) as e:
                 logger.error("callback_erreur", erreur=str(e))
 
         if not self._intercept_enabled:

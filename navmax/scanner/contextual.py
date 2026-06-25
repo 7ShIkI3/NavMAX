@@ -98,7 +98,7 @@ async def _probe_http_tech(host: str, port: int, ssl: bool = False) -> dict:
                     "server": headers.get("Server", ""),
                     "powered_by": headers.get("X-Powered-By", ""),
                 }
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
         return {"error": str(e)}
 
 
@@ -116,7 +116,7 @@ async def _probe_dir_scan(host: str, port: int, ssl: bool = False) -> dict:
                                  timeout=3, ssl=False, allow_redirects=False) as resp:
                     if resp.status not in (404, 403):
                         found.append({"path": path, "status": resp.status})
-            except Exception:
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
                 pass
     return {"found_dirs": found}
 
@@ -125,32 +125,54 @@ async def _probe_redis_info(host: str, port: int) -> dict:
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port), timeout=3)
+    except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+        return {"error": str(e)}
+
+    text = ""
+    try:
         writer.write(b"INFO\r\n")
         await writer.drain()
         data = await asyncio.wait_for(reader.read(4096), timeout=3)
-        writer.close()
         text = data.decode("utf-8", errors="replace")
-        info = {}
-        for line in text.splitlines():
-            if ":" in line and not line.startswith("#"):
-                k, v = line.split(":", 1)
-                info[k] = v.strip()
-        return {"redis_version": info.get("redis_version", ""),
-                "os": info.get("os", "")}
-    except Exception as e:
+    except (asyncio.TimeoutError, OSError) as e:
         return {"error": str(e)}
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except OSError:
+            pass
+
+    info = {}
+    for line in text.splitlines():
+        if ":" in line and not line.startswith("#"):
+            k, v = line.split(":", 1)
+            info[k] = v.strip()
+    return {"redis_version": info.get("redis_version", ""),
+            "os": info.get("os", "")}
 
 
 async def _probe_ssh_version(host: str, port: int) -> dict:
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port), timeout=3)
-        banner = await asyncio.wait_for(reader.read(256), timeout=3)
-        writer.close()
-        text = banner.decode("utf-8", errors="replace").strip()
-        return {"banner": text}
-    except Exception as e:
+    except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
         return {"error": str(e)}
+
+    text = ""
+    try:
+        banner = await asyncio.wait_for(reader.read(256), timeout=3)
+        text = banner.decode("utf-8", errors="replace").strip()
+    except (asyncio.TimeoutError, OSError) as e:
+        return {"error": str(e)}
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except OSError:
+            pass
+
+    return {"banner": text}
 
 
 _PROBE_HANDLERS = {
@@ -213,7 +235,7 @@ class ContextualScanEngine:
                     asyncio.open_connection(host, port), timeout=timeout)
                 w.close()
                 return port
-            except Exception:
+            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
                 return None
         results = await asyncio.gather(*[check(p) for p in ports])
         return [p for p in results if p is not None]
@@ -224,16 +246,27 @@ class ContextualScanEngine:
         try:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(host, port), timeout=timeout)
+        except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+            result.error = str(e)
+            result.service = _guess_by_port(port)
+            return result
+
+        try:
             writer.write(b"\r\n")
             await writer.drain()
             banner = await asyncio.wait_for(reader.read(1024), timeout=timeout)
-            writer.close()
             text = banner.decode("utf-8", errors="replace").strip()
             result.banner = text
             result.service, result.version = _identify_service(port, text)
-        except Exception as e:
+        except (asyncio.TimeoutError, OSError) as e:
             result.error = str(e)
             result.service = _guess_by_port(port)
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
         return result
 
     async def _run_probes(self, result: ScanResult, timeout: float):
@@ -245,7 +278,7 @@ class ContextualScanEngine:
                 continue
             try:
                 result.probes[probe.name] = await handler(result.host, result.port)
-            except Exception as e:
+            except (asyncio.TimeoutError, OSError, RuntimeError) as e:
                 result.probes[probe.name] = {"error": str(e)}
 
 

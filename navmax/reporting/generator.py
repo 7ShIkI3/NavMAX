@@ -7,9 +7,11 @@ de mission : synthèse exécutive, méthodologie, findings, recommandations.
 L'IA génère le contenu, le module formate en HTML/MD propre.
 """
 
+import html
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 import structlog
 
@@ -297,20 +299,30 @@ class AIReportGenerator:
         findings_html = ""
         for f in report.findings:
             color = severity_colors.get(f.severity.upper(), "#666")
+            safe_severity = html.escape(f.severity or "")
+            safe_title = html.escape(f.title or "")
+            safe_cve = html.escape(f.cve or "") if f.cve else ""
+            safe_affected = html.escape(f.affected or "") if f.affected else ""
+            safe_description = html.escape(f.description or "") if f.description else ""
+            safe_remediation = html.escape(f.remediation or "") if f.remediation else ""
             findings_html += f"""
             <div class="finding" style="border-left: 4px solid {color}; margin: 1em 0; padding: 0.5em 1em; background: #fafafa;">
-                <h3 style="color:{color}">[{f.severity}] {f.title}</h3>
-                {f'<p><strong>CVE:</strong> {f.cve}</p>' if f.cve else ''}
-                {f'<p><strong>Affected:</strong> {f.affected}</p>' if f.affected else ''}
-                {f'<p>{f.description}</p>' if f.description else ''}
-                {f'<p><strong>Remediation:</strong> {f.remediation}</p>' if f.remediation else ''}
+                <h3 style="color:{color}">[{safe_severity}] {safe_title}</h3>
+                {f'<p><strong>CVE:</strong> {safe_cve}</p>' if safe_cve else ''}
+                {f'<p><strong>Affected:</strong> {safe_affected}</p>' if safe_affected else ''}
+                {f'<p>{safe_description}</p>' if safe_description else ''}
+                {f'<p><strong>Remediation:</strong> {safe_remediation}</p>' if safe_remediation else ''}
             </div>"""
+
+        safe_title_html = html.escape(report.title or "")
+        safe_generated_at = html.escape(report.generated_at[:19])
+        safe_summary = html.escape(report.executive_summary or "No summary.")
 
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>{report.title}</title>
+<title>{safe_title_html}</title>
 <style>
 body {{ font-family: -apple-system, sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; color: #333; }}
 h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
@@ -320,10 +332,10 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 </style>
 </head>
 <body>
-<h1>{report.title}</h1>
-<p>Generated: {report.generated_at[:19]}</p>
+<h1>{safe_title_html}</h1>
+<p>Generated: {safe_generated_at}</p>
 <h2>Executive Summary</h2>
-<p>{report.executive_summary or 'No summary.'}</p>
+<p>{safe_summary}</p>
 <h2>Statistics</h2>
 <div class="stats">
 <div class="stat"><div class="value">{report.stats.get('phases_executed', 0)}</div>Phases</div>
@@ -334,3 +346,55 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 {findings_html}
 </body>
 </html>"""
+
+    @staticmethod
+    def _validate_output_path(output_path: str) -> Path:
+        """Valide et résout un chemin de sortie pour prévenir le path traversal.
+
+        Args:
+            output_path: Chemin de sortie fourni par l'utilisateur.
+
+        Returns:
+            Path résolu et validé.
+
+        Raises:
+            ValueError: Si le chemin contient '..' ou est invalide.
+        """
+        resolved = Path(output_path).resolve()
+        if ".." in str(Path(output_path)):
+            raise ValueError(f"Chemin de sortie invalide : {output_path}")
+        return resolved
+
+    def save_html(self, report: AuditReport, output_path: str) -> Path:
+        """Sauvegarde le rapport en HTML.
+
+        Args:
+            report: Rapport à sauvegarder.
+            output_path: Chemin du fichier de sortie.
+
+        Returns:
+            Path absolu du fichier créé.
+        """
+        path = self._validate_output_path(output_path)
+        content = self.to_html(report)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        logger.info("rapport_html_sauvegarde", path=str(path))
+        return path
+
+    def save_markdown(self, report: AuditReport, output_path: str) -> Path:
+        """Sauvegarde le rapport en Markdown.
+
+        Args:
+            report: Rapport à sauvegarder.
+            output_path: Chemin du fichier de sortie.
+
+        Returns:
+            Path absolu du fichier créé.
+        """
+        path = self._validate_output_path(output_path)
+        content = self.to_markdown(report)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        logger.info("rapport_md_sauvegarde", path=str(path))
+        return path

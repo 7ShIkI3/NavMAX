@@ -158,7 +158,7 @@ class DnsCollector:
                 elif rtype == "SOA":
                     records.extend(await DnsCollector._resolve_soa(domain))
 
-            except Exception as e:
+            except (OSError, socket.gaierror, socket.herror) as e:
                 logger.debug("dns_erreur", domain=domain, type=rtype, erreur=str(e))
 
         return records

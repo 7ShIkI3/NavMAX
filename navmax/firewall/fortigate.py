@@ -20,6 +20,7 @@ Usage:
 
 import asyncio
 from typing import Optional, Any
+import httpx
 import structlog
 
 from .base import (
@@ -164,8 +165,6 @@ class FortiGateConnector(FirewallConnector):
             True si connecté avec succès
         """
         try:
-            import httpx
-
             self._client = httpx.AsyncClient(
                 base_url=f"https://{self.host}",
                 verify=self.verify_ssl,
@@ -194,7 +193,7 @@ class FortiGateConnector(FirewallConnector):
                         using="api_key" if self.api_key else "password")
             return True
 
-        except Exception as e:
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
             logger.error("fortigate_connect_failed",
                          host=self.host, error=str(e))
             return False
@@ -241,7 +240,7 @@ class FortiGateConnector(FirewallConnector):
                 "version": status.get("version", ""),
                 "serial": status.get("serial", ""),
             }
-        except Exception:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError):
             # Fallback: cmdb
             try:
                 data = await self._api_get(
@@ -256,7 +255,7 @@ class FortiGateConnector(FirewallConnector):
                     "version": "",
                     "serial": "",
                 }
-            except Exception:
+            except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError):
                 return {"hostname": self.host, "model": "", "version": "", "serial": ""}
 
     async def get_rules(self) -> list[FirewallRule]:
@@ -300,7 +299,7 @@ class FortiGateConnector(FirewallConnector):
                     description=pol.get("comments", ""),
                     raw=pol,
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.error("fortigate_get_rules", error=str(e))
 
         return rules
@@ -323,7 +322,7 @@ class FortiGateConnector(FirewallConnector):
                     type=iface.get("type", "physical"),
                     vlan_id=int(iface.get("vlanid", 0)),
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.error("fortigate_get_interfaces", error=str(e))
 
         return interfaces
@@ -352,7 +351,7 @@ class FortiGateConnector(FirewallConnector):
                     value=value,
                     type=addr_type,
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.error("fortigate_get_addresses", error=str(e))
 
         return addresses
@@ -374,7 +373,7 @@ class FortiGateConnector(FirewallConnector):
                         for h in admin.get("trusthost", [])
                     ],
                 ))
-        except Exception as e:
+        except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
             logger.error("fortigate_get_users", error=str(e))
 
         return users

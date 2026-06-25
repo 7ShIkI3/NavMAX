@@ -265,6 +265,8 @@ class ReActAgent:
             self.tools[tool.name] = tool
         self.max_steps = max_steps
         self.model_tier = model_tier
+        self._provider_failures: dict[str, int] = {}
+        self._provider_skip_until: dict[str, float] = {}
 
     async def run(self, objective: str) -> MissionResult:
         """Exécute la boucle ReAct complète.
@@ -300,7 +302,7 @@ class ReActAgent:
                     tier=self.model_tier,
                 )
                 step = self._parse_step(step_num, response)
-            except Exception as e:
+            except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
                 logger.error("react_parse_error", step=step_num, error=str(e))
                 step = Step(
                     step_number=step_num,
@@ -352,7 +354,7 @@ class ReActAgent:
                         findings.extend(result["findings"])
                 except ToolRequiresConfirmation:
                     raise
-                except Exception as e:
+                except (RuntimeError, ValueError, TypeError, OSError, jsonschema.ValidationError) as e:
                     logger.error("react_tool_error", tool=step.tool_name, error=str(e))
                     step.error = str(e)
                     step.result = {"error": str(e)}
@@ -414,7 +416,7 @@ class ReActAgent:
                     tier=self.model_tier,
                 )
                 step = self._parse_step(step_num, response)
-            except Exception as e:
+            except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
                 yield StepUpdate(
                     step_number=step_num,
                     status="error",
@@ -463,7 +465,7 @@ class ReActAgent:
                         tool_name=step.tool_name,
                         result=result,
                     )
-                except Exception as e:
+                except (RuntimeError, ValueError, TypeError, OSError, jsonschema.ValidationError) as e:
                     step.error = str(e)
                     yield StepUpdate(
                         step_number=step_num,
@@ -484,6 +486,22 @@ class ReActAgent:
             )
 
     # ── Internals ────────────────────────────────────────────────
+
+    def _is_provider_available(self, provider_name: str) -> bool:
+        import time
+        return time.monotonic() >= self._provider_skip_until.get(provider_name, 0.0)
+
+    def _record_provider_failure(self, provider_name: str) -> None:
+        import time
+        count = self._provider_failures.get(provider_name, 0) + 1
+        self._provider_failures[provider_name] = count
+        if count >= 5:
+            skip_until = time.monotonic() + 60.0
+            self._provider_skip_until[provider_name] = skip_until
+            logger.warning("circuit_breaker_ouvert", provider=provider_name, reset_in_s=60)
+
+    def _record_provider_success(self, provider_name: str) -> None:
+        self._provider_failures[provider_name] = 0
 
     def _format_tools(self) -> str:
         """Formate la liste des tools pour le prompt."""

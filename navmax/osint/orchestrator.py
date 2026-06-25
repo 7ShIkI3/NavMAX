@@ -47,35 +47,35 @@ class OsintOrchestrator:
         entity_type = EntityType.DOMAIN if target_type == "domain" else EntityType.IP
         root = Entity(type=entity_type, value=target, label=target)
         self.graph.add_entity(root)
-        self._results_log.append(f"[+] Entité racine : {target} ({target_type})")
+        self._results_log.append("[+] Entité racine : {} ({})".format(target, target_type))
 
         # Niveau 1 : transforms sur la racine
         transforms = get_transforms_for(entity_type)
-        self._results_log.append(f"[+] Transforms niveau 1 : {len(transforms)} disponibles")
+        self._results_log.append("[+] Transforms niveau 1 : {} disponibles".format(len(transforms)))
 
         new_entities: list[Entity] = []
         for t in transforms:
             try:
                 results = await t.run(root, self.graph)
                 new_entities.extend(results)
-                self._results_log.append(f"    ├─ {t.name} : {len(results)} nouvelles entités")
-            except Exception as e:
-                self._results_log.append(f"    ├─ {t.name} : ERREUR — {e}")
+                self._results_log.append("    ├─ {} : {} nouvelles entités".format(t.name, len(results)))
+            except (RuntimeError, OSError, ValueError) as e:
+                self._results_log.append("    ├─ {} : ERREUR — {}".format(t.name, e))
 
         # Niveau 2 : transforms sur les nouvelles entités (si max_depth >= 2)
         if self.max_depth >= 2:
-            self._results_log.append(f"[+] Transforms niveau 2 sur {len(new_entities)} entités...")
+            self._results_log.append("[+] Transforms niveau 2 sur {} entités...".format(len(new_entities)))
             for entity in new_entities[:20]:  # Limiter à 20 pour éviter l'explosion
                 transforms_l2 = get_transforms_for(entity.type)
                 for t in transforms_l2:
                     try:
                         sub_results = await t.run(entity, self.graph)
-                        self._results_log.append(f"    ├─ [{entity.type.value}] {t.name} : {len(sub_results)} entités")
-                    except Exception as e:
-                        logger.debug("transform_l2_échec", entity=entity.value, transform=t.name, erreur=str(e))
+                        self._results_log.append("    ├─ [{}] {} : {} entités".format(entity.type.value, t.name, len(sub_results)))
+                    except (RuntimeError, OSError, ValueError) as e:
+                        logger.debug("transform_l2_echec", entity=entity.value, transform=t.name, erreur=str(e))
 
         self._results_log.append(
-            f"[✓] Investigation terminée : {self.graph.node_count} entités, {self.graph.edge_count} relations"
+            "[+] Investigation terminée : {} entités, {} relations".format(self.graph.node_count, self.graph.edge_count)
         )
 
         return {

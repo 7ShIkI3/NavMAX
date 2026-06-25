@@ -2,10 +2,15 @@
 Schémas Pydantic partagés pour l'API.
 """
 
+import re
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Autorise : alphanumériques, points, tirets, underscores, deux-points, crochets,
+# barres obliques (pour les CIDR/chemins), et @ (pour les domaines internationaux)
+VALID_TARGET_PATTERN = re.compile(r'^[a-zA-Z0-9._\-:/\[\]@]+$')
 
 
 # ---- Pagination ----
@@ -28,6 +33,16 @@ class TargetCreate(BaseModel):
     tags: str | None = Field(None, examples=["web,dmz,production"])
     notes: str | None = None
 
+    @field_validator("address", mode="before")
+    @classmethod
+    def validate_target_format(cls, v: str) -> str:
+        if v and not VALID_TARGET_PATTERN.match(str(v)):
+            raise ValueError(
+                "Format cible invalide — seuls alphanumériques, points, tirets, "
+                "deux-points autorisés"
+            )
+        return v
+
 
 class TargetUpdate(BaseModel):
     name: str | None = None
@@ -36,6 +51,16 @@ class TargetUpdate(BaseModel):
     tags: str | None = None
     notes: str | None = None
     alive: bool | None = None
+
+    @field_validator("address", mode="before")
+    @classmethod
+    def validate_target_format(cls, v: str | None) -> str | None:
+        if v and not VALID_TARGET_PATTERN.match(str(v)):
+            raise ValueError(
+                "Format cible invalide — seuls alphanumériques, points, tirets, "
+                "deux-points autorisés"
+            )
+        return v
 
 
 class TargetResponse(BaseModel):
@@ -113,7 +138,7 @@ class ServiceResponse(BaseModel):
     id: str
     target_id: str
     scan_id: str | None = None
-    port: int
+    port: int = Field(..., ge=1, le=65535)
     protocol: str
     state: str
     service_name: str | None = None

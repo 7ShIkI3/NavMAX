@@ -307,14 +307,15 @@ class NucleiScanner:
             command=" ".join(args),
         )
 
+        proc = None
+        findings: list[NucleiFinding] = []
+        stderr_task = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-
-            findings: list[NucleiFinding] = []
 
             # Lire stdout ligne par ligne avec timeout
             async def _read_stdout() -> None:
@@ -345,22 +346,28 @@ class NucleiScanner:
             stdout_task = asyncio.create_task(_read_stdout())
             stderr_task = asyncio.create_task(_read_stderr())
 
-            # Attendre avec timeout
-            await asyncio.wait_for(
-                asyncio.gather(stdout_task, stderr_task),
-                timeout=timeout,
-            )
+            try:
+                # Attendre avec timeout
+                await asyncio.wait_for(
+                    asyncio.gather(stdout_task, stderr_task),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.error("nuclei_scan_timeout", target=target, timeout=timeout)
+                raise NucleiTimeoutError(target, timeout)
+            finally:
+                if proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
 
-            await proc.wait()
+        except NucleiTimeoutError:
+            raise
+        except OSError as e:
+            logger.error("nuclei_subprocess_error", target=target, error=str(e))
+            raise
 
-        except asyncio.TimeoutError:
-            logger.error("nuclei_scan_timeout", target=target, timeout=timeout)
-            if proc:
-                proc.kill()
-            raise NucleiTimeoutError(target, timeout)
-
-        stderr_text = stderr_task.result() if not stderr_task.done() else ""
-        if proc.returncode != 0 and proc.returncode is not None:
+        stderr_text = stderr_task.result() if (stderr_task is not None and stderr_task.done()) else ""
+        if proc is not None and proc.returncode != 0 and proc.returncode is not None:
             logger.warning(
                 "nuclei_scan_nonzero_exit",
                 target=target,
@@ -372,7 +379,7 @@ class NucleiScanner:
             "nuclei_scan_completed",
             target=target,
             findings_count=len(findings),
-            returncode=proc.returncode,
+            returncode=proc.returncode if proc is not None else None,
         )
 
         # Filtrer par sévérité côté client si plusieurs sévérités demandées

@@ -320,7 +320,7 @@ class DomainToWeb(Transform):
                     )
                     graph.add_relation(entity, link_entity, RelationType.LINKED_TO)
                     new_entities.append(link_entity)
-            except Exception:
+            except ValueError:
                 pass
 
         # Social links

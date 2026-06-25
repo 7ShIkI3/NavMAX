@@ -288,7 +288,9 @@ class ADConnector:
         self._connected: bool = False
         self._bound: bool = False
 
-    # ── Connexion / Déconnexion ─────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════
+    # Connexion & Authentification LDAP
+    # ══════════════════════════════════════════════════════════════════
 
     async def connect(self) -> None:
         """Établit la connexion au contrôleur de domaine et s'authentifie."""
@@ -399,6 +401,10 @@ class ADConnector:
 
         return kwargs
 
+    # ══════════════════════════════════════════════════════════════════
+    # Fermeture & nettoyage
+    # ══════════════════════════════════════════════════════════════════
+
     async def close(self) -> None:
         """Ferme la connexion LDAP proprement."""
         if self._connection and not self._connection.closed:
@@ -414,7 +420,9 @@ class ADConnector:
     def is_connected(self) -> bool:
         return self._connected and self._bound and not self._connection.closed
 
-    # ── Recherches LDAP ─────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════
+    # Requêtes LDAP — helpers
+    # ══════════════════════════════════════════════════════════════════
 
     async def search(
         self,
@@ -722,7 +730,9 @@ class ADConnector:
                 "Installez-le avec : pip install impacket pycryptodome"
             )
 
-    # ── impacket : Authentification NTLM avancée ─────────────────
+    # ══════════════════════════════════════════════════════════════════
+    # Authentification NTLM / Kerberos (impacket)
+    # ══════════════════════════════════════════════════════════════════
 
     async def authenticate_ntlm(
         self, username: str, password: str, domain: Optional[str] = None

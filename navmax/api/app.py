@@ -35,7 +35,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Démarrage / arrêt de l'API."""
     setup_logging()
     await create_all()
-    logger.info("api_démarrée", host=config.api_host, port=config.api_port)
+    logger.info(
+        "navmax_démarrage",
+        host=config.api_host,
+        port=config.api_port,
+        debug=getattr(config, "debug", False),
+    )
     yield
     # Nettoyer le proxy
     from navmax.api.routes.proxy import _proxy_server as _ps, _web_scanner as _ws, _fuzzer as _fz
@@ -55,6 +60,7 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────────
+# ATTENTION : En production, restreindre aux origines autorisées uniquement
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

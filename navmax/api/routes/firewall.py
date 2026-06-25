@@ -11,7 +11,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
+from navmax.core.logging import get_logger
+
 router = APIRouter(prefix="/api/v1/firewall", tags=["Firewall"])
+logger = get_logger(__name__)
 
 
 # ── Schemas ────────────────────────────────────────────────────
@@ -76,6 +79,11 @@ async def fortigate_rules(req: FortiGateRequest):
 
         config = await fgt.get_full_config()
 
+        logger.info(
+            "fortigate_règles_extraites",
+            host=req.host,
+            rules_count=len(config.rules),
+        )
         return {
             "vendor": "fortinet",
             "hostname": config.hostname,
@@ -106,8 +114,14 @@ async def fortigate_rules(req: FortiGateRequest):
                 for c in config.cve_checks
             ],
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except ConnectionError as exc:
+        logger.warning("fortigate_connexion_échouée", host=req.host, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion FortiGate échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs API FortiGate imprévisibles
+        logger.error("fortigate_erreur", host=req.host, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await fgt.close()
 
@@ -132,6 +146,11 @@ async def stormshield_rules(req: StormShieldRequest):
 
         config = await sns.get_full_config()
 
+        logger.info(
+            "stormshield_règles_extraites",
+            host=req.host,
+            rules_count=len(config.rules),
+        )
         return {
             "vendor": "stormshield",
             "hostname": config.hostname,
@@ -162,8 +181,14 @@ async def stormshield_rules(req: StormShieldRequest):
                 for c in config.cve_checks
             ],
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except ConnectionError as exc:
+        logger.warning("stormshield_connexion_échouée", host=req.host, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion StormShield échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs API StormShield imprévisibles
+        logger.error("stormshield_erreur", host=req.host, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await sns.close()
 

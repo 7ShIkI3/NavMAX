@@ -118,9 +118,11 @@ async def web_analyze(url: str) -> dict:
 @router.post("/investigate")
 async def investigate(req: InvestigateRequest) -> dict:
     """Investigation OSINT complète (orchestrateur)."""
+    logger.info("osint_investigation_lancée", target=req.target, type=req.target_type, depth=req.max_depth)
     orch = OsintOrchestrator(max_depth=req.max_depth)
     result = await orch.investigate(req.target, req.target_type)
 
+    logger.info("osint_investigation_terminée", target=req.target, nodes=result.get("node_count", 0))
     graph_data = orch.export("cytoscape")
     return {
         "target": result["target"],

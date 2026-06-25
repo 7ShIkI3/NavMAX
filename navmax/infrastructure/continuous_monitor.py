@@ -399,5 +399,5 @@ class ContinuousMonitor:
                                          title=alert.title,
                                          entity=alert.affected_entity)
 
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError) as e:
                 logger.error("monitor_cycle_error", error=str(e))

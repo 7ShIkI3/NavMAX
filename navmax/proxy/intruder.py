@@ -23,6 +23,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
@@ -31,6 +32,16 @@ import httpx
 from navmax.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class IntruderMode(StrEnum):
+    SNIPER = "sniper"
+    BATTERING_RAM = "battering_ram"
+    PITCHFORK = "pitchfork"
+    CLUSTER_BOMB = "cluster_bomb"
+
+
+MAX_POSITIONS = 100
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +272,7 @@ class IntruderReport:
 
     target_url: str
     target_method: str
-    mode: str  # sniper ou cluster_bomb
+    mode: str  # sniper, cluster_bomb, pitchfork ou battering_ram
     positions: list[str]
     total_requests: int
     results: list[IntruderResult] = field(default_factory=list)
@@ -453,7 +464,7 @@ def _replace_form_field(body: str, field_name: str, value: str) -> str:
     import urllib.parse as _up
     try:
         params = _up.parse_qs(body, keep_blank_values=True)
-    except Exception:
+    except ValueError:
         return body
     params[field_name] = [value]
     return _up.urlencode(params, doseq=True)
@@ -555,12 +566,14 @@ class Intruder:
         client = await self._get_client()
         self._semaphore = asyncio.Semaphore(self.concurrency)
 
-        mode = mode.lower()
-        if mode not in ("sniper", "cluster_bomb"):
-            raise ValueError(f"Mode invalide : {mode} (attendu: sniper ou cluster_bomb)")
+        mode = IntruderMode(mode.lower()) if mode.lower() in IntruderMode._value2member_map_ else mode.lower()
+        if mode not in (IntruderMode.SNIPER, IntruderMode.CLUSTER_BOMB, IntruderMode.PITCHFORK, IntruderMode.BATTERING_RAM):
+            raise ValueError(f"Mode invalide : {mode} (attendu: sniper, cluster_bomb, pitchfork ou battering_ram)")
 
         if not positions:
             raise ValueError("Au moins une position est requise")
+        if len(positions) > MAX_POSITIONS:
+            raise ValueError(f"Trop de positions : {len(positions)} (max {MAX_POSITIONS})")
 
         # Résoudre les payloads prédéfinis
         resolved_payloads = self._resolve_payloads(payloads)
@@ -665,7 +678,7 @@ class Intruder:
         """
         combinations: list[list[tuple[str, str]]] = []
 
-        if mode == "sniper":
+        if mode == IntruderMode.SNIPER:
             # Sniper: une position à la fois
             payload_keys = list(payloads.keys())
 
@@ -689,7 +702,7 @@ class Intruder:
                     for pval in pvals:
                         combinations.append([(pos, pval)])
 
-        elif mode == "cluster_bomb":
+        elif mode == IntruderMode.CLUSTER_BOMB:
             # Cluster bomb: produit cartésien — chaque combinaison modifie
             # TOUTES les positions simultanément avec un payload par position
             import itertools
@@ -812,7 +825,7 @@ async def quick_attack(
     body: str | None = None,
     positions: list[str] | None = None,
     payload_category: str = "xss",
-    mode: str = "sniper",
+    mode: str = IntruderMode.SNIPER,
     **kwargs: Any,
 ) -> IntruderReport:
     """Lance une attaque Intruder rapide avec une configuration minimale.

@@ -113,7 +113,7 @@ class OSINTMonitor:
             for alert in alerts:
                 try:
                     await self.notifier(alert)
-                except Exception as e:
+                except (TypeError, ValueError, RuntimeError) as e:
                     logger.error("notify_failed", error=str(e))
 
         return alerts
@@ -145,7 +145,7 @@ class OSINTMonitor:
                     for entity in getattr(result, 'ip_addresses', []):
                         ips.append(entity.value if hasattr(entity, 'value') else str(entity))
                     snapshot["ips"] = sorted(ips)
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, AttributeError) as e:
                 logger.warning("collect_failed", target=target, error=str(e))
 
         return snapshot

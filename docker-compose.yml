@@ -75,10 +75,10 @@ services:
       NAVMAX_LOG_FORMAT: "${NAVMAX_LOG_FORMAT:-json}"
 
       # Base de données PostgreSQL
-      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://navmax:ChangerMoi!@postgres:5432/navmax}"
+      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-navmax}:${POSTGRES_PASSWORD:-ChangerMoi!}@postgres:5432/navmax}"
 
       # Redis
-      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:navmax_redis_secret@redis:6379/0}"
+      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:${REDIS_PASSWORD:-navmax_redis_secret}@redis:6379/0}"
 
       # JWT
       NAVMAX_JWT_SECRET: "${NAVMAX_JWT_SECRET:-}"
@@ -103,6 +103,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - navmax-net
@@ -132,10 +134,10 @@ services:
       NAVMAX_LOG_FORMAT: "${NAVMAX_LOG_FORMAT:-json}"
 
       # Base de données PostgreSQL
-      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://navmax:ChangerMoi!@postgres:5432/navmax}"
+      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-navmax}:${POSTGRES_PASSWORD:-ChangerMoi!}@postgres:5432/navmax}"
 
       # Redis (broker + backend Celery)
-      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:navmax_redis_secret@redis:6379/0}"
+      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:${REDIS_PASSWORD:-navmax_redis_secret}@redis:6379/0}"
 
       # Data directory
       NAVMAX_DATA_DIR: "/data/navmax"
@@ -147,6 +149,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     networks:
       - navmax-net

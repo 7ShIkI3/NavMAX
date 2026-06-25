@@ -112,6 +112,7 @@ class CVSSScorer:
                 c = CVSS3(vector)
                 scores = c.scores()
                 base = float(scores[0]) if scores else self._heuristic_score(vector)
+                base = self._clamp_score(base)
                 severity = c.severities()[0].capitalize() if c.severities() else self._severity_from_score(base)
                 return CVSSScore(
                     vector_string=vector,
@@ -122,7 +123,7 @@ class CVSSScorer:
                 logger.warning("cvss_calc_error", vector=vector, error=str(e))
 
         # Fallback heuristique
-        base = self._heuristic_score(vector)
+        base = self._clamp_score(self._heuristic_score(vector))
         return CVSSScore(
             vector_string=vector,
             base_score=base,
@@ -159,6 +160,7 @@ class CVSSScorer:
         sev_lower = (severity or "").lower()
         if sev_lower in severity_map:
             score, vector = severity_map[sev_lower]
+            score = self._clamp_score(score)
             return CVSSScore(
                 vector_string=vector,
                 base_score=score,
@@ -173,6 +175,24 @@ class CVSSScorer:
         )
 
     # ── Internals ──────────────────────────────────────────────
+
+    @staticmethod
+    def _clamp_score(score: float) -> float:
+        """Valide que le score CVSS est dans la plage [0.0, 10.0].
+
+        Args:
+            score: Score brut.
+
+        Returns:
+            Score clampé entre 0.0 et 10.0.
+
+        Raises:
+            ValueError: Si le score est hors plage après arrondi (indicateur de bug).
+        """
+        clamped = round(max(0.0, min(10.0, score)), 1)
+        if score != clamped:
+            logger.warning("cvss_score_hors_plage", raw_score=score, clamped=clamped)
+        return clamped
 
     @staticmethod
     def _heuristic_score(vector: str) -> float:

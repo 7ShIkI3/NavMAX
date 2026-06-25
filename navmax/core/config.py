@@ -2,6 +2,8 @@
 Configuration centralisée via variables d'environnement et fichier .env.
 """
 
+import re
+import warnings
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,12 +34,22 @@ class Config(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Retourne l'URL de la BDD (SQLite par défaut)."""
+        """Retourne l'URL de la BDD (SQLite par défaut).
+
+        Les credentials présents dans l'URL ne sont pas loggués.
+        """
         if self.db_url:
             return self.db_url
         db_path = self.data_dir / "navmax.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite+aiosqlite:///{db_path}"
+
+    @property
+    def database_url_safe(self) -> str:
+        """Retourne l'URL de la BDD avec les credentials masqués (safe pour les logs)."""
+        url = self.database_url
+        # Masque user:password@host → ***@host
+        return re.sub(r"//[^@]+@", "//***@", url)
 
     # --- Scanner ---
     scanner_default_timeout: float = 2.0  # secondes
@@ -61,6 +73,23 @@ class Config(BaseSettings):
     # --- Redis (rate limiting & cache) ---
     redis_url: str = ""  # ex: redis://localhost:6379/0
 
+    def validate_critical(self) -> None:
+        """Valide les valeurs critiques de la configuration et émet des avertissements."""
+        if self.jwt_secret and len(self.jwt_secret) < 32:
+            warnings.warn(
+                f"[NavMAX] NAVMAX_JWT_SECRET trop court ({len(self.jwt_secret)} chars) — "
+                "minimum recommandé : 32 caractères.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif not self.jwt_secret:
+            warnings.warn(
+                "[NavMAX] NAVMAX_JWT_SECRET absent — l'authentification JWT sera non sécurisée.",
+                UserWarning,
+                stacklevel=2,
+            )
+
 
 # Instance globale
 config = Config()
+config.validate_critical()

@@ -254,8 +254,14 @@ class PasswordSprayer:
         """
         import time
 
+        if not users:
+            raise ValueError("Liste d'utilisateurs vide")
+
         if not self._wordlist:
             self.load_default_wordlist()
+
+        if not self._wordlist:
+            raise ValueError("Liste de mots de passe vide")
 
         if not self.connector:
             raise ValueError("PasswordSprayer requires an active ADConnector")
@@ -297,9 +303,9 @@ class PasswordSprayer:
                 attempt_count += 1
 
                 if self.config.dry_run:
+                    # RÈGLE CRITIQUE : ne jamais logger le mot de passe
                     logger.info("dry_run_attempt",
-                                user=user_info["username"],
-                                password=password)
+                                user=user_info["username"])
                     continue
 
                 try:

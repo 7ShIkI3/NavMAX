@@ -37,6 +37,13 @@ COPY . .
 
 RUN mkdir -p /data/navmax /data/nuclei
 
+# Sécurité : utilisateur non-root
+RUN groupadd -r navmax --gid=1001 && \
+    useradd -r -g navmax --uid=1001 --home-dir=/app --no-create-home navmax && \
+    chown -R navmax:navmax /app /data/navmax /data/nuclei
+
+USER navmax
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \

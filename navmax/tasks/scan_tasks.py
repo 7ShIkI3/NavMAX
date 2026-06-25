@@ -8,6 +8,7 @@ tournent dans un processus séparé sans boucle d'événements.
 import asyncio
 import json
 import shutil
+import subprocess
 import uuid
 from datetime import datetime, timezone
 
@@ -33,7 +34,7 @@ def _run_async(coro):
 # ── Tâche : run_nmap_scan ──────────────────────────────────────
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, time_limit=600, soft_time_limit=540)
 def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> dict:
     """Lance un scan Nmap complet sur une cible et persiste les résultats.
 
@@ -87,7 +88,10 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
 
                 return db_target.id, db_target.name
 
-        target_id, target_name = _run_async(_find_or_create_target())
+        try:
+            target_id, target_name = _run_async(_find_or_create_target())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=3)
 
         # ── 4. Créer un enregistrement Scan ─────────────────────
         async def _create_scan_record() -> str:
@@ -105,7 +109,10 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                 await db.commit()
                 return db_scan.id
 
-        _run_async(_create_scan_record())
+        try:
+            _run_async(_create_scan_record())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=3)
 
         self.update_state(
             state="PROGRESS",
@@ -132,7 +139,10 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                 "error": result.error,
             }
 
-        scan_result = _run_async(_run_nmap_scan())
+        try:
+            scan_result = _run_async(_run_nmap_scan())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=3)
 
         self.update_state(
             state="PROGRESS",
@@ -206,7 +216,10 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                     open=len(open_ports),
                 )
 
-        _run_async(_persist_results())
+        try:
+            _run_async(_persist_results())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=3)
 
         self.update_state(
             state="SUCCESS",
@@ -243,7 +256,7 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
 # ── Tâche : run_nuclei_scan ────────────────────────────────────
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, time_limit=660, soft_time_limit=600)
 def run_nuclei_scan(
     self,
     target: str,
@@ -310,7 +323,10 @@ def run_nuclei_scan(
                     await db.refresh(db_target)
                 return db_target.id
 
-        target_id = _run_async(_find_or_create_target())
+        try:
+            target_id = _run_async(_find_or_create_target())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=3)
 
         # ── Construire la commande nuclei ───────────────────────
         cmd = [nuclei_path, "-target", target, "-json", "-silent"]
@@ -320,18 +336,28 @@ def run_nuclei_scan(
             cmd.extend(["-severity", ",".join(severity)])
 
         # Exécuter nuclei en sous-processus
-        import subprocess
-
+        proc = None
         try:
-            proc_result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=600,
             )
 
+            try:
+                stdout, _ = proc.communicate(timeout=600)
+            except subprocess.TimeoutExpired:
+                logger.error("nuclei_timeout", target=target)
+                return {
+                    "scan_id": scan_id,
+                    "target": target,
+                    "status": "timeout",
+                    "vulnerabilities": [],
+                }
+
             vulnerabilities = []
-            for line in proc_result.stdout.strip().split("\n"):
+            for line in stdout.strip().split("\n"):
                 if not line.strip():
                     continue
                 try:
@@ -365,7 +391,10 @@ def run_nuclei_scan(
                         db.add(vuln)
                     await db.commit()
 
-            _run_async(_persist_vulns())
+            try:
+                _run_async(_persist_vulns())
+            except (ConnectionError, TimeoutError) as exc:
+                raise self.retry(exc=exc, countdown=30, max_retries=3)
 
             logger.info(
                 "nuclei_task_termine",
@@ -386,14 +415,6 @@ def run_nuclei_scan(
                 "vulnerabilities": vulnerabilities,
             }
 
-        except subprocess.TimeoutExpired:
-            logger.error("nuclei_timeout", target=target)
-            return {
-                "scan_id": scan_id,
-                "target": target,
-                "status": "timeout",
-                "vulnerabilities": [],
-            }
         except FileNotFoundError:
             return {
                 "scan_id": scan_id,
@@ -402,6 +423,13 @@ def run_nuclei_scan(
                 "note": "Binaire nuclei introuvable (shutil.which a réussi mais subprocess échoue)",
                 "vulnerabilities": [],
             }
+        finally:
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
     try:
         return _execute()
@@ -417,7 +445,7 @@ def run_nuclei_scan(
 # ── Tâche : run_mission ────────────────────────────────────────
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=1, time_limit=3600, soft_time_limit=3540)
 def run_mission(self, mission_objective: str) -> dict:
     """Planifie et exécute une mission complète via MissionPlanner.
 
@@ -451,7 +479,10 @@ def run_mission(self, mission_objective: str) -> dict:
             await engine.initialize()
             return engine
 
-        engine = _run_async(_init_engine())
+        try:
+            engine = _run_async(_init_engine())
+        except (ConnectionError, TimeoutError) as exc:
+            raise self.retry(exc=exc, countdown=30, max_retries=1)
 
         # ── 2. Planifier la mission ─────────────────────────────
         self.update_state(

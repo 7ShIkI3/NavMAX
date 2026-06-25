@@ -232,7 +232,10 @@ class Crawler:
                     technologies=techs,
                     depth=depth,
                 )
+            except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
+                return CrawlResult(url=url, status_code=0, depth=depth, error=str(e))
             except Exception as e:
+                logger.debug("fetch_erreur_inattendue", url=url, erreur=str(e))
                 return CrawlResult(url=url, status_code=0, depth=depth, error=str(e))
 
     async def crawl(self, base_url: str) -> CrawlReport:
@@ -310,6 +313,15 @@ class Crawler:
             total_params += len(r.params)
 
         self._client = None
+
+        logger.info(
+            "crawl_terminé",
+            base_url=base_url,
+            crawled=len(self._visited),
+            endpoints=len(self._results),
+            dirs=len(directories_found),
+            duration_ms=round(elapsed, 0),
+        )
 
         return CrawlReport(
             base_url=base_url,

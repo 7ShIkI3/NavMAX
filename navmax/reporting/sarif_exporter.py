@@ -166,6 +166,34 @@ class SARIFExporter:
         doc = self.export(findings, scan_info)
         return json.dumps(doc, indent=2, ensure_ascii=False)
 
+    def save(
+        self,
+        findings: list[dict],
+        output_path: str,
+        scan_info: dict | None = None,
+    ) -> None:
+        """Sauvegarde le rapport SARIF dans un fichier.
+
+        Args:
+            findings: Liste de findings.
+            output_path: Chemin du fichier de sortie.
+            scan_info: Infos du scan optionnelles.
+
+        Raises:
+            ValueError: Si le chemin contient '..'.
+        """
+        from pathlib import Path
+
+        resolved = Path(output_path).resolve()
+        if ".." in str(Path(output_path)):
+            raise ValueError(f"Chemin de sortie invalide : {output_path}")
+
+        content = self.export_json(findings, scan_info)
+        with open(resolved, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info("sarif_sauvegarde", path=str(resolved), findings=len(findings))
+
     # ── Internals ──────────────────────────────────────────────
 
     @staticmethod

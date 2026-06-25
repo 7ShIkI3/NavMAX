@@ -12,12 +12,15 @@ Architecture :
 
 import asyncio
 import json
+import ssl
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Awaitable
+
+import httpx
 
 from navmax.core.config import config
 from navmax.core.logging import get_logger
@@ -203,7 +206,7 @@ if MITMPROXY_AVAILABLE:
                             # est synchrone; on ne peut pas await ici.
                             # On schedule la coroutine dans une approche fire-and-forget
                             asyncio.ensure_future(result)
-                    except Exception as e:
+                    except (RuntimeError, ValueError, TypeError) as e:
                         logger.error("callback_flux_erreur", erreur=str(e))
 
                 logger.debug(
@@ -212,7 +215,7 @@ if MITMPROXY_AVAILABLE:
                     url=captured.url[:100],
                     status=captured.response_status,
                 )
-            except Exception as e:
+            except (AttributeError, KeyError, UnicodeDecodeError) as e:
                 logger.error("capture_flux_erreur", erreur=str(e))
 
         def error(self, flow: http.HTTPFlow) -> None:
@@ -415,7 +418,7 @@ class NavMITMProxy:
 
         try:
             self._master.shutdown()
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             logger.debug("arrêt_master", erreur=str(e))
 
         if self._thread and self._thread.is_alive():
@@ -499,8 +502,6 @@ class NavMITMProxy:
         )
 
         # Envoyer via httpx
-        import httpx
-
         t0 = time.monotonic()
         try:
             async with httpx.AsyncClient(
@@ -530,7 +531,7 @@ class NavMITMProxy:
                 self._addon._flows.append(result)
 
             return result
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.RequestError, OSError, ssl.SSLError) as e:
             elapsed = (time.monotonic() - t0) * 1000
             result = CapturedFlow(
                 method=method,
@@ -608,7 +609,7 @@ class NavMITMProxy:
         """
         try:
             master.run()
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             logger.error("master_erreur", erreur=str(e))
             self._running = False
 
@@ -620,5 +621,5 @@ class NavMITMProxy:
         for cb in self._on_flow_captured_callbacks:
             try:
                 await cb(captured)
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError) as e:
                 logger.error("callback_flux_erreur", erreur=str(e))

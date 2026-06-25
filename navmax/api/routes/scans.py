@@ -173,11 +173,14 @@ async def delete_scan(scan_id: str, db: AsyncSession = Depends(get_session)) -> 
 
     try:
         celery_app.control.revoke(scan_id, terminate=True, signal="SIGTERM")
-    except (CeleryError, Exception):
-        logger.debug("tâche_celery_déjà_terminée", task_id=scan_id)
+    except CeleryError as exc:
+        logger.debug("tâche_celery_déjà_terminée", task_id=scan_id, erreur=str(exc))
+    except Exception as exc:  # noqa: BLE001 — fallback réseau/connexion Celery
+        logger.debug("tâche_celery_erreur_révocation", task_id=scan_id, erreur=str(exc))
 
     scan = await db.get(Scan, scan_id)
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan introuvable")
     await db.delete(scan)
     await db.commit()
+    logger.info("scan_supprimé", scan_id=scan_id)

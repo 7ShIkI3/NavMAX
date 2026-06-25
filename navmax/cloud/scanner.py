@@ -8,15 +8,21 @@ Scanners implémentés :
 
 import asyncio
 import json
-import logging
 import re
 import socket
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# AWS Region validation
+# ---------------------------------------------------------------------------
+
+AWS_REGION_PATTERN = re.compile(r'^[a-z]{2}-[a-z]+-[0-9]+$')
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -187,15 +193,15 @@ async def _check_s3_bucket(
                         remediation="Vérifier manuellement la politique du bucket.",
                     )
                 )
-        except Exception:
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError):
             pass  # graceful degradation
 
     except httpx.TimeoutException:
-        logger.warning(f"S3 timeout pour {bucket_name}")
+        logger.warning("s3_timeout", bucket=bucket_name)
     except httpx.ConnectError:
-        logger.warning(f"S3 connexion refusée pour {bucket_name}")
-    except Exception as exc:
-        logger.debug(f"S3 erreur pour {bucket_name}: {exc}")
+        logger.warning("s3_connexion_refusee", bucket=bucket_name)
+    except httpx.HTTPStatusError as exc:
+        logger.debug("s3_erreur_http", bucket=bucket_name, error=str(exc))
 
     return findings
 
@@ -426,7 +432,7 @@ async def _check_subdomain(
         # 403 = existe mais interdit (bucket privé)
         if resp.status_code == 403:
             return url
-    except Exception:
+    except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError, OSError):
         pass
     return None
 
@@ -435,6 +441,7 @@ async def discover_cloud_resources(
     domain: str,
     timeout: float = 10.0,
     resolve_dns: bool = True,
+    region: str | None = None,
 ) -> CloudReconResult:
     """Découvre les ressources cloud associées à un domaine.
 
@@ -446,10 +453,15 @@ async def discover_cloud_resources(
         domain: Nom de domaine à analyser
         timeout: Timeout des requêtes en secondes
         resolve_dns: Si True, effectue les résolutions DNS
+        region: Région AWS optionnelle (ex: eu-west-1)
 
     Returns:
         CloudReconResult contenant les ressources découvertes
     """
+    if region and not AWS_REGION_PATTERN.match(region):
+        logger.warning("aws_region_invalide", region=region)
+        return CloudReconResult(domain=domain)
+
     result = CloudReconResult(domain=domain)
 
     async with httpx.AsyncClient(
@@ -513,11 +525,11 @@ async def discover_cloud_resources(
                         try:
                             _ip = socket.gethostbyname(cname)
                             result.ips_found.append(f"{cname} -> {_ip}")
-                        except Exception:
+                        except (socket.gaierror, OSError):
                             pass
 
-            except Exception:
-                logger.debug(f"DNS resolution failed for {domain}")
+            except (socket.gaierror, OSError) as e:
+                logger.debug("dns_resolution_failed", domain=domain, error=str(e))
 
         # Déduplication
         result.s3_buckets = list(dict.fromkeys(result.s3_buckets))
@@ -559,7 +571,7 @@ async def scan_s3_buckets(
             if isinstance(result, list):
                 all_findings.extend(result)
             elif isinstance(result, Exception):
-                logger.debug(f"S3 scan error: {result}")
+                logger.debug("s3_scan_error", error=str(result))
 
     return all_findings
 

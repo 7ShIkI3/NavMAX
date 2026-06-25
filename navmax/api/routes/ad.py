@@ -16,8 +16,10 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from navmax.db.engine import get_session
+from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/ad", tags=["Active Directory"])
+logger = get_logger(__name__)
 
 
 # ── Schemas ────────────────────────────────────────────────────
@@ -79,6 +81,12 @@ async def ad_enumerate(req: ADEnumerateRequest):
         await connector.connect()
         enumerator = ADEnumerator(connector)
         domain_map = await enumerator.enumerate_all()
+        logger.info(
+            "ad_énumération_réussie",
+            server=req.server,
+            domain=req.domain,
+            users=len(domain_map.users),
+        )
         return {
             "status": "success",
             "domain": domain_map.domain.name,
@@ -92,8 +100,15 @@ async def ad_enumerate(req: ADEnumerateRequest):
             "kerberoastable_users": len(domain_map.kerberoastable_users),
             "summary": domain_map.summary(),
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ConnectionError as exc:
+        logger.warning("ad_connexion_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion AD échouée : {exc}") from exc
+    except PermissionError as exc:
+        logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
+        logger.error("ad_énumération_erreur", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
 
@@ -122,6 +137,12 @@ async def ad_scan(req: ADScanRequest):
         scanner = ADVulnScanner(connector)
         report = await scanner.scan_all(domain_map)
 
+        logger.info(
+            "ad_scan_réussi",
+            server=req.server,
+            domain=req.domain,
+            findings=report.total_findings,
+        )
         return {
             "status": "success",
             "domain": report.domain,
@@ -139,8 +160,15 @@ async def ad_scan(req: ADScanRequest):
                 for f in report.findings
             ],
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ConnectionError as exc:
+        logger.warning("ad_connexion_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion AD échouée : {exc}") from exc
+    except PermissionError as exc:
+        logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
+        logger.error("ad_scan_erreur", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
 
@@ -173,6 +201,12 @@ async def ad_analyze(req: ADAnalyzeRequest):
         analyzer = AttackPathAnalyzer()
         analysis = await analyzer.analyze(graph)
 
+        logger.info(
+            "ad_analyse_réussie",
+            server=req.server,
+            domain=req.domain,
+            risk=analysis.overall_risk_level,
+        )
         return {
             "status": "success",
             "domain": domain_map.domain.name,
@@ -198,8 +232,15 @@ async def ad_analyze(req: ADAnalyzeRequest):
             ],
             "executive_summary": analysis.executive_summary,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ConnectionError as exc:
+        logger.warning("ad_connexion_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion AD échouée : {exc}") from exc
+    except PermissionError as exc:
+        logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
+        logger.error("ad_analyse_erreur", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
 
@@ -233,11 +274,26 @@ async def ad_spray(req: ADSprayRequest):
         else:
             sprayer.load_default_wordlist()
 
+        logger.info(
+            "ad_spray_lancé",
+            server=req.server,
+            domain=req.domain,
+            safe_mode=req.safe_mode,
+            target_count=len(req.target_users or []),
+        )
+
         # Spray ciblé si target_users spécifié
         session = await sprayer.spray_user_list(
             [{"username": u} for u in (req.target_users or [])]
         )
 
+        logger.info(
+            "ad_spray_terminé",
+            server=req.server,
+            domain=req.domain,
+            attempts=session.total_attempts,
+            successes=len(session.successes),
+        )
         return {
             "status": "success",
             "total_attempts": session.total_attempts,
@@ -248,7 +304,14 @@ async def ad_spray(req: ADSprayRequest):
             ],
             "duration": session.duration_seconds,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ConnectionError as exc:
+        logger.warning("ad_connexion_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=502, detail=f"Connexion AD échouée : {exc}") from exc
+    except PermissionError as exc:
+        logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
+        logger.error("ad_spray_erreur", server=req.server, erreur=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()

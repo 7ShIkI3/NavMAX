@@ -220,7 +220,7 @@ class WebScanner:
                         remediation=f"Ajouter l'en-tête {header} dans la configuration du serveur",
                         cwe="CWE-693",
                     ))
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
             logger.debug("scan_headers_échec", url=url, erreur=str(e))
         return vulns
 
@@ -249,7 +249,7 @@ class WebScanner:
                         remediation="Supprimer les informations sensibles des réponses HTTP",
                         cwe="CWE-200",
                     ))
-        except Exception as e:
+        except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
             logger.debug("scan_info_échec", url=url, erreur=str(e))
         return vulns
 
@@ -293,7 +293,7 @@ class WebScanner:
                             cwe="CWE-79",
                         ))
                         break  # Un seul payload suffit pour confirmer
-                except Exception:
+                except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
 
         return vulns
@@ -336,7 +336,7 @@ class WebScanner:
                                 cwe="CWE-89",
                             ))
                             return vulns  # Une seule suffit
-                except Exception:
+                except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
         return vulns
 
@@ -378,7 +378,7 @@ class WebScanner:
                         remediation="Utiliser des requêtes paramétrées (prepared statements).",
                         cwe="CWE-89",
                     ))
-            except Exception:
+            except (httpx.TimeoutException, httpx.RequestError, OSError):
                 continue
 
         return vulns
@@ -420,7 +420,7 @@ class WebScanner:
                                 cwe="CWE-22",
                             ))
                             return vulns
-                except Exception:
+                except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
         return vulns
 
@@ -460,6 +460,6 @@ class WebScanner:
                                 remediation="Utiliser une whitelist de destinations ou des tokens de redirection.",
                                 cwe="CWE-601",
                             ))
-                except Exception:
+                except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
         return vulns

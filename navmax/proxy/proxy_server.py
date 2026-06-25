@@ -43,6 +43,7 @@ class ProxyServer:
         self._server: asyncio.AbstractServer | None = None
         self._flows: list[InterceptedFlow] = []
         self._running: bool = False
+        self._stopping: bool = False
 
     @property
     def running(self) -> bool:
@@ -68,11 +69,16 @@ class ProxyServer:
 
     async def stop(self) -> None:
         """Arrête le serveur proxy."""
+        self._stopping = True
         self._running = False
         if self._server:
             self._server.close()
-            await self._server.wait_closed()
-        logger.info("proxy_arrêté")
+            try:
+                await asyncio.wait_for(self._server.wait_closed(), timeout=10.0)
+                logger.info("proxy_arrêt_gracieux")
+            except asyncio.TimeoutError:
+                logger.warning("proxy_arrêt_forcé")
+        self._stopping = False
 
     # ------------------------------------------------------------------
     # Gestion des connexions client
@@ -108,7 +114,7 @@ class ProxyServer:
             pass
         except (ConnectionResetError, OSError) as e:
             logger.debug("connexion_perdue", erreur=str(e))
-        except Exception as e:
+        except (ssl.SSLError, UnicodeDecodeError) as e:
             logger.error("erreur_proxy", erreur=str(e))
         finally:
             try:
@@ -194,7 +200,7 @@ class ProxyServer:
             flow.response_headers = resp_headers
             flow.response_body = resp_body
 
-        except Exception as e:
+        except (asyncio.TimeoutError, ConnectionResetError, OSError) as e:
             flow.response_status = 502
             logger.debug("erreur_réponse", host=host, erreur=str(e))
         finally:
@@ -226,7 +232,7 @@ class ProxyServer:
         # 2. Générer un certificat pour ce hostname
         try:
             cert_pem, key_pem = generate_host_cert(host)
-        except Exception as e:
+        except (ValueError, OSError) as e:
             logger.error("échec_cert", host=host, erreur=str(e))
             return
 
@@ -264,7 +270,7 @@ class ProxyServer:
             )
         except ssl.SSLError as e:
             logger.debug("tls_client_échec", host=host, erreur=str(e))
-        except Exception as e:
+        except (asyncio.TimeoutError, ConnectionResetError, OSError) as e:
             logger.error("relay_échec", host=host, erreur=str(e))
         finally:
             remote_writer.close()

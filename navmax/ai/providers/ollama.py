@@ -4,6 +4,7 @@ Endpoint: http://localhost:11434/api/generate
 Install: winget install Ollama.Ollama
 """
 
+import asyncio
 import json
 import time
 import aiohttp
@@ -59,31 +60,44 @@ class OllamaProvider(BaseProvider):
     async def health_check(self) -> bool:
         try:
             async with aiohttp.ClientSession() as s:
-                async with s.get(f"{self.base_url}/api/tags", timeout=5) as resp:
+                async with s.get(
+                    f"{self.base_url}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
                     return resp.status == 200
-        except Exception:
+        except aiohttp.ClientError:
+            return False
+        except asyncio.TimeoutError:
             return False
 
     async def list_models(self) -> list[ModelInfo]:
         if self._model_cache:
             return self._model_cache
 
-        async with aiohttp.ClientSession() as s:
-            async with s.get(f"{self.base_url}/api/tags", timeout=10) as resp:
-                data = await resp.json()
-                models = []
-                for m in data.get("models", []):
-                    name = m["name"]
-                    tier = self._guess_tier(name)
-                    models.append(ModelInfo(
-                        name=name,
-                        provider=ProviderType.OLLAMA,
-                        tier=tier,
-                        context_window=8192,
-                        supports_streaming=True,
-                    ))
-                self._model_cache = models
-                return models
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"{self.base_url}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    models = []
+                    for m in data.get("models", []):
+                        name = m["name"]
+                        tier = self._guess_tier(name)
+                        models.append(ModelInfo(
+                            name=name,
+                            provider=ProviderType.OLLAMA,
+                            tier=tier,
+                            context_window=8192,
+                            supports_streaming=True,
+                        ))
+                    self._model_cache = models
+                    return models
+        except aiohttp.ClientError as e:
+            logger.warning("ollama_list_models_failed", error=str(e))
+            return []
 
     def _guess_tier(self, model_name: str) -> ModelTier:
         # Match exact
@@ -127,25 +141,35 @@ class OllamaProvider(BaseProvider):
         if params.stop_sequences:
             payload["options"]["stop"] = params.stop_sequences
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=self.timeout),
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                elapsed = time.monotonic() - t0
-                eval_count = data.get("eval_count", 0)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    elapsed = time.monotonic() - t0
+                    eval_count = data.get("eval_count", 0)
 
-                return GenerateResult(
-                    text=data.get("response", ""),
-                    model=model,
-                    provider=ProviderType.OLLAMA,
-                    tokens_used=eval_count,
-                    tokens_per_second=eval_count / max(elapsed, 0.01),
-                    finish_reason="stop" if data.get("done") else "length",
-                )
+                    return GenerateResult(
+                        text=data.get("response", ""),
+                        model=model,
+                        provider=ProviderType.OLLAMA,
+                        tokens_used=eval_count,
+                        tokens_per_second=eval_count / max(elapsed, 0.01),
+                        finish_reason="stop" if data.get("done") else "length",
+                    )
+        except asyncio.TimeoutError as e:
+            logger.error("ollama_generate_timeout", model=model, timeout=self.timeout)
+            raise RuntimeError(f"Ollama timed out after {self.timeout}s") from e
+        except aiohttp.ClientResponseError as e:
+            logger.error("ollama_generate_http_error", model=model, status=e.status)
+            raise RuntimeError(f"Ollama HTTP {e.status}: {e.message}") from e
+        except aiohttp.ClientError as e:
+            logger.error("ollama_generate_client_error", model=model, error=str(e))
+            raise RuntimeError(f"Ollama connexion échouée: {e}") from e
 
     async def stream(self, params: GenerateParams) -> AsyncIterator[str]:
         model = params.model or "llama3.1:8b"
@@ -164,19 +188,26 @@ class OllamaProvider(BaseProvider):
         if params.json_mode:
             payload["format"] = "json"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=self.timeout),
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.content:
-                    if line:
-                        try:
-                            chunk = json.loads(line)
-                            if chunk.get("done"):
-                                break
-                            yield chunk.get("response", "")
-                        except json.JSONDecodeError:
-                            continue
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.content:
+                        if line:
+                            try:
+                                chunk = json.loads(line)
+                                if chunk.get("done"):
+                                    break
+                                yield chunk.get("response", "")
+                            except json.JSONDecodeError:
+                                continue
+        except aiohttp.ClientResponseError as e:
+            logger.error("ollama_stream_http_error", model=model, status=e.status)
+            raise RuntimeError(f"Ollama HTTP {e.status}: {e.message}") from e
+        except aiohttp.ClientError as e:
+            logger.error("ollama_stream_client_error", model=model, error=str(e))
+            raise RuntimeError(f"Ollama stream connexion échouée: {e}") from e

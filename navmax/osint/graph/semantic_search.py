@@ -100,7 +100,7 @@ class SemanticGraphSearch:
         # Étape 1: Traduire la question en opérations graphe
         try:
             plan = await self._translate(question)
-        except Exception as e:
+        except (ValueError, RuntimeError, KeyError) as e:
             return GraphQueryResult(
                 question=question,
                 explanation="Translation failed",
