@@ -11,5 +11,17 @@ Fonctionnalités :
 from .engine import run_scan, run_scan_background, parse_ports
 from .tcp import tcp_connect_scan
 from .fingerprint import detect_os, detect_service
+from .nuclei_scanner import NucleiScanner, NucleiFinding, NucleiNotFoundError, NucleiTimeoutError
 
-__all__ = ["run_scan", "run_scan_background", "parse_ports", "tcp_connect_scan", "detect_os", "detect_service"]
+__all__ = [
+    "run_scan",
+    "run_scan_background",
+    "parse_ports",
+    "tcp_connect_scan",
+    "detect_os",
+    "detect_service",
+    "NucleiScanner",
+    "NucleiFinding",
+    "NucleiNotFoundError",
+    "NucleiTimeoutError",
+]
