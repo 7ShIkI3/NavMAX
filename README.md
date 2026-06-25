@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-773%2F773-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.4.1-orange.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Version](https://img.shields.io/badge/version-0.4.2-orange.svg)](https://github.com/7ShIkI3/NavMAX)
 
 *Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK***
 
@@ -47,6 +47,15 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 | 🔒 **Sécurité** | ❌ Aucune | ✅ **Audit P0+P1** (6 fixes), SAST CI/CD (Bandit+Safety) |
 | 🐳 **Docker** | Basique | ✅ **PostgreSQL**, Nginx, volumes persistants, tout-en-un |
 | 🧪 **Tests** | 403 | ✅ **773** |
+
+### 🆕 v0.4.2 — Refactoring Mathis & Core Infra
+
+| Module | Avant (v0.4.1) | Maintenant (v0.4.2) |
+|---|---|---|
+| 🔧 **Refactoring** | ❌ Aucun | ✅ Merge tou0/NavMAX — 81 fichiers, +2311/-896 lignes |
+| 🏗️ **Core infra** | ❌ Aucun | ✅ constants.py (30+), exceptions.py (16), retry.py (@async_retry) |
+| 🔒 **Sécurité** | Basique | ✅ Anti-XSS, anti-prompt-injection (8 patterns), Docker non-root, JWT 32+ chars |
+| ⚡ **Robustesse** | Faible | ✅ Circuit breakers, graceful shutdown, timeouts LLM 180s, done_callback async |
 
 ### 🆕 v0.4.0 — Omni-Tool Infrastructure
 
@@ -680,7 +689,11 @@ NavMAX/
 │   │   ├── sarif_exporter.py  # 📊 SARIF 2.1.0 (NOUVEAU v0.4.1)
 │   │   └── ai_report.py      # Rapports IA HTML/MD
 │   ├── integrations/      # 🔗 TheHive, MISP, Hub
-│   ├── core/              # Config, logging, plugins, audit
+│   ├── core/
+│   │   ├── constants.py      # 30+ constantes (NOUVEAU v0.4.2)
+│   │   ├── exceptions.py     # 16 exceptions typées (NOUVEAU v0.4.2)
+│   │   ├── retry.py          # @async_retry backoff (NOUVEAU v0.4.2)
+│   │   └── utils.py          # safe_close_writer (NOUVEAU v0.4.2)
 │   ├── db/                # SQLAlchemy async models
 │   ├── api/               # FastAPI routes REST (34+ endpoints)
 │   │   └── static/        #   🖥️ Dashboard Web (NOUVEAU v0.4.1)
