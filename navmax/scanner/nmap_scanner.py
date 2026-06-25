@@ -3,9 +3,13 @@ NmapScanner — wrapper asynchrone autour de python-nmap avec fallback scapy.
 
 Détection OS, version detection, NSE scripts, avec fallback élégant
 vers le scanner TCP natif (scapy) si nmap n'est pas installé.
+
+Sécurité stricte : les arguments nmap sont limités à des profils prédéfinis.
+Aucun passage d'arguments bruts autorisé.
 """
 
 import asyncio
+import re
 import shutil
 import structlog
 from dataclasses import dataclass, field
@@ -14,6 +18,31 @@ from typing import Optional, Callable, Awaitable
 from navmax.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# ── Profils nmap whitelistés ──────────────────────────────────
+# Seuls ces profils peuvent être utilisés ; aucun argument nmap libre.
+NMAP_PROFILES: dict[str, str] = {
+    "quick": "-T4 -F",
+    "default": "-sV -sC -T4",
+    "deep": "-sV -sC -O -T4 --script vuln",
+    "stealth": "-sS -T2 -f",
+    "vuln": "-sV --script vuln",
+}
+
+
+def _validate_host(host: str) -> None:
+    """Valide que host est une IP ou un hostname basique."""
+    if not host or not isinstance(host, str):
+        raise ValueError(f"host must be a non-empty string, got {type(host).__name__}")
+    # Vérification basique : IP (IPv4/v6) ou hostname (DNS)
+    host = host.strip()
+    # IPv4
+    ipv4_re = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+    # IPv6 simplifié (présence de ':')
+    # Hostname (lettres, chiffres, points, tirets)
+    hostname_re = r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$"
+    if not (re.match(ipv4_re, host) or ":" in host or re.match(hostname_re, host)):
+        raise ValueError(f"Invalid host format: '{host}'")
 
 
 @dataclass
@@ -52,7 +81,12 @@ class NmapScanner:
     Utilise asyncio.to_thread() pour ne pas bloquer la boucle asynchrone.
     Détecte automatiquement si nmap est installé ; sinon, tombe sur un
     scanner TCP natif via asyncio.open_connection (scapy fallback).
+
+    Les arguments nmap sont strictement limités aux profils prédéfinis
+    (NMAP_PROFILES). Aucun argument brut n'est accepté.
     """
+
+    PROFILES = NMAP_PROFILES
 
     def __init__(self):
         self._nmap_available: Optional[bool] = None
@@ -70,22 +104,39 @@ class NmapScanner:
         self,
         host: str,
         ports: Optional[list[int]] = None,
-        args: str = "-sV -O --osscan-guess",
+        profile: str = "default",
         timeout: int = 120,
         scripts: Optional[list[str]] = None,
+        unsafe_scripts: bool = False,
     ) -> NmapHostResult:
         """Lance un scan nmap complet sur un hôte.
+
+        Les arguments nmap sont déterminés par un profil prédéfini uniquement.
+        Aucun passage d'arguments bruts n'est autorisé.
 
         Args:
             host: Cible (IP ou hostname)
             ports: Liste de ports (ex: [80, 443, 22]). None = ports communs
-            args: Arguments nmap (défaut: -sV -O --osscan-guess)
+            profile: Profil nmap prédéfini ("quick", "default", "deep", "stealth", "vuln")
             timeout: Timeout en secondes
-            scripts: Scripts NSE à exécuter (ex: ["vuln", "safe"])
+            scripts: Scripts NSE supplémentaires (ex: ["http-title", "ssl-enum-ciphers"])
+            unsafe_scripts: Activer --script-args=unsafe=1 (défaut: False)
 
         Returns:
             NmapHostResult avec les résultats structurés
+
+        Raises:
+            ValueError: Si le profil est inconnu ou si l'hôte est invalide
         """
+        # Validation
+        _validate_host(host)
+        if profile not in self.PROFILES:
+            valid = ", ".join(sorted(self.PROFILES.keys()))
+            raise ValueError(
+                f"Unknown nmap profile '{profile}'. "
+                f"Valid profiles: {valid}"
+            )
+
         result = NmapHostResult(host=host)
 
         if not self.available:
@@ -98,17 +149,22 @@ class NmapScanner:
             logger.info("nmap_python_missing_fallback", host=host)
             return await self._fallback_scan(host, ports, timeout)
 
-        # Construire la chaîne de ports
-        port_str = ""
-        if ports:
-            port_str = ",".join(str(p) for p in ports)
+        # Construire les arguments à partir du profil
+        nse_args = self.PROFILES[profile]
 
-        # Ajouter les scripts NSE
-        nse_args = args
+        # Ajouter les scripts NSE supplémentaires
         if scripts:
             script_str = ",".join(scripts)
             nse_args += f" --script={script_str}"
 
+        # Activer unsafe si demandé
+        if unsafe_scripts:
+            nse_args += " --script-args=unsafe=1"
+
+        # Ajouter les ports
+        port_str = ""
+        if ports:
+            port_str = ",".join(str(p) for p in ports)
         if port_str:
             nse_args += f" -p {port_str}"
 
@@ -185,8 +241,8 @@ class NmapScanner:
         return result
 
     async def scan_os(self, host: str, timeout: int = 120) -> NmapHostResult:
-        """Scan spécifique pour la détection OS (nmap -O)."""
-        return await self.scan(host, args="-O --osscan-guess", timeout=timeout)
+        """Scan spécifique pour la détection OS (profil deep avec -O)."""
+        return await self.scan(host, profile="deep", timeout=timeout)
 
     async def scan_services(
         self,
@@ -194,8 +250,8 @@ class NmapScanner:
         ports: Optional[list[int]] = None,
         timeout: int = 120,
     ) -> NmapHostResult:
-        """Scan spécifique pour la détection de services/versions (nmap -sV)."""
-        return await self.scan(host, ports=ports, args="-sV", timeout=timeout)
+        """Scan spécifique pour la détection de services/versions (profil default)."""
+        return await self.scan(host, ports=ports, profile="default", timeout=timeout)
 
     async def scan_vuln(
         self,
@@ -203,11 +259,16 @@ class NmapScanner:
         ports: Optional[list[int]] = None,
         timeout: int = 300,
     ) -> NmapHostResult:
-        """Scan avec scripts NSE de vulnérabilité (--script vuln)."""
+        """Scan avec scripts NSE de vulnérabilité (profil vuln).
+
+        Les scripts unsafe sont activés car il s'agit d'un scan
+        de vulnérabilité explicite.
+        """
         return await self.scan(
             host, ports=ports,
-            args="-sV --script=vuln --script-args=unsafe=1",
+            profile="vuln",
             timeout=timeout,
+            unsafe_scripts=True,
         )
 
     async def scan_nse(
@@ -217,10 +278,10 @@ class NmapScanner:
         ports: Optional[list[int]] = None,
         timeout: int = 180,
     ) -> NmapHostResult:
-        """Scan avec scripts NSE personnalisés."""
+        """Scan avec scripts NSE personnalisés (profil default + scripts)."""
         return await self.scan(
             host, ports=ports,
-            args="-sV",
+            profile="default",
             scripts=scripts,
             timeout=timeout,
         )

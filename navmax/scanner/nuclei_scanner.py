@@ -13,12 +13,44 @@ Usage:
 
 import asyncio
 import json
+import re
 import shutil
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional
 
 logger = structlog.get_logger(__name__)
+
+
+# ── Validation ─────────────────────────────────────────────────
+
+# Target regex: URL (http/https), hostname, IPv4, with optional port and path
+# Blocks newlines, spaces, pipes, backticks, $(), ;, && and other shell-dangerous chars
+_TARGET_REGEX = re.compile(
+    r"^(?:https?://)?"                                    # optional protocol
+    r"(?:"
+    r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9]+)"  # domain
+    r"|"
+    r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:/\d{1,2})?"  # IPv4 with optional CIDR
+    r")"
+    r"(?::\d{1,5})?"                                      # optional port
+    r"(?:/[a-zA-Z0-9._~:/?#@!$&'()*+,;=-]*)?$",         # optional path (safe chars only)
+)
+
+# Template path whitelist: only known template directories
+_ALLOWED_TEMPLATE_PREFIXES = frozenset({
+    "cves/",
+    "exposed-panels/",
+    "vulnerabilities/",
+    "misconfiguration/",
+    "technologies/",
+    "default-logins/",
+    "exposures/",
+    "fuzzing/",
+})
+
+# Template ID: alphanumeric + hyphens (standard nuclei template ID format)
+_TEMPLATE_ID_REGEX = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$")
 
 
 # ── Exceptions ─────────────────────────────────────────────────
@@ -125,6 +157,48 @@ class NucleiScanner:
             raise NucleiNotFoundError()
         return self._binary  # type: ignore[return-value]
 
+    @staticmethod
+    def _validate_target(target: str) -> bool:
+        """Validate target is a safe URL, hostname, or IP (no shell injection).
+
+        Blocks newlines, pipes, backticks, ``$()``, ``;``, ``&&``, and other
+        shell-dangerous characters via strict regex matching.
+
+        Args:
+            target: Target string to validate.
+
+        Returns:
+            True if the target format is valid and safe.
+        """
+        if not target or not isinstance(target, str):
+            return False
+        return bool(_TARGET_REGEX.match(target))
+
+    @staticmethod
+    def _validate_template(template: str) -> bool:
+        """Validate template is a known directory path or valid template ID.
+
+        Known directory paths (whitelist):
+        ``cves/``, ``exposed-panels/``, ``vulnerabilities/``,
+        ``misconfiguration/``, ``technologies/``, ``default-logins/``,
+        ``exposures/``, ``fuzzing/``.
+
+        Template IDs must be alphanumeric with hyphens (standard nuclei format).
+
+        Args:
+            template: Template string to validate.
+
+        Returns:
+            True if the template is safe and valid.
+        """
+        if not template or not isinstance(template, str):
+            return False
+        if any(template.startswith(prefix) for prefix in _ALLOWED_TEMPLATE_PREFIXES):
+            return True
+        if _TEMPLATE_ID_REGEX.match(template):
+            return True
+        return False
+
     # ── Installation des templates ────────────────────────────
 
     @staticmethod
@@ -190,13 +264,21 @@ class NucleiScanner:
         """
         binary = await self._require_installed()
 
+        # ── Validation de la cible ──
+        if not self._validate_target(target):
+            logger.error("nuclei_invalid_target", target=target)
+            raise ValueError(f"Invalid target format: {target!r}")
+
         # Construction de la commande
-        args = [binary, "-json", "-silent"]
+        args = [binary, "-json", "-silent", "--disable-interactsh"]
 
         # Templates
         if templates:
             for t in templates:
-                args.extend(["-t", t])
+                if self._validate_template(t):
+                    args.extend(["-t", t])
+                else:
+                    logger.warning("nuclei_invalid_template", template=t)
         else:
             # Par défaut, on utilise le dossier templates complet
             args.extend(["-t", "cves/"])

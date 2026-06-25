@@ -108,6 +108,8 @@ class TestNavMITMProxy:
         assert proxy.running is False
         assert proxy.flow_count == 0
         assert proxy.recent_flows == []
+        assert proxy.verify_upstream is True
+        assert proxy.ssl_insecure is False
 
     @pytest.mark.asyncio
     async def test_start_stop_mitmproxy_not_available(self) -> None:
@@ -140,6 +142,15 @@ class TestNavMITMProxy:
             # Vérifier que le master a été créé avec les bonnes options
             MockMaster.assert_called_once()
             call_kwargs = MockMaster.call_args[0][0]
+
+            # Vérifier ssl_insecure dans les options (False par défaut = sécurisé)
+            MockOptions.assert_called_once_with(
+                listen_host="127.0.0.1",
+                listen_port=8080,
+                ssl_insecure=False,
+                http2=True,
+                websocket=True,
+            )
 
             # Vérifier que le thread a été créé et démarré
             MockThread.assert_called_once()

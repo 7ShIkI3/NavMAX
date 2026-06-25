@@ -282,6 +282,8 @@ class NavMITMProxy:
         host: Adresse d'écoute du proxy
         port: Port d'écoute du proxy
         interceptor: Instance d'Interceptor optionnelle
+        verify_upstream: Vérifier les certificats TLS upstream (True par défaut).
+            Passer False pour accepter les certificats invalides (⚠️ risque sécurité).
     """
 
     def __init__(
@@ -289,10 +291,12 @@ class NavMITMProxy:
         host: str = "127.0.0.1",
         port: int = 8080,
         interceptor: Interceptor | None = None,
+        verify_upstream: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.interceptor = interceptor or Interceptor()
+        self.verify_upstream = verify_upstream
 
         self._master: Master | None = None
         self._addon: NavMITMAddon | None = None
@@ -327,6 +331,14 @@ class NavMITMProxy:
             return list(self._addon._flows[-200:])
         return []
 
+    @property
+    def ssl_insecure(self) -> bool:
+        """Vérification TLS upstream désactivée ? (retourne ``not verify_upstream``).
+
+        Pour compatibilité avec l'interface existante.
+        """
+        return not self.verify_upstream
+
     # ------------------------------------------------------------------
     # Cycle de vie
     # ------------------------------------------------------------------
@@ -348,11 +360,17 @@ class NavMITMProxy:
 
         self._loop = asyncio.get_running_loop()
 
+        if not self.verify_upstream:
+            logger.warning(
+                "⚠️ Vérification TLS upstream désactivée — les certificats "
+                "invalides seront acceptés silencieusement"
+            )
+
         # Créer les options mitmproxy
         opts = options.Options(
             listen_host=self.host,
             listen_port=self.port,
-            ssl_insecure=True,  # Ignorer les erreurs TLS upstream
+            ssl_insecure=not self.verify_upstream,
             http2=True,
             websocket=True,
         )
@@ -381,9 +399,10 @@ class NavMITMProxy:
         await asyncio.sleep(0.5)
 
         logger.info(
-            "proxy_mitm_démarré",
+            "proxy_mitm_started",
             host=self.host,
             port=self.port,
+            verify_upstream=self.verify_upstream,
         )
 
     async def stop(self) -> None:
@@ -485,7 +504,7 @@ class NavMITMProxy:
         t0 = time.monotonic()
         try:
             async with httpx.AsyncClient(
-                verify=False, timeout=30.0
+                verify=self.verify_upstream, timeout=30.0
             ) as client:
                 resp = await client.request(
                     method=method,
