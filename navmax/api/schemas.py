@@ -85,6 +85,29 @@ class ScanListResponse(BaseModel):
     pagination: Pagination
 
 
+# ---- Task (Celery) ----
+class TaskStatusResponse(BaseModel):
+    """Statut d'une tâche Celery."""
+    task_id: str
+    state: str  # PENDING, PROGRESS, SUCCESS, FAILURE
+    meta: dict | None = None
+    result: dict | None = None
+
+
+class ScanCreateResponse(BaseModel):
+    """Réponse après création d'un scan avec tâche Celery."""
+    task_id: str
+    scan_id: str
+    status: str = "PENDING"
+    message: str = "Scan lancé en arrière-plan"
+
+
+class TaskProgressEvent(BaseModel):
+    """Événement SSE pour la progression d'un scan."""
+    event: str = "progress"
+    data: dict
+
+
 # ---- Service ----
 class ServiceResponse(BaseModel):
     id: str

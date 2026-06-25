@@ -1,0 +1,384 @@
+"""NucleiScanner — wrapper async autour du binaire nuclei pour scanner de vulnérabilités.
+
+Remplace les 17 signatures CVE codées en dur dans vuln_db.py par du vrai scanning
+communautaire avec 10 000+ templates. Nuclei est un scanner open-source maintenu
+par ProjectDiscovery.
+
+Usage:
+    scanner = NucleiScanner()
+    findings = await scanner.scan("https://example.com", severity=["critical", "high"])
+    for f in findings:
+        print(f.template_id, f.severity, f.cve_ids)
+"""
+
+import asyncio
+import json
+import shutil
+import structlog
+from dataclasses import dataclass, field
+from typing import Optional
+
+logger = structlog.get_logger(__name__)
+
+
+# ── Exceptions ─────────────────────────────────────────────────
+
+
+class NucleiNotFoundError(RuntimeError):
+    """Nuclei binaire introuvable sur le système."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "nuclei binaire introuvable. "
+            "Installez-le via :\n"
+            "  # Linux/macOS\n"
+            "  go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest\n\n"
+            "  # Ou via Homebrew\n"
+            "  brew install nuclei\n\n"
+            "  # Téléchargement direct\n"
+            "  https://github.com/projectdiscovery/nuclei/releases"
+        )
+
+
+class NucleiTimeoutError(TimeoutError):
+    """Le scan nuclei a dépassé le temps imparti."""
+
+    def __init__(self, target: str, timeout: int) -> None:
+        super().__init__(
+            f"Scan nuclei vers {target} a dépassé le timeout de {timeout}s. "
+            "Essayez d'augmenter le timeout ou de réduire le nombre de templates."
+        )
+
+
+# ── Dataclasses ────────────────────────────────────────────────
+
+
+@dataclass
+class NucleiFinding:
+    """Résultat d'un template nuclei ayant matché sur la cible.
+
+    Contient toutes les informations extraites par nuclei pendant le scan :
+    l'ID du template, la sévérité, les CVE associées, et les résultats
+    extraits (payloads, réponses HTTP, etc.).
+    """
+
+    template_id: str
+    name: str
+    severity: str
+    host: str
+    matched_at: str
+    description: str = ""
+    cvss_score: Optional[float] = None
+    cve_ids: list[str] = field(default_factory=list)
+    reference_urls: list[str] = field(default_factory=list)
+    extracted_results: list[str] = field(default_factory=list)
+
+
+# ── NucleiScanner ──────────────────────────────────────────────
+
+
+class NucleiScanner:
+    """Wrapper asynchrone autour du binaire nuclei.
+
+    Exécute nuclei en sous-processus avec les arguments appropriés,
+    parse le flux JSON ligne par ligne, et retourne une liste structurée
+    de ``NucleiFinding``.
+
+    Attributes:
+        binary_path: Chemin vers le binaire nuclei (détecté via shutil si None).
+    """
+
+    def __init__(self, binary_path: Optional[str] = None) -> None:
+        self._binary: Optional[str] = binary_path
+        self._available: Optional[bool] = None
+
+    # ── Vérification d'installation ────────────────────────────
+
+    async def check_installed(self) -> bool:
+        """Vérifie si nuclei est installé et disponible.
+
+        Returns:
+            True si le binaire nuclei est trouvé dans le PATH.
+        """
+        if self._available is not None:
+            return self._available
+
+        # shutil.which est thread-safe, on peut l'utiliser directement
+        loop = asyncio.get_running_loop()
+        self._binary = await loop.run_in_executor(None, shutil.which, "nuclei")
+        self._available = self._binary is not None
+
+        if self._available:
+            logger.info("nuclei_detected", path=self._binary)
+        else:
+            logger.warning("nuclei_not_found")
+
+        return self._available
+
+    async def _require_installed(self) -> str:
+        """Vérifie que nuclei est installé et retourne son chemin.
+
+        Raises:
+            NucleiNotFoundError: Si nuclei n'est pas trouvé.
+        """
+        if not await self.check_installed():
+            raise NucleiNotFoundError()
+        return self._binary  # type: ignore[return-value]
+
+    # ── Installation des templates ────────────────────────────
+
+    @staticmethod
+    async def install_templates() -> None:
+        """Télécharge/met à jour les templates nuclei officiels.
+
+        Exécute ``nuclei -update-templates`` pour synchroniser la dernière
+        version des templates communautaires (10 000+ templates).
+        """
+        binary = shutil.which("nuclei")
+        if not binary:
+            raise NucleiNotFoundError()
+
+        logger.info("nuclei_updating_templates")
+        proc = await asyncio.create_subprocess_exec(
+            binary,
+            "-update-templates",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode == 0:
+            logger.info("nuclei_templates_updated")
+        else:
+            logger.error(
+                "nuclei_templates_update_failed",
+                returncode=proc.returncode,
+                stderr=stderr.decode("utf-8", errors="replace"),
+            )
+
+        if stdout:
+            logger.debug("nuclei_update_output", output=stdout.decode("utf-8", errors="replace"))
+
+    # ── Scan principal ─────────────────────────────────────────
+
+    async def scan(
+        self,
+        target: str,
+        templates: Optional[list[str]] = None,
+        severity: Optional[list[str]] = None,
+        timeout: int = 300,
+    ) -> list[NucleiFinding]:
+        """Lance un scan nuclei sur la cible donnée.
+
+        Args:
+            target: Cible à scanner (URL, IP, domaine, CIDR).
+                Ex: ``"https://example.com"``, ``"10.0.0.1"``, ``"192.168.1.0/24"``.
+            templates: Liste de templates ou tags nuclei.
+                Ex: ``["cves/", "exposed-panels/"]``.
+                None = tous les templates (scan complet).
+            severity: Filtre par sévérité. Valeurs acceptées :
+                ``"critical"``, ``"high"``, ``"medium"``, ``"low"``, ``"info"``.
+                None = toutes les sévérités.
+            timeout: Timeout maximum pour le scan en secondes (défaut: 300).
+
+        Returns:
+            Liste des findings (vulnérabilités, informations, etc.) trouvés.
+
+        Raises:
+            NucleiNotFoundError: Si nuclei n'est pas installé.
+            NucleiTimeoutError: Si le scan dépasse le timeout.
+        """
+        binary = await self._require_installed()
+
+        # Construction de la commande
+        args = [binary, "-json", "-silent"]
+
+        # Templates
+        if templates:
+            for t in templates:
+                args.extend(["-t", t])
+        else:
+            # Par défaut, on utilise le dossier templates complet
+            args.extend(["-t", "cves/"])
+
+        # Filtre sévérité
+        valid_severity = {"critical", "high", "medium", "low", "info"}
+        if severity:
+            # Nuclei accepte une seule valeur -s, on prend la plus haute
+            filtered = [s.lower() for s in severity if s.lower() in valid_severity]
+            if filtered:
+                # Prendre la plus élevée (critical > high > medium > low > info)
+                order = ["info", "low", "medium", "high", "critical"]
+                highest = max(filtered, key=lambda s: order.index(s))
+                args.extend(["-s", highest])
+
+        # Target
+        args.append("-u")
+        args.append(target)
+
+        logger.info(
+            "nuclei_scan_starting",
+            target=target,
+            templates=templates,
+            severity=severity,
+            timeout=timeout,
+            command=" ".join(args),
+        )
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            findings: list[NucleiFinding] = []
+
+            # Lire stdout ligne par ligne avec timeout
+            async def _read_stdout() -> None:
+                nonlocal findings
+                assert proc.stdout is not None
+                while True:
+                    line = await proc.stdout.readline()
+                    if not line:
+                        break
+                    line_str = line.decode("utf-8", errors="replace").strip()
+                    if line_str:
+                        try:
+                            finding = self._parse_json_line(line_str)
+                            if finding:
+                                findings.append(finding)
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                "nuclei_json_parse_error",
+                                line=line_str[:200],
+                            )
+
+            # Lire stderr en arrière-plan
+            async def _read_stderr() -> str:
+                assert proc.stderr is not None
+                data = await proc.stderr.read()
+                return data.decode("utf-8", errors="replace")
+
+            stdout_task = asyncio.create_task(_read_stdout())
+            stderr_task = asyncio.create_task(_read_stderr())
+
+            # Attendre avec timeout
+            await asyncio.wait_for(
+                asyncio.gather(stdout_task, stderr_task),
+                timeout=timeout,
+            )
+
+            await proc.wait()
+
+        except asyncio.TimeoutError:
+            logger.error("nuclei_scan_timeout", target=target, timeout=timeout)
+            if proc:
+                proc.kill()
+            raise NucleiTimeoutError(target, timeout)
+
+        stderr_text = stderr_task.result() if not stderr_task.done() else ""
+        if proc.returncode != 0 and proc.returncode is not None:
+            logger.warning(
+                "nuclei_scan_nonzero_exit",
+                target=target,
+                returncode=proc.returncode,
+                stderr=stderr_text[:500] if stderr_text else "",
+            )
+
+        logger.info(
+            "nuclei_scan_completed",
+            target=target,
+            findings_count=len(findings),
+            returncode=proc.returncode,
+        )
+
+        # Filtrer par sévérité côté client si plusieurs sévérités demandées
+        if severity:
+            filtered_severity = {s.lower() for s in severity if s.lower() in valid_severity}
+            if filtered_severity:
+                findings = [f for f in findings if f.severity.lower() in filtered_severity]
+
+        return findings
+
+    # ── Parsing JSON ───────────────────────────────────────────
+
+    def _parse_json_line(self, line: str) -> Optional[NucleiFinding]:
+        """Parse une ligne JSON provenant de nuclei.
+
+        Args:
+            line: Une ligne de sortie JSON de nuclei (format v3).
+
+        Returns:
+            Un NucleiFinding si la ligne est correcte, None si elle ne
+            correspond pas au format attendu.
+        """
+        if not line or not line.strip():
+            return None
+
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            logger.warning("nuclei_invalid_json_line", line=line[:200])
+            return None
+
+        template_id = data.get("template-id", data.get("templateID", ""))
+        name = data.get("info", {}).get("name", data.get("name", ""))
+        severity = data.get("info", {}).get("severity", data.get("severity", "info"))
+        host = data.get("host", data.get("ip", ""))
+        matched_at = data.get("matched-at", data.get("matched_at", ""))
+
+        # Infos extraites du champ "info"
+        info = data.get("info", {})
+        description = info.get("description", "")
+        cvss_score = info.get("classification", {}).get("cvss-score", None)
+        if isinstance(cvss_score, str):
+            try:
+                cvss_score = float(cvss_score)
+            except (ValueError, TypeError):
+                cvss_score = None
+
+        # CVE IDs
+        classification = info.get("classification", {})
+        cve_ids: list[str] = []
+        cve_data = classification.get("cve-id", [])
+        if isinstance(cve_data, list):
+            cve_ids = cve_data
+        elif isinstance(cve_data, str):
+            cve_ids = [cve_data]
+
+        # References
+        references = info.get("reference", [])
+        if isinstance(references, str):
+            references = [references]
+        reference_urls = references if isinstance(references, list) else []
+
+        # Extracted results (matcher-name, extracted-values, curl-command)
+        extracted_results: list[str] = []
+        matcher_name = data.get("matcher-name", "")
+        if matcher_name:
+            extracted_results.append(f"matcher: {matcher_name}")
+
+        extracted = data.get("extracted-results", [])
+        if isinstance(extracted, list):
+            for e in extracted:
+                extracted_results.append(str(e))
+        elif extracted:
+            extracted_results.append(str(extracted))
+
+        curl = data.get("curl-command", "")
+        if curl:
+            extracted_results.append(f"curl: {curl[:200]}")
+
+        return NucleiFinding(
+            template_id=template_id,
+            name=name,
+            severity=severity,
+            host=host,
+            matched_at=matched_at,
+            description=description,
+            cvss_score=cvss_score,
+            cve_ids=cve_ids,
+            reference_urls=reference_urls,
+            extracted_results=extracted_results,
+        )

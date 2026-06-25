@@ -24,7 +24,7 @@ from navmax.api.auth import (
     require_role,
 )
 
-from .routes import targets, scans, proxy, exploit, osint, workspaces, ai, ad, firewall
+from .routes import targets, scans, proxy, exploit, osint, workspaces, ai, ad, firewall, nuclei
 
 logger = get_logger(__name__)
 
@@ -148,6 +148,13 @@ app.include_router(
     firewall.router,
     tags=["Firewall"],
     dependencies=admin_only,
+)
+
+# Nuclei (vulnérabilités → operator+)
+app.include_router(
+    nuclei.router,
+    tags=["Nuclei"],
+    dependencies=operator_or_admin,
 )
 
 
