@@ -229,7 +229,7 @@ class IntegrationHub:
                 else:
                     rid = None
                 results[name] = rid
-            except (RuntimeError, OSError, ValueError) as e:
+            except Exception as e:
                 logger.error("connector_failed", name=name, error=str(e))
                 results[name] = None
         return results

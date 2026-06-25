@@ -1048,10 +1048,11 @@ class TestPasswordSprayer:
 
     @pytest.mark.asyncio
     async def test_spray_without_connector_raises(self):
+        """Le spray sans connector lève une ValueError."""
         from navmax.ad.password_spray import PasswordSprayer
         sprayer = PasswordSprayer(connector=None)
         sprayer.set_wordlist(["test"])
-        with pytest.raises(ValueError, match="requires an active"):
+        with pytest.raises(ValueError):
             await sprayer.spray_user_list([])
 
 

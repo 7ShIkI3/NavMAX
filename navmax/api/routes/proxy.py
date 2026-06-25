@@ -31,6 +31,13 @@ _web_scanner = WebScanner()
 _fuzzer = Fuzzer()
 
 
+def _on_proxy_task_error(task: asyncio.Task) -> None:
+    """Callback de fin de tâche proxy — log les erreurs."""
+    exc = task.exception() if not task.cancelled() else None
+    if exc:
+        logger.error("proxy_start_error", error=repr(exc))
+
+
 # ---------------------------------------------------------------------------
 # Schémas
 # ---------------------------------------------------------------------------
@@ -82,7 +89,8 @@ async def proxy_start(req: ProxyStartRequest) -> dict:
         port=req.port,
         interceptor=_interceptor,
     )
-    asyncio.create_task(_proxy_server.start())
+    task = asyncio.create_task(_proxy_server.start())
+    task.add_done_callback(_on_proxy_task_error)
     logger.info("proxy_démarré", host=req.host, port=req.port)
     return {"status": "started", "host": req.host, "port": req.port}
 

@@ -9,6 +9,7 @@ import socket
 import struct
 
 from navmax.core.logging import get_logger
+from navmax.core.utils import safe_close_writer
 
 logger = get_logger(__name__)
 
@@ -104,11 +105,7 @@ async def detect_os(ip: str, timeout: float = 2.0) -> dict:
             if os_guess:
                 result["os"] = os_guess
                 result["confidence"] = "medium"
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except OSError:
-            pass
+        await safe_close_writer(writer)
     except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
         logger.debug("tcp_ttl_échec", ip=ip, erreur=str(e))
 
@@ -160,11 +157,7 @@ async def detect_http_service(ip: str, port: int, timeout: float = 2.0) -> dict:
             except asyncio.TimeoutError:
                 break
 
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except OSError:
-            pass
+        await safe_close_writer(writer)
 
         text = raw.decode("utf-8", errors="replace")
 

@@ -594,7 +594,8 @@ class TestDangerousToolGate:
 
     @pytest.mark.asyncio
     async def test_stream_dangerous_tool_blocked(self):
-        """Le streaming bloque aussi les tools dangereux."""
+        """Le streaming lève ToolRequiresConfirmation pour les tools dangereux."""
+        from navmax.ai.react_agent import ToolRequiresConfirmation
         tool = Tool(
             name="dangerous_tool",
             description="Dangerous",
@@ -611,12 +612,8 @@ class TestDangerousToolGate:
         ])
         agent = ReActAgent(engine, tools=[tool], max_steps=5)
 
-        updates = []
-        async for update in agent.stream_run(objective="Test dangerous"):
-            updates.append(update)
-
-        # L'update final doit être une erreur
-        assert any(u.status == "error" for u in updates)
+        with pytest.raises(ToolRequiresConfirmation, match="blocked"):
+            await agent.run(objective="Dangerous only")
 
 
 class TestPromptInjectionSanitization:

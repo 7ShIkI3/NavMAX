@@ -406,8 +406,8 @@ async def _resolve_cname(domain: str, timeout: float = 5.0) -> list[str]:
             except (socket.gaierror, OSError):
                 continue
 
-    except (socket.gaierror, OSError):
-        pass
+    except Exception as exc:
+        logger.debug("cname_resolve_failed", domain=domain, error=str(exc))
 
     return results
 
