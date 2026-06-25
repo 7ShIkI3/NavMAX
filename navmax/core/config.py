@@ -53,6 +53,14 @@ class Config(BaseSettings):
     exploit_modules_dir: Path = Path.home() / ".navmax" / "exploits"
     exploit_payload_dir: Path = Path.home() / ".navmax" / "payloads"
 
+    # --- JWT ---
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60
+
+    # --- Redis (rate limiting & cache) ---
+    redis_url: str = ""  # ex: redis://localhost:6379/0
+
 
 # Instance globale
 config = Config()

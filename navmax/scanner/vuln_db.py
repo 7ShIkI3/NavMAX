@@ -197,6 +197,259 @@ DEFAULT_SIGNATURES: list[dict] = [
         "description": "Backdoor in vsftpd 2.3.4 (smiley face)",
         "references": ["https://nvd.nist.gov/vuln/detail/CVE-2011-2523"],
     },
+    # Apache (new)
+    {
+        "cve": "CVE-2024-3094",
+        "service": "apache",
+        "version_range": ">=2.4.0,<2.4.60",
+        "severity": "critical",
+        "description": "XZ Utils backdoor (CVE-2024-3094) — RCE in Apache via xz/liblzma (supply chain)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-3094"],
+    },
+    {
+        "cve": "CVE-2023-44487",
+        "service": "apache",
+        "version_range": ">=2.4.0,<2.4.58",
+        "severity": "high",
+        "description": "HTTP/2 Rapid Reset attack — DoS/RCE via stream cancellation",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-44487"],
+    },
+    # Tomcat (Ghostcat)
+    {
+        "cve": "CVE-2020-1938",
+        "service": "tomcat",
+        "version_range": ">=7.0.0,<9.0.31",
+        "severity": "critical",
+        "description": "Ghostcat — arbitrary file read / RCE via AJP connector (AJP/1.3 on port 8009)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-1938"],
+    },
+    # WebLogic
+    {
+        "cve": "CVE-2020-14882",
+        "service": "weblogic",
+        "version_range": ">=10.3.6.0,<12.2.1.4.0",
+        "severity": "critical",
+        "description": "RCE in Oracle WebLogic Server via Console",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-14882"],
+    },
+    {
+        "cve": "CVE-2017-10271",
+        "service": "weblogic",
+        "version_range": ">=10.3.6.0,<12.2.1.1.0",
+        "severity": "critical",
+        "description": "RCE via XMLDecoder deserialization in WebLogic WLS-WSAT",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2017-10271"],
+    },
+    # JBoss
+    {
+        "cve": "CVE-2017-12149",
+        "service": "jboss",
+        "version_range": ">=5.0.0,<7.0.0",
+        "severity": "critical",
+        "description": "RCE via HTTP deserialization in JBoss AS",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2017-12149"],
+    },
+    # Drupal
+    {
+        "cve": "CVE-2018-7600",
+        "service": "drupal",
+        "version_range": ">=7.0,<7.58",
+        "severity": "critical",
+        "description": "Drupalgeddon2 — RCE via Drupal Core (SA-CORE-2018-002)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2018-7600"],
+    },
+    # WordPress
+    {
+        "cve": "CVE-2024-44000",
+        "service": "wordpress",
+        "version_range": ">=6.0,<6.5.5",
+        "severity": "medium",
+        "description": "Stored XSS via HTML tag in uploaded file names",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-44000"],
+    },
+    {
+        "cve": "CVE-2017-1001000",
+        "service": "wordpress",
+        "version_range": ">=4.7.0,<4.7.1",
+        "severity": "high",
+        "description": "REST API content injection (privilege escalation)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2017-1001000"],
+    },
+    # Exchange ProxyLogon
+    {
+        "cve": "CVE-2021-26855",
+        "service": "exchange",
+        "version_range": ">=2013,<=2019",
+        "severity": "critical",
+        "description": "ProxyLogon — SSRF leading to RCE in Microsoft Exchange Server",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-26855"],
+    },
+    # Exchange ProxyShell
+    {
+        "cve": "CVE-2021-34473",
+        "service": "exchange",
+        "version_range": ">=2016,<=2019",
+        "severity": "critical",
+        "description": "ProxyShell — RCE via autodiscover (pre-auth) in Exchange",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-34473"],
+    },
+    # vCenter
+    {
+        "cve": "CVE-2021-21972",
+        "service": "vcenter",
+        "version_range": ">=6.5,<7.0.2",
+        "severity": "critical",
+        "description": "RCE via vSphere Client plugin upload in VMware vCenter",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-21972"],
+    },
+    {
+        "cve": "CVE-2021-22005",
+        "service": "vcenter",
+        "version_range": "<7.0.3",
+        "severity": "critical",
+        "description": "File upload RCE in VMware vCenter Server analytics",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-22005"],
+    },
+    # Citrix ADC
+    {
+        "cve": "CVE-2019-19781",
+        "service": "citrix_adc",
+        "version_range": ">=10.5,<13.0",
+        "severity": "critical",
+        "description": "Directory traversal / RCE in Citrix ADC / NetScaler Gateway",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2019-19781"],
+    },
+    # F5 BIG-IP
+    {
+        "cve": "CVE-2020-5902",
+        "service": "f5_bigip",
+        "version_range": ">=11.6,<16.0",
+        "severity": "critical",
+        "description": "RCE via TMUI in F5 BIG-IP (Traffic Management User Interface)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-5902"],
+    },
+    {
+        "cve": "CVE-2022-1388",
+        "service": "f5_bigip",
+        "version_range": ">=11.6,<17.0",
+        "severity": "critical",
+        "description": "RCE via unauthenticated iControl REST API in F5 BIG-IP",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-1388"],
+    },
+    # Atlassian Confluence
+    {
+        "cve": "CVE-2023-22515",
+        "service": "confluence",
+        "version_range": ">=8.0.0,<8.6.0",
+        "severity": "critical",
+        "description": "Broken access control — privilege escalation in Confluence Data Center/Server",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-22515"],
+    },
+    {
+        "cve": "CVE-2022-26134",
+        "service": "confluence",
+        "version_range": ">=1.3.0,<7.18.0",
+        "severity": "critical",
+        "description": "OGNL injection — RCE in Confluence Server/Data Center",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-26134"],
+    },
+    # Zoho ManageEngine
+    {
+        "cve": "CVE-2022-47966",
+        "service": "manageengine",
+        "version_range": ">=1.0,<17.0",
+        "severity": "critical",
+        "description": "RCE via SAML SSO in Zoho ManageEngine",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-47966"],
+    },
+    # Microsoft RDP (BlueKeep)
+    {
+        "cve": "CVE-2019-0708",
+        "service": "rdp",
+        "version_range": ">=6.0,<=10.0",
+        "severity": "critical",
+        "description": "BlueKeep — RCE via RDP (MS19-002), pre-auth in Windows RDS",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2019-0708"],
+    },
+    # Cisco IOS
+    {
+        "cve": "CVE-2023-20198",
+        "service": "cisco_ios",
+        "version_range": ">=15.0,<17.9",
+        "severity": "critical",
+        "description": "Privilege escalation in Cisco IOS XE Web UI",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2023-20198"],
+    },
+    {
+        "cve": "CVE-2020-3566",
+        "service": "cisco_ios",
+        "version_range": ">=15.0,<16.12",
+        "severity": "high",
+        "description": "DoS via IP fragment reassembly in Cisco IOS",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2020-3566"],
+    },
+    # Spring4Shell
+    {
+        "cve": "CVE-2022-22965",
+        "service": "spring",
+        "version_range": ">=5.3.0,<5.3.18",
+        "severity": "critical",
+        "description": "Spring4Shell — RCE via Spring Framework class property injection",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2022-22965"],
+    },
+    # Struts2
+    {
+        "cve": "CVE-2017-5638",
+        "service": "struts2",
+        "version_range": ">=2.3.5,<2.3.31",
+        "severity": "critical",
+        "description": "RCE via Content-Type header in Apache Struts2 (Jakarta Multipart parser)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2017-5638"],
+    },
+    # PHP
+    {
+        "cve": "CVE-2024-4577",
+        "service": "php",
+        "version_range": ">=8.0.0,<8.0.30",
+        "severity": "critical",
+        "description": "Argument injection RCE in PHP CGI on Windows",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-4577"],
+    },
+    {
+        "cve": "CVE-2019-11043",
+        "service": "php",
+        "version_range": ">=7.1,<7.3.10",
+        "severity": "critical",
+        "description": "RCE via FPM fastcgi in PHP (path_info under nginx)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2019-11043"],
+    },
+    # IIS
+    {
+        "cve": "CVE-2021-31166",
+        "service": "iis",
+        "version_range": ">=10.0,<10.0.20348.288",
+        "severity": "critical",
+        "description": "HTTP Protocol Stack RCE in Windows HTTP.sys (MS21-031)",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2021-31166"],
+    },
+    # CUPS
+    {
+        "cve": "CVE-2024-47176",
+        "service": "cups",
+        "version_range": ">=2.0.0,<2.4.9",
+        "severity": "critical",
+        "description": "RCE via IPP/HTTP in CUPS printing system",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-47176"],
+    },
+    # PHPUnit
+    {
+        "cve": "CVE-2017-9841",
+        "service": "phpunit",
+        "version_range": ">=5.0.0,<6.5.0",
+        "severity": "critical",
+        "description": "RCE via PHPUnit eval-stdin.php gadget",
+        "references": ["https://nvd.nist.gov/vuln/detail/CVE-2017-9841"],
+    },
 ]
 
 

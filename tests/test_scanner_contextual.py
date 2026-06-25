@@ -79,7 +79,7 @@ class TestVulnDatabase:
         return vdb
 
     def test_loads_default_signatures(self, db):
-        assert db.count >= 15
+        assert db.count >= 47
 
     def test_check_apache_vulnerable(self, db):
         vulns = db.check("apache", "2.4.49")
@@ -89,7 +89,10 @@ class TestVulnDatabase:
 
     def test_check_apache_safe(self, db):
         vulns = db.check("apache", "2.4.51")
-        assert len(vulns) == 0  # 2.4.51 is patched
+        # 2.4.51 is patched for CVE-2021-41773/CVE-2021-42013, but may match CVE-2023-44487
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2021-41773" not in cves
+        assert "CVE-2021-42013" not in cves
 
     def test_check_apache_lower_bound(self, db):
         vulns = db.check("apache", "2.4.48")
@@ -151,8 +154,71 @@ class TestVulnDatabase:
         vulns = db.check("openssh", "8.9p1")
         assert len(vulns) >= 1
 
+    def test_check_tomcat_ghostcat(self, db):
+        vulns = db.check("tomcat", "9.0.30")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2020-1938" in cves
 
-# ── ContextualScanEngine ──────────────────────────────────────
+    def test_check_weblogic_14882(self, db):
+        vulns = db.check("weblogic", "12.2.1.3.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2020-14882" in cves
+
+    def test_check_drupalgeddon(self, db):
+        vulns = db.check("drupal", "7.57")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2018-7600" in cves
+
+    def test_check_exchange_proxylogon(self, db):
+        vulns = db.check("exchange", "2019")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2021-26855" in cves
+
+    def test_check_vcenter_21972(self, db):
+        vulns = db.check("vcenter", "6.7")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2021-21972" in cves
+
+    def test_check_citrix_adc(self, db):
+        vulns = db.check("citrix_adc", "12.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2019-19781" in cves
+
+    def test_check_f5_bigip(self, db):
+        vulns = db.check("f5_bigip", "15.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2020-5902" in cves
+
+    def test_check_confluence_ognl(self, db):
+        vulns = db.check("confluence", "7.17.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2022-26134" in cves
+
+    def test_check_bluekeep(self, db):
+        vulns = db.check("rdp", "7.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2019-0708" in cves
+
+    def test_check_spring4shell(self, db):
+        vulns = db.check("spring", "5.3.17")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2022-22965" in cves
+
+    def test_check_struts2(self, db):
+        vulns = db.check("struts2", "2.3.30")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2017-5638" in cves
+
+    def test_check_phpunit_rce(self, db):
+        vulns = db.check("phpunit", "5.6.0")
+        cves = [v["cve"] for v in vulns]
+        assert "CVE-2017-9841" in cves
+
+    def test_check_total_signatures(self, db):
+        assert db.count >= 37  # Au moins 37 signatures
+
+
+# ── ContextualScanEngine
 
 class TestContextualScanEngine:
     @pytest.fixture

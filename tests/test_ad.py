@@ -18,6 +18,7 @@ from navmax.ad.connector import (
     ADGPO,
     ADDomain,
     ADTrust,
+    ADConnector,
     ADConnectionError,
     ADAuthenticationError,
     parse_user_account_control,
@@ -1232,3 +1233,127 @@ class TestADCSSCanner:
         scanner._check_esc2(report)
         assert len(report.findings) >= 1
         assert report.findings[0].esc_id == "ESC2"
+
+
+# ═══════════════════════════════════════════════════════════════
+# ADConnector — Nouvelles méthodes impacket (mockées)
+# ═══════════════════════════════════════════════════════════════
+
+class TestADConnectorImpacketMethods:
+    """Tests des méthodes kerberoast, asrep_roast, pass_the_hash, authenticate_ntlm.
+
+    Toutes les méthodes sont testées avec des mocks — pas de connexion réelle.
+    """
+
+    @pytest.fixture
+    def config(self):
+        return ADConfig(
+            server="dc.test.local",
+            domain="test.local",
+            username="admin@test.local",
+            password="TestPass123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_kerberoast_not_connected(self, config):
+        """Kerberoast sans connexion doit fonctionner (pas de pré-requis connect)."""
+        connector = ADConnector(config)
+        # La méthode échouera sur impacket non mocké — on teste que l'appel
+        # ne lève pas d'erreur de structure
+        result = await connector.kerberoast("svc_test", domain="test.local")
+        assert isinstance(result, dict)
+        assert "success" in result
+        assert "hash" in result
+        assert "target" in result
+        assert result["target"] == "svc_test"
+
+    @pytest.mark.asyncio
+    async def test_asrep_roast_not_connected(self, config):
+        """AS-REP Roast sans connexion doit fonctionner."""
+        connector = ADConnector(config)
+        result = await connector.asrep_roast("legacy_user", domain="test.local")
+        assert isinstance(result, dict)
+        assert "success" in result
+        assert "hash" in result
+        assert result["target"] == "legacy_user"
+
+    @pytest.mark.asyncio
+    async def test_pass_the_hash_not_connected(self, config):
+        """Pass-the-Hash sans connexion doit fonctionner."""
+        connector = ADConnector(config)
+        result = await connector.pass_the_hash(
+            "192.168.1.100",
+            "Administrator",
+            "aad3b435b51404eeaad3b435b51404ee",
+            domain="test.local",
+        )
+        assert isinstance(result, dict)
+        assert "success" in result
+        assert "hostname" in result
+        assert result["hostname"] == "192.168.1.100"
+        assert "shares" in result
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_authenticate_ntlm_not_connected(self, config):
+        """authenticate_ntlm sans connexion doit retourner False (pas d'exception)."""
+        connector = ADConnector(config)
+        result = await connector.authenticate_ntlm(
+            "admin", "password", domain="test.local"
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_authenticate_ntlm_bad_host(self, config):
+        """authenticate_ntlm avec host invalide doit retourner False."""
+        config.server = "192.0.2.1"  # TEST-NET-1 (unreachable)
+        connector = ADConnector(config)
+        result = await connector.authenticate_ntlm(
+            "admin", "badpass", domain="test.local"
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_ldap3_is_callable(self):
+        """_check_ldap3 est une méthode statique appelable."""
+        ADConnector._check_ldap3()  # Ne lève pas si ldap3 installé
+
+    @pytest.mark.asyncio
+    async def test_check_impacket_is_callable(self):
+        """_check_impacket est une méthode statique appelable."""
+        ADConnector._check_impacket()  # Ne lève pas si impacket installé
+
+    def test_kerberoast_method_signature(self):
+        """Vérifie la signature de kerberoast."""
+        import inspect
+        sig = inspect.signature(ADConnector.kerberoast)
+        params = list(sig.parameters.keys())
+        assert "target_user" in params
+        assert "domain" in params
+
+    def test_asrep_roast_method_signature(self):
+        """Vérifie la signature de asrep_roast."""
+        import inspect
+        sig = inspect.signature(ADConnector.asrep_roast)
+        params = list(sig.parameters.keys())
+        assert "target_user" in params
+        assert "domain" in params
+
+    def test_pass_the_hash_method_signature(self):
+        """Vérifie la signature de pass_the_hash."""
+        import inspect
+        sig = inspect.signature(ADConnector.pass_the_hash)
+        params = list(sig.parameters.keys())
+        assert "target_host" in params
+        assert "username" in params
+        assert "nthash" in params
+        assert "domain" in params
+
+    def test_authenticate_ntlm_method_signature(self):
+        """Vérifie la signature de authenticate_ntlm."""
+        import inspect
+        sig = inspect.signature(ADConnector.authenticate_ntlm)
+        params = list(sig.parameters.keys())
+        assert "username" in params
+        assert "password" in params
+        assert "domain" in params

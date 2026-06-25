@@ -15,6 +15,7 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "httpx>=0.28.0",
     "scapy>=2.6.0",
+    "python-nmap>=0.7.1",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
     "structlog>=24.4.0",
@@ -25,6 +26,12 @@ dependencies = [
     "aiohttp>=3.9.0",
     "jinja2>=3.1.0",
     "packaging>=24.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "slowapi>=0.1.9",
+    "redis>=5.0.0",
+    "ldap3>=2.9.1",
+    "impacket>=0.12.0",
 ]
 
 [project.optional-dependencies]
@@ -37,8 +44,16 @@ dev = [
 local-ai = [
     "llama-cpp-python>=0.3.0",
 ]
+scanner = [
+    "python-nmap>=0.7.1",
+]
+ad = [
+    "ldap3>=2.9.1",
+    "impacket>=0.12.0",
+    "pycryptodome>=3.20.0",
+]
 full = [
-    "navmax[dev,local-ai]",
+    "navmax[dev,local-ai,ad]",
     "weasyprint>=62.0",
     "python-docx>=1.1.0",
 ]

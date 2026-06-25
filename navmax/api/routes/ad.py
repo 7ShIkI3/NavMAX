@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from navmax.db.session import get_session
+from navmax.db.engine import get_session
 
 router = APIRouter(prefix="/api/v1/ad", tags=["Active Directory"])
 
