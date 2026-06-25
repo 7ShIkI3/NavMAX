@@ -2,11 +2,11 @@
 
 <div align="center">
 
-**Plateforme de cybersécurité offensive autonome — pilotée par IA, pour agents IA**
+**Plateforme de cybersécurité offensive autonome — Dashboard Web, Cloud Scanner (AWS S3/IAM), Intruder (Burp-style), Plugin System — pilotée par IA, pour agents IA**
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-586%2F586-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-773%2F773-brightgreen.svg)](tests/)
 [![Version](https://img.shields.io/badge/version-0.4.1-orange.svg)](https://github.com/7ShIkI3/NavMAX)
 
 *Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK***
@@ -40,7 +40,13 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 | 🎯 **MITRE ATT&CK** | ❌ Aucun | ✅ **Mapping automatique** CVE → techniques MITRE ATT&CK |
 | 🕸️ **Playwright Spider** | Crawler basique | ✅ **Crawler SPA/JavaScript** pour apps React/Vue/Angular |
 | 🔐 **Auth JWT + RBAC** | ❌ Aucune | ✅ **Admin/Operator/Viewer** avec JWT + rate limiting |
-| 🧪 **Tests** | 403 | ✅ **586** |
+| 🖥️ **Dashboard** | ❌ Aucun | ✅ **Web UI single-file**, Mission Control SSE, Attack Graph canvas |
+| ☁️ **Cloud** | ❌ Aucun | ✅ **S3 scanner**, IAM analyzer, Cloud Recon DNS (sans SDK) |
+| 🛠️ **Intruder** | ❌ Aucun | ✅ **Fuzzer sniper/cluster_bomb**, 8 payloads prédéfinis |
+| 🏗️ **Plugins** | ❌ Aucun | ✅ **@register_plugin**, discover/load/execute, API REST |
+| 🔒 **Sécurité** | ❌ Aucune | ✅ **Audit P0+P1** (6 fixes), SAST CI/CD (Bandit+Safety) |
+| 🐳 **Docker** | Basique | ✅ **PostgreSQL**, Nginx, volumes persistants, tout-en-un |
+| 🧪 **Tests** | 403 | ✅ **773** |
 
 ### 🆕 v0.4.0 — Omni-Tool Infrastructure
 
@@ -100,6 +106,11 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 └──────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────────────┐
+│                     ☁️ CLOUD SCANNER (NOUVEAU v0.4.1)                     │
+│  S3 Scanner · IAM Analyzer · Cloud Recon DNS (sans SDK)                  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
 │                     🛡️ AD / LDAP ATTACK SURFACE                          │
 │  Enumerator · Trust Graph · Attack Paths · Vuln Scanner                  │
 │  Password Spray · SMB Scanner · ADCS ESC1-9 · BloodHound                 │
@@ -115,6 +126,11 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 │                        🏗️ INFRASTRUCTURE SOC                              │
 │  Impact Reporter · Remediation Advisor (PS) · Continuous                  │
 │  Monitor (baseline + drift detection + alerts)                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        🖥️ DASHBOARD WEB UI (NOUVEAU v0.4.1)              │
+│  Mission Control SSE · Attack Graph Canvas · Single-file Web UI          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -303,6 +319,40 @@ navmax proxy replay session.har --rate 1.0
 navmax proxy spider https://app.target.com --depth 3 --headless
 ```
 
+### 🖥️ Dashboard (NOUVEAU v0.4.1)
+
+```bash
+# Lancer le dashboard web
+navmax dashboard  # → http://localhost:8000/dashboard
+```
+
+### ☁️ Cloud Scanner (NOUVEAU v0.4.1)
+
+```bash
+# Scan S3 bucket
+navmax cloud scan-s3 my-bucket --region us-east-1
+
+# Reconnaissance DNS cloud
+navmax cloud recon example.com
+```
+
+### 🛠️ Intruder (NOUVEAU v0.4.1)
+
+```bash
+# Attaque fuzzer avec payloads prédéfinis
+navmax intruder attack --request req.txt --positions "body:user" --payloads xss
+```
+
+### 🏗️ Plugins (NOUVEAU v0.4.1)
+
+```bash
+# Lister les plugins disponibles
+navmax plugins list
+
+# Exécuter un plugin communautaire
+navmax plugins run community/nuclei-automation
+```
+
 ### 📄 Rapports
 
 ```bash
@@ -418,6 +468,23 @@ SI airgap mode → cloud désactivé, 100% local
 | `POST` | `/api/v1/firewall/stormshield` | Analyse StormShield |
 | `POST` | `/api/v1/firewall/analyze` | Analyse des règles |
 | `POST` | `/api/v1/firewall/correlate` | Corrélation AD × FW |
+
+### 🆕 v0.4.1 — Dashboard & Cloud & Intruder & Plugins
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/dashboard` | Web UI Dashboard |
+| `GET` | `/api/v1/dashboard/stream` | Mission Control SSE |
+| `GET` | `/api/v1/dashboard/graph` | Attack Graph canvas |
+| `POST` | `/api/v1/cloud/scan-s3` | Scan bucket S3 |
+| `POST` | `/api/v1/cloud/analyze-iam` | Analyse IAM |
+| `POST` | `/api/v1/cloud/recon` | Cloud Recon DNS |
+| `POST` | `/api/v1/plugins/discover` | Découvrir plugins |
+| `POST` | `/api/v1/plugins/load` | Charger plugin |
+| `POST` | `/api/v1/plugins/execute` | Exécuter plugin |
+| `GET` | `/api/v1/plugins/list` | Lister plugins |
+| `POST` | `/api/v1/proxy/intruder` | Intruder / Fuzzer |
+| `GET` | `/api/v1/proxy/intruder/payloads` | Payloads prédéfinis |
 
 ---
 
@@ -552,7 +619,7 @@ SI airgap mode → cloud désactivé, 100% local
 
 ```bash
 pytest tests/ -v
-# 586 passed
+# 773 passed
 ```
 
 ---
@@ -602,6 +669,7 @@ NavMAX/
 │   │   ├── auto_pivot.py  #   Lateral movement auto
 │   │   ├── evasion.py     #   7 techniques polymorphiques
 │   │   └── modules/       #   24 modules d'exploit
+│   ├── cloud/             # ☁️ Cloud Scanner (NOUVEAU v0.4.1)
 │   ├── osint/
 │   │   ├── monitor.py     #   Abonnement + alertes
 │   │   └── graph/semantic_search.py  # NL → graphe
@@ -615,9 +683,13 @@ NavMAX/
 │   ├── core/              # Config, logging, plugins, audit
 │   ├── db/                # SQLAlchemy async models
 │   ├── api/               # FastAPI routes REST (34+ endpoints)
+│   │   └── static/        #   🖥️ Dashboard Web (NOUVEAU v0.4.1)
 │   └── sdk/               # Client Python async
-├── tests/                 # 586 tests
-├── .github/workflows/     # CI/CD
+├── tests/                 # 773 tests
+├── .github/workflows/     # 🔒 SAST CI/CD (NOUVEAU)
+├── nginx/                 # 🐳 Reverse proxy (NOUVEAU)
+├── Dockerfile             # 🐳 Multi-stage (NOUVEAU)
+├── .env.example           # 🐳 Configuration (NOUVEAU)
 └── pyproject.toml
 ```
 
