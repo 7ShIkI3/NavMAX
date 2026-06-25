@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -156,6 +157,14 @@ app.include_router(
     tags=["Nuclei"],
     dependencies=operator_or_admin,
 )
+
+
+# ── Dashboard (static files) ─────────────────────────────────────
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/dashboard", StaticFiles(directory=static_dir, html=True), name="dashboard")
+logger.info("dashboard_monté", path=static_dir)
 
 
 # ── Health check (public) ───────────────────────────────────────

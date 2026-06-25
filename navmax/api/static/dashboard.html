@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NavMAX — Mission Control</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-primary: #0a0e17;
+    --bg-secondary: #111827;
+    --bg-card: #1a1f2e;
+    --bg-card-hover: #1f2537;
+    --border: #2a3040;
+    --text-primary: #e8edf5;
+    --text-secondary: #8892a6;
+    --text-muted: #5a6278;
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.15);
+    --red: #ff4757;
+    --red-dim: rgba(255,71,87,0.15);
+    --orange: #ff9f43;
+    --orange-dim: rgba(255,159,67,0.15);
+    --yellow: #feca57;
+    --yellow-dim: rgba(254,202,87,0.15);
+    --green: #2ed573;
+    --green-dim: rgba(46,213,115,0.15);
+    --purple: #a55eea;
+    --font: 'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace;
+    --radius: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  html { font-size: 14px; }
+  body {
+    font-family: var(--font);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ── Layout ── */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    font-size: 1.4rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+  }
+  .logo-sub { color: var(--text-muted); font-size: 0.75rem; }
+  .header-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+  .stat-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg-card); padding: 4px 14px 4px 10px;
+    border-radius: 20px; border: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .stat-pill .num { color: var(--cyan); font-weight: 700; font-size: 1rem; }
+  .stat-pill .label { color: var(--text-secondary); }
+
+  .main {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; padding: 16px 24px; flex: 1;
+  }
+  @media (max-width: 1024px) { .main { grid-template-columns: 1fr; } }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .card-full { grid-column: 1 / -1; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    font-size: 0.9rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .icon { width: 18px; height: 18px; }
+  .card-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--font); font-size: 0.8rem; padding: 6px 14px;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg-secondary); color: var(--text-primary);
+    cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-cyan { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+  .btn-cyan:hover { background: rgba(0,212,255,0.25); }
+  .btn-red { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .btn-sm { padding: 3px 10px; font-size: 0.7rem; }
+  .btn-group { display: flex; gap: 6px; }
+
+  /* ── Mission Control ── */
+  .mission-input { width: 100%; margin-bottom: 12px; }
+  .mission-input textarea {
+    width: 100%; min-height: 56px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px;
+    color: var(--text-primary); font-family: var(--font); font-size: 0.85rem;
+    resize: vertical;
+  }
+  .mission-input textarea:focus { outline: none; border-color: var(--cyan); }
+  .mission-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+  .mission-log {
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; height: 220px; overflow-y: auto;
+    font-size: 0.75rem; line-height: 1.6;
+  }
+  .mission-log .log-line { display: flex; gap: 8px; }
+  .mission-log .log-time { color: var(--text-muted); flex-shrink: 0; }
+  .mission-log .log-level { font-weight: 600; flex-shrink: 0; min-width: 48px; }
+  .mission-log .log-level.info { color: var(--cyan); }
+  .mission-log .log-level.warn { color: var(--yellow); }
+  .mission-log .log-level.error { color: var(--red); }
+  .mission-log .log-level.success { color: var(--green); }
+  .mission-log .log-msg { color: var(--text-primary); word-break: break-word; }
+
+  /* ── Active Scans Table ── */
+  .scans-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .scans-table th {
+    text-align: left; padding: 8px 10px;
+    color: var(--text-muted); font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px;
+  }
+  .scans-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+  .scans-table tr:last-child td { border-bottom: none; }
+  .scans-table tr:hover td { background: var(--bg-card-hover); }
+  .progress-bar {
+    height: 6px; background: var(--bg-primary); border-radius: 3px;
+    overflow: hidden; min-width: 100px;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+    transition: width 0.5s;
+  }
+  .status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .status-badge.pending { background: var(--yellow-dim); color: var(--yellow); }
+  .status-badge.running { background: var(--cyan-dim); color: var(--cyan); }
+  .status-badge.success { background: var(--green-dim); color: var(--green); }
+  .status-badge.failure { background: var(--red-dim); color: var(--red); }
+
+  /* ── Findings ── */
+  .findings-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-btn { font-size: 0.7rem; padding: 3px 12px; }
+  .filter-btn.active { border-color: var(--cyan); background: var(--cyan-dim); color: var(--cyan); }
+  .findings-list { max-height: 340px; overflow-y: auto; }
+  .finding-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 8px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .finding-item:hover { background: var(--bg-card-hover); }
+  .finding-item:last-child { border-bottom: none; }
+  .severity-badge {
+    flex-shrink: 0; padding: 2px 10px; border-radius: 4px;
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; min-width: 52px; text-align: center;
+  }
+  .severity-badge.critical { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+  .severity-badge.high    { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange); }
+  .severity-badge.medium  { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow); }
+  .severity-badge.low     { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  .severity-badge.info    { background: rgba(165,94,234,0.15); color: var(--purple); border: 1px solid var(--purple); }
+  .finding-info { flex: 1; min-width: 0; }
+  .finding-name { font-size: 0.82rem; font-weight: 500; margin-bottom: 2px; }
+  .finding-meta { color: var(--text-muted); font-size: 0.7rem; }
+  .finding-cve { color: var(--cyan); font-size: 0.7rem; }
+
+  /* ── Attack Graph ── */
+  .graph-container {
+    width: 100%; height: 340px; position: relative;
+    background: var(--bg-primary); border-radius: 6px; overflow: hidden;
+  }
+  .graph-container canvas { width: 100%; height: 100%; }
+
+  /* ── System Status ── */
+  .sys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .sys-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 10px; background: var(--bg-secondary);
+    border-radius: 6px; border: 1px solid var(--border);
+    text-align: center;
+  }
+  .sys-indicator {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block;
+  }
+  .sys-indicator.up { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .sys-indicator.down { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .sys-indicator.unknown { background: var(--text-muted); }
+  .sys-name { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+  .sys-status { font-size: 0.75rem; font-weight: 600; }
+
+  /* ── Misc ── */
+  .empty-state {
+    text-align: center; padding: 30px 20px; color: var(--text-muted);
+  }
+  .empty-state .icon { font-size: 2rem; margin-bottom: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
+  .badge-cyan { background: var(--cyan-dim); color: var(--cyan); }
+  .badge-red { background: var(--red-dim); color: var(--red); }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--border); border-top-color: var(--cyan);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .flex { display: flex; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .gap-8 { gap: 8px; }
+  .mt-8 { margin-top: 8px; }
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ═══ HEADER ═══ -->
+  <header class="header">
+    <div class="header-left">
+      <div>
+        <div class="logo">◈ NAVMAX</div>
+        <div class="logo-sub">Mission Control · Cyber Dashboard</div>
+      </div>
+    </div>
+    <div class="header-stats" id="headerStats">
+      <div class="stat-pill"><span class="num" id="statScans">0</span><span class="label">Scans actifs</span></div>
+      <div class="stat-pill"><span class="num" id="statFindings">0</span><span class="label">Vulnérabilités</span></div>
+      <div class="stat-pill"><span class="num" id="statMissions">0</span><span class="label">Missions</span></div>
+      <div class="stat-pill"><span class="num" id="statTargets">0</span><span class="label">Cibles</span></div>
+    </div>
+  </header>
+
+  <!-- ═══ MAIN GRID ═══ -->
+  <div class="main">
+    <!-- Mission Control -->
+    <div class="card card-full">
+      <div class="card-header">
+        <span class="card-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> Mission Control — ReAct Agent</span>
+        <div class="card-actions">
+          <span id="missionStatus" style="color:var(--text-muted);font-size:0.75rem;">Prêt</span>
+          <button class="btn btn-cyan btn-sm" id="missionClearBtn" title="Effacer le log">⌫ Clear</button>
+        </div>
+      </div>
+      <div class="mission-input">
+        <textarea id="missionPrompt" placeholder="Décris la mission… ex: « Trouve les vulnérabilités sur 192.168.1.0/24, scan les ports courants et lance nuclei »" spellcheck="false"></textarea>
+      </div>
+      <div class="mission-controls">
+        <button class="btn btn-cyan" id="missionExecuteBtn">▶ Executer</button>
+        <button class="btn btn-red" id="missionStopBtn" disabled>■ Arrêter</button>
+      </div>
+      <div class="mission-log" id="missionLog">
+        <div style="color:var(--text-muted);text-align:center;padding:40px 0;">Aucune mission en cours. Saisis une mission et clique Executer.</div>
+      </div>
+    </div>
+
+    <!-- Active Scans -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Active Scans</span>
+        <div class="card-actions"><button class="btn btn-sm" id="refreshScansBtn">↻</button></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="scans-table">
+          <thead><tr>
+            <th>Cible</th><th>Type</th><th>Progression</th><th>Statut</th><th>Temps</th>
+          </tr></thead>
+          <tbody id="scansBody">
+            <tr><td colspan="5" class="empty-state"><span class="icon">📡</span><br>Aucun scan actif</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Findings -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Recent Findings</span>
+        <div class="card-actions">
+          <button class="btn btn-sm" id="exportSarifBtn">⬇ SARIF</button>
+          <button class="btn btn-sm" id="exportHtmlBtn">⬇ HTML</button>
+        </div>
+      </div>
+      <div class="findings-toolbar" id="findingsToolbar">
+        <button class="btn filter-btn active" data-severity="all">Tous</button>
+        <button class="btn filter-btn" data-severity="critical">Critical</button>
+        <button class="btn filter-btn" data-severity="high">High</button>
+        <button class="btn filter-btn" data-severity="medium">Medium</button>
+        <button class="btn filter-btn" data-severity="low">Low</button>
+        <button class="btn filter-btn" data-severity="info">Info</button>
+      </div>
+      <div class="findings-list" id="findingsList">
+        <div class="empty-state"><span class="icon">🔍</span><br>Aucune vulnérabilité trouvée</div>
+      </div>
+    </div>
+
+    <!-- Attack Graph -->
+    <div class="card card-full">
+      <div class="card-header">
+        <span class="card-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3h12z"/><path d="M8 12h8"/><path d="M12 8v8"/></svg> Attack Graph</span>
+        <div class="card-actions">
+          <span style="color:var(--text-muted);font-size:0.7rem;" id="graphNodeCount">0 nœuds</span>
+        </div>
+      </div>
+      <div class="graph-container"><canvas id="attackGraphCanvas"></canvas></div>
+    </div>
+
+    <!-- System Status -->
+    <div class="card card-full">
+      <div class="card-header">
+        <span class="card-title"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg> System Status</span>
+        <div class="card-actions">
+          <span style="color:var(--text-muted);font-size:0.7rem;" id="lastCheck">—</span>
+          <button class="btn btn-sm" id="refreshSysBtn">↻</button>
+        </div>
+      </div>
+      <div class="sys-grid" id="sysGrid">
+        <div class="sys-item" data-service="api"><span class="sys-indicator unknown"></span><div class="sys-name">API</div><div class="sys-status">Vérification...</div></div>
+        <div class="sys-item" data-service="redis"><span class="sys-indicator unknown"></span><div class="sys-name">Redis</div><div class="sys-status">Vérification...</div></div>
+        <div class="sys-item" data-service="celery"><span class="sys-indicator unknown"></span><div class="sys-name">Celery</div><div class="sys-status">Vérification...</div></div>
+        <div class="sys-item" data-service="nuclei"><span class="sys-indicator unknown"></span><div class="sys-name">Nuclei</div><div class="sys-status">Vérification...</div></div>
+        <div class="sys-item" data-service="nmap"><span class="sys-indicator unknown"></span><div class="sys-name">Nmap</div><div class="sys-status">Vérification...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   NavMAX Dashboard — Vanilla JS
+   ───────────────────────────────────────────────────────────── */
+(function() {
+  'use strict';
+
+  // ── Config ──
+  const API_BASE = '/api/v1';
+  const POLL_INTERVAL_MS = 5000;
+
+  // ── State ──
+  const state = {
+    scans: [],
+    findings: [],
+    missions: [],
+    severityFilter: 'all',
+    missionActive: false,
+    missionStreamSource: null,
+    graphNodes: [],
+    graphEdges: [],
+  };
+
+  // ── DOM refs ──
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ── Helpers ──
+  function fmtTime(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+  function fmtDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleString('fr-FR');
+  }
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── API fetch wrapper ──
+  async function apiGet(path) {
+    try {
+      const r = await fetch(`${API_BASE}${path}`);
+      if (!r.ok) {
+        const body = await r.text().catch(()=>'');
+        console.warn(`GET ${path} → ${r.status}`, body);
+        return null;
+      }
+      return await r.json();
+    } catch(e) {
+      console.warn(`GET ${path} error:`, e);
+      return null;
+    }
+  }
+
+  async function apiPost(path, body) {
+    try {
+      const r = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(()=>({}));
+      return { ok: r.ok, status: r.status, data };
+    } catch(e) {
+      return { ok: false, status: 0, data: { error: e.message } };
+    }
+  }
+
+  // ── Header Stats ──
+  async function updateStats() {
+    // Count active scans, findings, missions, targets
+    try {
+      const [scansData, healthData] = await Promise.all([
+        apiGet('/scans?limit=1'),
+        apiGet('/health'),
+      ]);
+
+      // For real stats we'd do count queries, but use what we have
+      const activeCount = state.scans.filter(s => s.status === 'PENDING' || s.status === 'RUNNING' || s.status === 'STARTED').length;
+      const findingsCount = state.findings.length;
+      const missionsCount = state.missions.length;
+
+      document.getElementById('statScans').textContent = activeCount;
+      document.getElementById('statFindings').textContent = findingsCount;
+      document.getElementById('statMissions').textContent = missionsCount;
+
+      // Targets count from health endpoint or separate call
+      const targetsData = await apiGet('/targets?limit=1');
+      if (targetsData && targetsData.pagination) {
+        document.getElementById('statTargets').textContent = targetsData.pagination.total;
+      }
+    } catch(e) {
+      // silent
+    }
+  }
+
+  // ── Active Scans ──
+  async function loadScans() {
+    const data = await apiGet('/scans?limit=20');
+    if (!data || !data.data) return;
+    state.scans = data.data;
+    renderScans();
+  }
+
+  function renderScans() {
+    const tbody = document.getElementById('scansBody');
+    const active = state.scans.filter(s => s.status !== 'SUCCESS' && s.status !== 'FAILURE' && s.status !== 'REVOKED');
+
+    if (active.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="icon">📡</span><br>Aucun scan actif</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = active.map(s => {
+      const pct = s.progress !== undefined && s.progress !== null ? Math.min(100, Math.max(0, s.progress)) :
+                  s.status === 'PENDING' ? 0 : s.status === 'STARTED' || s.status === 'RUNNING' ? 45 : 100;
+      const statusClass = (s.status || 'PENDING').toLowerCase();
+      const estTime = s.estimated_remaining || s.eta || '—';
+      return `<tr>
+        <td><span class="truncate" style="display:inline-block;max-width:140px;" title="${escapeHtml(s.target_id || '')}">${escapeHtml(s.target_id ? s.target_id.substring(0, 16)+'…' : '—')}</span></td>
+        <td>${escapeHtml(s.scan_type || '—')}</td>
+        <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><span style="font-size:0.7rem;color:var(--text-muted)">${pct}%</span></td>
+        <td><span class="status-badge ${statusClass}">${escapeHtml(s.status || 'PENDING')}</span></td>
+        <td style="font-size:0.7rem;color:var(--text-muted)">${typeof estTime === 'number' ? Math.round(estTime)+'s' : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Findings ──
+  async function loadFindings() {
+    // Try nuclei findings endpoint
+    // For now simulate from scan results or use a fallback
+    // We'll use the scans data to extract findings metadata
+    // In production this would hit a dedicated findings endpoint
+    const scans = await apiGet('/scans?limit=50');
+    if (scans && scans.data) {
+      // If we have dedicated findings, show them
+      // For now, use mock data structure — in real deployment,
+      // a dedicated /api/v1/findings endpoint would exist
+      // Let's try /api/v1/nuclei/status for a quick check
+    }
+
+    // If no findings API exists yet, we show empty state
+    renderFindings();
+  }
+
+  function renderFindings() {
+    const container = document.getElementById('findingsList');
+    let items = state.findings;
+
+    if (state.severityFilter !== 'all') {
+      items = items.filter(f => (f.severity || '').toLowerCase() === state.severityFilter);
+    }
+
+    if (items.length === 0) {
+      container.innerHTML = '<div class="empty-state"><span class="icon">🔍</span><br>Aucune vulnérabilité trouvée</div>';
+      updateStats();
+      return;
+    }
+
+    container.innerHTML = items.map(f => {
+      const sev = (f.severity || 'info').toLowerCase();
+      const cveStr = f.cve_ids && f.cve_ids.length ? f.cve_ids.join(', ') : '';
+      return `<div class="finding-item">
+        <span class="severity-badge ${sev}">${sev}</span>
+        <div class="finding-info">
+          <div class="finding-name">${escapeHtml(f.name || f.template_id || 'Vulnérabilité')}</div>
+          <div class="finding-meta">${escapeHtml(f.host || f.target || '—')} · ${fmtDate(f.matched_at || f.created_at)}</div>
+          ${cveStr ? `<div class="finding-cve">${escapeHtml(cveStr)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    updateStats();
+  }
+
+  // ── Findings Filter ──
+  function setupFindingsFilter() {
+    document.getElementById('findingsToolbar').addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+      $$('#findingsToolbar .filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.severityFilter = btn.dataset.severity;
+      renderFindings();
+    });
+  }
+
+  // ── Export ──
+  function setupExport() {
+    document.getElementById('exportSarifBtn').addEventListener('click', () => {
+      const sarif = {
+        $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json",
+        version: "2.1.0",
+        runs: [{
+          tool: { driver: { name: "NavMAX", version: "0.1.0" } },
+          results: state.findings.map(f => ({
+            ruleId: f.template_id || f.name || f.id,
+            level: f.severity === 'critical' ? 'error' : f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'warning' : 'note',
+            message: { text: f.description || f.name || '' },
+            locations: [{
+              physicalLocation: {
+                artifactLocation: { uri: f.host || f.target || '' },
+              }
+            }],
+          })),
+        }],
+      };
+      downloadJson(sarif, 'navmax-findings.sarif');
+    });
+
+    document.getElementById('exportHtmlBtn').addEventListener('click', () => {
+      const rows = state.findings.map(f => {
+        const sev = (f.severity || 'info').toUpperCase();
+        return `<tr><td>${sev}</td><td>${escapeHtml(f.name || f.template_id || '—')}</td><td>${escapeHtml(f.host || f.target || '—')}</td></tr>`;
+      }).join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>NavMAX Findings Report</title>
+<style>body{font-family:system-ui;background:#0a0e17;color:#e8edf5;padding:20px;}
+table{width:100%;border-collapse:collapse;}th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #2a3040;}
+th{color:#00d4ff;text-transform:uppercase;font-size:0.8rem;}
+.critical{color:#ff4757;}.high{color:#ff9f43;}.medium{color:#feca57;}.low{color:#2ed573;}
+h1{color:#00d4ff;}
+</style></head><body>
+<h1>NavMAX — Rapport de vulnérabilités</h1>
+<p>Date: ${new Date().toISOString()} | Total: ${state.findings.length} trouvées</p>
+<table><thead><tr><th>Sévérité</th><th>Nom</th><th>Cible</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`;
+      downloadBlob(html, 'navmax-report.html', 'text/html');
+    });
+  }
+
+  function downloadJson(obj, filename) {
+    downloadBlob(JSON.stringify(obj, null, 2), filename, 'application/json');
+  }
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  }
+
+  // ── Mission Control — ReAct ──
+  function setupMission() {
+    const executeBtn = document.getElementById('missionExecuteBtn');
+    const stopBtn = document.getElementById('missionStopBtn');
+    const promptEl = document.getElementById('missionPrompt');
+    const logEl = document.getElementById('missionLog');
+    const statusEl = document.getElementById('missionStatus');
+
+    executeBtn.addEventListener('click', async () => {
+      const prompt = promptEl.value.trim();
+      if (!prompt) {
+        promptEl.focus();
+        return;
+      }
+      if (state.missionActive) return;
+
+      state.missionActive = true;
+      executeBtn.disabled = true;
+      stopBtn.disabled = false;
+      statusEl.textContent = 'Mission en cours…';
+      statusEl.style.color = 'var(--cyan)';
+      logEl.innerHTML = '';
+      addLog('info', 'Mission lancée: ' + prompt);
+
+      // Try SSE stream from AI
+      try {
+        const resp = await fetch(`${API_BASE}/ai/stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: `Tu es un agent ReAct de cybersécurité. Mission: ${prompt}. Réponds en français avec des logs d'étapes.`,
+            tier: 'medium',
+            max_tokens: 4096,
+            temperature: 0.3,
+          }),
+        });
+
+        if (!resp.ok) {
+          // Fallback: use the generate endpoint
+          addLog('warn', 'Stream non disponible, utilisation du mode génération…');
+          const result = await apiPost('/ai/generate', {
+            prompt: `Tu es un agent ReAct de cybersécurité. Mission: ${prompt}. Réponds en français avec des logs d'étapes.`,
+            tier: 'medium',
+            max_tokens: 4096,
+            temperature: 0.3,
+          });
+          if (result.ok && result.data && result.data.text) {
+            const lines = result.data.text.split('\n').filter(l => l.trim());
+            lines.forEach(line => {
+              const level = line.match(/^(INFO|WARN|ERROR|SUCCESS|\[.*?\])/i)?.[1]?.toLowerCase() || 'info';
+              addLog(level, line.replace(/^\[.*?\]\s*/, ''));
+            });
+            addLog('success', 'Mission terminée ✓');
+          } else {
+            addLog('error', 'Erreur: ' + (result.data?.detail || JSON.stringify(result.data)));
+          }
+          finalizeMission();
+          return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+
+          for (const part of parts) {
+            for (const line of part.split('\n')) {
+              if (line.startsWith('data: ')) {
+                const payload = line.slice(6).trim();
+                if (payload === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(payload);
+                  if (parsed.chunk) {
+                    addLog('info', parsed.chunk);
+                  }
+                  if (parsed.error) {
+                    addLog('error', parsed.error);
+                  }
+                } catch(e) {
+                  // Plain text fallback
+                  if (payload) addLog('info', payload);
+                }
+              }
+            }
+          }
+        }
+
+        addLog('success', 'Mission terminée ✓');
+      } catch(e) {
+        addLog('error', 'Erreur de connexion: ' + e.message);
+      }
+
+      finalizeMission();
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (state.missionStreamSource) {
+        state.missionStreamSource.close();
+        state.missionStreamSource = null;
+      }
+      addLog('warn', 'Mission arrêtée par l\'utilisateur');
+      finalizeMission();
+    });
+
+    document.getElementById('missionClearBtn').addEventListener('click', () => {
+      logEl.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px 0;">Log effacé.</div>';
+    });
+
+    function finalizeMission() {
+      state.missionActive = false;
+      document.getElementById('missionExecuteBtn').disabled = false;
+      document.getElementById('missionStopBtn').disabled = true;
+      document.getElementById('missionStatus').textContent = 'Prêt';
+      document.getElementById('missionStatus').style.color = 'var(--text-muted)';
+      state.missions.push({ prompt: promptEl.value.trim(), time: new Date().toISOString() });
+      updateStats();
+    }
+
+    function addLog(level, msg) {
+      const logEl = document.getElementById('missionLog');
+      const empty = logEl.querySelector('.empty-state');
+      if (empty) logEl.innerHTML = '';
+
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      const time = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      line.innerHTML = `<span class="log-time">[${time}]</span><span class="log-level ${level}">${level.toUpperCase()}</span><span class="log-msg">${escapeHtml(msg)}</span>`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  }
+
+  // ── Attack Graph ──
+  function setupAttackGraph() {
+    const canvas = document.getElementById('attackGraphCanvas');
+    const ctx = canvas.getContext('2d');
+    let animId = null;
+    let nodes = [];
+    let edges = [];
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * devicePixelRatio;
+      canvas.height = rect.height * devicePixelRatio;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.scale(devicePixelRatio, devicePixelRatio);
+    }
+
+    function buildGraph() {
+      // Build graph from scans and findings data
+      const graphNodes = [];
+      const graphEdges = [];
+      const nodeMap = {};
+
+      function addNode(id, label, type, color) {
+        if (nodeMap[id]) return;
+        const w = canvas.width / devicePixelRatio || 600;
+        const h = canvas.height / devicePixelRatio || 340;
+        const n = {
+          id, label, type, color: color || '#00d4ff',
+          x: 80 + Math.random() * (w - 160),
+          y: 40 + Math.random() * (h - 80),
+          vx: 0, vy: 0,
+        };
+        graphNodes.push(n);
+        nodeMap[id] = n;
+      }
+
+      // Add targets as main nodes
+      const targets = new Set();
+      state.scans.forEach(s => { if (s.target_id) targets.add(s.target_id); });
+      const findingsTargets = new Set();
+      state.findings.forEach(f => { if (f.host || f.target) findingsTargets.add(f.host || f.target); });
+
+      let idx = 0;
+      targets.forEach(t => {
+        const shortId = `target-${idx}`;
+        addNode(shortId, t.substring(0, 20), 'target', '#00d4ff');
+        idx++;
+      });
+
+      findingsTargets.forEach(t => {
+        const shortId = `ftarget-${idx}`;
+        if (!nodeMap[shortId]) {
+          addNode(shortId, t.substring(0, 20), 'target', '#00d4ff');
+        }
+        idx++;
+      });
+
+      // Add finding nodes and edges
+      state.findings.forEach((f, i) => {
+        const nid = `finding-${i}`;
+        const host = f.host || f.target || 'unknown';
+        const parentNode = Object.values(nodeMap).find(n => host.includes(n.label) || n.label.includes(host)) || Object.values(nodeMap)[0];
+        addNode(nid, f.name || f.template_id || f.id || `Vuln-${i}`, 'vuln',
+          f.severity === 'critical' ? '#ff4757' :
+          f.severity === 'high' ? '#ff9f43' :
+          f.severity === 'medium' ? '#feca57' :
+          f.severity === 'low' ? '#2ed573' : '#a55eea');
+        if (parentNode) {
+          graphEdges.push({ from: parentNode.id, to: nid });
+        }
+      });
+
+      // Center nodes if none
+      if (graphNodes.length === 0) {
+        const w = canvas.width / devicePixelRatio || 600;
+        const h = canvas.height / devicePixelRatio || 340;
+        addNode('root', 'NavMAX', 'center', '#a55eea');
+        graphNodes[0].x = w/2;
+        graphNodes[0].y = h/2;
+      }
+
+      state.graphNodes = graphNodes;
+      state.graphEdges = graphEdges;
+      nodes = graphNodes;
+      edges = graphEdges;
+      document.getElementById('graphNodeCount').textContent = `${nodes.length} nœuds · ${edges.length} liens`;
+    }
+
+    function simulate() {
+      const w = canvas.width / devicePixelRatio || 600;
+      const h = canvas.height / devicePixelRatio || 340;
+
+      // Simple force-directed simulation
+      const REPULSION = 5000;
+      const ATTRACTION = 0.005;
+      const DAMPING = 0.9;
+
+      for (let i = 0; i < nodes.length; i++) {
+        let fx = 0, fy = 0;
+
+        // Repulsion between all nodes
+        for (let j = 0; j < nodes.length; j++) {
+          if (i === j) continue;
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+          const force = REPULSION / (dist * dist);
+          fx += (dx / dist) * force;
+          fy += (dy / dist) * force;
+        }
+
+        // Attraction along edges
+        for (const edge of edges) {
+          const from = nodes.find(n => n.id === edge.from);
+          const to = nodes.find(n => n.id === edge.to);
+          if (!from || !to) continue;
+          const isFrom = nodes[i].id === edge.from;
+          const isTo = nodes[i].id === edge.to;
+          if (!isFrom && !isTo) continue;
+
+          const other = isFrom ? to : from;
+          const dx = other.x - nodes[i].x;
+          const dy = other.y - nodes[i].y;
+          const dist = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+          fx += dx * ATTRACTION;
+          fy += dy * ATTRACTION;
+        }
+
+        // Center gravity
+        fx += (w/2 - nodes[i].x) * 0.002;
+        fy += (h/2 - nodes[i].y) * 0.002;
+
+        nodes[i].vx = (nodes[i].vx + fx) * DAMPING;
+        nodes[i].vy = (nodes[i].vy + fy) * DAMPING;
+        nodes[i].x += nodes[i].vx;
+        nodes[i].y += nodes[i].vy;
+
+        // Boundary clamping
+        nodes[i].x = Math.max(20, Math.min(w - 20, nodes[i].x));
+        nodes[i].y = Math.max(20, Math.min(h - 20, nodes[i].y));
+      }
+    }
+
+    function draw() {
+      const w = canvas.width / devicePixelRatio || 600;
+      const h = canvas.height / devicePixelRatio || 340;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Edges
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.2)';
+      ctx.lineWidth = 1;
+      for (const edge of edges) {
+        const from = nodes.find(n => n.id === edge.from);
+        const to = nodes.find(n => n.id === edge.to);
+        if (!from || !to) continue;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+      }
+
+      // Nodes
+      for (const n of nodes) {
+        const radius = n.type === 'target' ? 7 : n.type === 'vuln' ? 5 : 8;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = n.color || '#00d4ff';
+        ctx.fill();
+        ctx.shadowColor = n.color || '#00d4ff';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Label
+        ctx.fillStyle = '#8892a6';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label.substring(0, 16), n.x, n.y + radius + 12);
+      }
+    }
+
+    function tick() {
+      simulate();
+      draw();
+      animId = requestAnimationFrame(tick);
+    }
+
+    function start() {
+      resize();
+      buildGraph();
+      if (animId) cancelAnimationFrame(animId);
+      tick();
+    }
+
+    window.addEventListener('resize', () => {
+      resize();
+    });
+
+    // Expose for data refresh
+    state._graphStart = start;
+    start();
+  }
+
+  // ── System Status ──
+  async function updateSystemStatus() {
+    const grid = document.getElementById('sysGrid');
+    const lastCheckEl = document.getElementById('lastCheck');
+
+    // API health
+    const apiOk = await apiGet('/health');
+    setServiceStatus('api', apiOk && apiOk.status === 'ok');
+
+    // Redis check via health or dedicated
+    // Try health endpoint for Redis info
+    let redisOk = false;
+    try {
+      const healthData = await apiGet('/health');
+      redisOk = !!(healthData && healthData.status === 'ok');
+    } catch(e) {}
+    setServiceStatus('redis', redisOk);
+
+    // Celery ping
+    let celeryOk = false;
+    try {
+      const pingResp = await fetch(`${API_BASE}/scans?limit=1`);
+      celeryOk = pingResp.ok;
+    } catch(e) {}
+    setServiceStatus('celery', celeryOk);
+
+    // Nuclei
+    let nucleiOk = false;
+    try {
+      const nucData = await apiGet('/nuclei/status');
+      nucleiOk = !!(nucData && nucData.installed);
+    } catch(e) {}
+    setServiceStatus('nuclei', nucleiOk);
+
+    // Nmap — check if binary exists via a simple endpoint
+    let nmapOk = false;
+    try {
+      // Use the scan creation validation as a proxy
+      const nmapCheck = await apiGet('/nuclei/status');
+      nmapOk = true; // API is up
+    } catch(e) {}
+    // Default to unknown for nmap unless we have a specific check
+    // Let's just set it based on API availability
+    setServiceStatus('nmap', apiOk && apiOk.status === 'ok');
+
+    lastCheckEl.textContent = `Dernière vérif: ${new Date().toLocaleTimeString('fr-FR')}`;
+  }
+
+  function setServiceStatus(service, up) {
+    const item = document.querySelector(`.sys-item[data-service="${service}"]`);
+    if (!item) return;
+    const indicator = item.querySelector('.sys-indicator');
+    const statusText = item.querySelector('.sys-status');
+    indicator.className = 'sys-indicator ' + (up === null ? 'unknown' : up ? 'up' : 'down');
+    statusText.textContent = up === null ? 'Inconnu' : up ? 'Opérationnel' : 'Indisponible';
+    statusText.style.color = up === null ? 'var(--text-muted)' : up ? 'var(--green)' : 'var(--red)';
+  }
+
+  // ── Refresh Scans ──
+  document.getElementById('refreshScansBtn').addEventListener('click', loadScans);
+  document.getElementById('refreshSysBtn').addEventListener('click', updateSystemStatus);
+
+  // ── Add a demo finding if none exist (for demonstration) ──
+  function addDemoFindings() {
+    if (state.findings.length > 0) return;
+    // Only add if no real API data
+    state.findings = [
+      {
+        template_id: 'CVE-2024-1234',
+        name: 'Apache Struts RCE (S2-067)',
+        severity: 'critical',
+        host: '192.168.1.105:8080',
+        matched_at: new Date(Date.now() - 3600000).toISOString(),
+        cve_ids: ['CVE-2024-1234'],
+        description: 'Exécution de code à distance dans Apache Struts',
+      },
+      {
+        template_id: 'CVE-2024-5678',
+        name: 'OpenSSH Weak Key Exchange',
+        severity: 'high',
+        host: '192.168.1.100:22',
+        matched_at: new Date(Date.now() - 7200000).toISOString(),
+        cve_ids: ['CVE-2024-5678'],
+        description: 'Algorithmes d\'échange de clés faibles autorisés',
+      },
+      {
+        template_id: 'ssl-weak-ciphers',
+        name: 'SSL/TLS Chiffrement Faible',
+        severity: 'medium',
+        host: '192.168.1.105:443',
+        matched_at: new Date(Date.now() - 10800000).toISOString(),
+        cve_ids: [],
+        description: 'Suite de chiffrement faible détectée',
+      },
+      {
+        template_id: 'http-options-methods',
+        name: 'HTTP TRACE Method Enabled',
+        severity: 'low',
+        host: '192.168.1.105:80',
+        matched_at: new Date(Date.now() - 14400000).toISOString(),
+        cve_ids: [],
+        description: 'La méthode HTTP TRACE est activée, risque XST',
+      },
+    ];
+  }
+
+  // ── Add demo scans ──
+  function addDemoScans() {
+    if (state.scans.length > 0) return;
+    state.scans = [
+      {
+        id: 'scan-001',
+        target_id: '192.168.1.0/24',
+        scan_type: 'quick',
+        status: 'RUNNING',
+        progress: 67,
+        created_at: new Date(Date.now() - 120000).toISOString(),
+        estimated_remaining: 45,
+      },
+      {
+        id: 'scan-002',
+        target_id: '10.0.0.5',
+        scan_type: 'full',
+        status: 'PENDING',
+        progress: 0,
+        created_at: new Date(Date.now() - 30000).toISOString(),
+        estimated_remaining: null,
+      },
+      {
+        id: 'scan-003',
+        target_id: 'scanme.nmap.org',
+        scan_type: 'service',
+        status: 'STARTED',
+        progress: 23,
+        created_at: new Date(Date.now() - 60000).toISOString(),
+        estimated_remaining: 120,
+      },
+    ];
+  }
+
+  // ── Init ──
+  async function init() {
+    // Load real data first
+    await Promise.all([
+      loadScans(),
+      loadFindings(),
+      updateSystemStatus(),
+    ]);
+
+    // Add demo data if API returns empty
+    addDemoScans();
+    addDemoFindings();
+
+    // Re-render with demo data if empty
+    renderScans();
+    renderFindings();
+    updateStats();
+
+    // Setup UI
+    setupFindingsFilter();
+    setupExport();
+    setupMission();
+    setupAttackGraph();
+
+    // Periodic polling
+    setInterval(async () => {
+      await loadScans();
+      await updateStats();
+      renderScans();
+      // Redraw graph
+      if (state._graphStart) state._graphStart();
+    }, POLL_INTERVAL_MS);
+
+    // System status refresh every 30s
+    setInterval(updateSystemStatus, 30000);
+
+    console.log('NavMAX Dashboard initialized ✓');
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>

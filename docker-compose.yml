@@ -1,63 +1,195 @@
+# ═══════════════════════════════════════════════════════════════════
+# NavMAX — Docker Compose Production "Tout-en-un"
+# Usage : docker compose up -d
+# ═══════════════════════════════════════════════════════════════════
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ── Services ──────────────────────────────────────────────────────
 services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: navmax-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-navmax}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangerMoi!}
+      POSTGRES_DB: navmax
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-navmax} -d navmax"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - navmax-net
+    logging: *default-logging
+
+  # ── Redis ───────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: navmax-redis
-    command: redis-server --bind 127.0.0.1 --requirepass navmax_redis_secret
+    command: >
+      redis-server --bind 0.0.0.0
+      --requirepass ${REDIS_PASSWORD:-navmax_redis_secret}
+      --appendonly yes
     ports:
       - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "navmax_redis_secret", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-navmax_redis_secret}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
     networks:
       - navmax-net
+    logging: *default-logging
 
+  # ── API FastAPI ─────────────────────────────────────────────────
   navmax-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: navmax-api
-    command: uvicorn navmax.api.app:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "127.0.0.1:8000:8000"
+    command: >
+      uvicorn navmax.api.app:app
+      --host 0.0.0.0
+      --port 8000
+      --workers ${NAVMAX_API_WORKERS:-2}
     environment:
-      - NAVMAX_REDIS_URL=redis://:navmax_redis_secret@redis:6379/0
-      - NAVMAX_DB_URL=sqlite+aiosqlite:///data/navmax.db
+      # Général
+      NAVMAX_DEBUG: "${NAVMAX_DEBUG:-false}"
+      NAVMAX_LOG_LEVEL: "${NAVMAX_LOG_LEVEL:-INFO}"
+      NAVMAX_LOG_FORMAT: "${NAVMAX_LOG_FORMAT:-json}"
+
+      # Base de données PostgreSQL
+      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://navmax:ChangerMoi!@postgres:5432/navmax}"
+
+      # Redis
+      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:navmax_redis_secret@redis:6379/0}"
+
+      # JWT
+      NAVMAX_JWT_SECRET: "${NAVMAX_JWT_SECRET:-}"
+      NAVMAX_JWT_ALGORITHM: "${NAVMAX_JWT_ALGORITHM:-HS256}"
+      NAVMAX_JWT_EXPIRE_MINUTES: "${NAVMAX_JWT_EXPIRE_MINUTES:-60}"
+
+      # API
+      NAVMAX_API_HOST: "0.0.0.0"
+      NAVMAX_API_PORT: "8000"
+
+      # Scanner
+      NAVMAX_SCANNER_DEFAULT_TIMEOUT: "${NAVMAX_SCANNER_DEFAULT_TIMEOUT:-2.0}"
+      NAVMAX_SCANNER_DEFAULT_PORTS: "${NAVMAX_SCANNER_DEFAULT_PORTS:-22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443,27017}"
+      NAVMAX_SCANNER_MAX_CONCURRENCY: "${NAVMAX_SCANNER_MAX_CONCURRENCY:-100}"
+
+      # Data directory
+      NAVMAX_DATA_DIR: "/data/navmax"
     volumes:
-      - .:/app
-      - navmax_data:/root/.navmax
+      - navmax_data:/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - navmax-net
+    logging: *default-logging
+    # L'API n'expose pas de port direct en production —
+    # on passe par Nginx (sauf pour healthcheck interne)
+    expose:
+      - "8000"
 
+  # ── Worker Celery ───────────────────────────────────────────────
   navmax-worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: navmax-worker
-    command: celery -A navmax.tasks worker --loglevel=info --concurrency=4
+    command: >
+      celery -A navmax.tasks worker
+      --loglevel=${NAVMAX_LOG_LEVEL:-INFO}
+      --concurrency=${CELERY_CONCURRENCY:-4}
+      --max-tasks-per-child=100
+      --time-limit=3600
+      --soft-time-limit=3300
     environment:
-      - NAVMAX_REDIS_URL=redis://:navmax_redis_secret@redis:6379/0
-      - NAVMAX_DB_URL=sqlite+aiosqlite:///data/navmax.db
+      # Général
+      NAVMAX_DEBUG: "${NAVMAX_DEBUG:-false}"
+      NAVMAX_LOG_LEVEL: "${NAVMAX_LOG_LEVEL:-INFO}"
+      NAVMAX_LOG_FORMAT: "${NAVMAX_LOG_FORMAT:-json}"
+
+      # Base de données PostgreSQL
+      NAVMAX_DB_URL: "${NAVMAX_DATABASE_URL:-postgresql+asyncpg://navmax:ChangerMoi!@postgres:5432/navmax}"
+
+      # Redis (broker + backend Celery)
+      NAVMAX_REDIS_URL: "${NAVMAX_REDIS_URL:-redis://:navmax_redis_secret@redis:6379/0}"
+
+      # Data directory
+      NAVMAX_DATA_DIR: "/data/navmax"
     volumes:
-      - .:/app
-      - navmax_data:/root/.navmax
+      - navmax_data:/data
+      - nucleidata:/root/nuclei-templates
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - navmax-net
+    logging: *default-logging
 
+  # ── Nginx Reverse Proxy ─────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: navmax-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./navmax/static:/app/navmax/static:ro
+    environment:
+      NGINX_PORT: "${NGINX_PORT:-80}"
+      NGINX_SERVER_NAME: "${NGINX_SERVER_NAME:-localhost}"
+      NGINX_RATE_LIMIT: "${NGINX_RATE_LIMIT:-10}"
+    depends_on:
+      - navmax-api
+    restart: unless-stopped
+    networks:
+      - navmax-net
+    logging: *default-logging
+
+# ── Volumes persistants ───────────────────────────────────────────
 volumes:
+  pgdata:
+    driver: local
+    name: navmax_pgdata
+  redisdata:
+    driver: local
+    name: navmax_redisdata
+  nucleidata:
+    driver: local
+    name: navmax_nucleidata
   navmax_data:
+    driver: local
+    name: navmax_data
 
+# ── Réseau ────────────────────────────────────────────────────────
 networks:
   navmax-net:
     driver: bridge
     internal: false
+    name: navmax-net
