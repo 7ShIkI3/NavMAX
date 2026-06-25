@@ -1,0 +1,145 @@
+# =============================================================================
+# Security Scan Workflow — SAST + Dependency + Secret Detection
+# Project : NavMAX
+# Trigger : push & pull_request on main
+# =============================================================================
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 1 : Bandit SAST — Static Analysis Security Testing
+  # ─────────────────────────────────────────────────────────────────────────
+  bandit-sast:
+    name: Bandit SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit SAST scan on navmax/
+        id: bandit
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          bandit -r navmax/ \
+            -f json \
+            -o reports/bandit-report.json \
+            --severity low,medium,high \
+            --confidence low,medium,high
+
+      - name: Upload Bandit JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: reports/bandit-report.json
+          if-no-files-found: warn
+
+      - name: Block pipeline on HIGH / CRITICAL vulnerabilities
+        run: python3 scripts/ci/check_bandit.py
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 2 : Safety — Dependency vulnerability check
+  # ─────────────────────────────────────────────────────────────────────────
+  safety-scan:
+    name: Safety Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install project dependencies (for Safety resolution)
+        run: |
+          pip install --upgrade pip
+          pip install .
+
+      - name: Install Safety
+        run: pip install safety
+
+      - name: Run Safety check (JSON output)
+        id: safety
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          safety check --json > reports/safety-report.json 2>&1 || true
+
+      - name: Upload Safety JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-report
+          path: reports/safety-report.json
+          if-no-files-found: warn
+
+      - name: Display Safety summary
+        run: |
+          if [ -f reports/safety-report.json ]; then
+            echo "📋 Safety scan results:"
+            python3 -c "import json,sys; d=json.load(open('reports/safety-report.json')); v=d if isinstance(d,list) else d.get('vulnerabilities',[]); print(f'Total vulns: {len(v)}'); [print(f'  [{x.get(\"severity\",x.get(\"severity_level\",\"?\"))}] {x.get(\"package_name\",x.get(\"package\",\"?\"))} — {x.get(\"vulnerability_id\",x.get(\"id\",\"?\"))} {x.get(\"cve\",\"\")}') for x in v[:10]]; print(f'  ... and {len(v)-10} more') if len(v)>10 else None"
+          else
+            echo "⚠️  No Safety report generated."
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # JOB 3 : Secret Scanning — detect-secrets
+  # ─────────────────────────────────────────────────────────────────────────
+  secret-scan:
+    name: Secret Detection (detect-secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install detect-secrets
+        run: pip install detect-secrets
+
+      - name: Scan for secrets with detect-secrets
+        id: secrets
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          detect-secrets scan --all-files \
+            --exclude-files '(\.git/|\.pytest_cache/|__pycache__/|\.vscode/|node_modules/)' \
+            --exclude-secrets 'password|passwd|secret|token|api_key' \
+            > reports/detect-secrets-report.json || true
+
+      - name: Upload detect-secrets report
+        uses: actions/upload-artifact@v4
+        with:
+          name: detect-secrets-report
+          path: reports/detect-secrets-report.json
+          if-no-files-found: warn
+
+      - name: Check for high-confidence secrets
+        run: python3 scripts/ci/check_secrets.py
