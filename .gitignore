@@ -13,3 +13,4 @@ navmax.db
 htmlcov/
 *.hive
 *.pem
+.hermes/
