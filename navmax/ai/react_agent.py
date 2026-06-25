@@ -18,16 +18,27 @@ Usage:
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, AsyncIterator
 
+import jsonschema
 import structlog
 
 from navmax.ai.engine import AIEngine
 from navmax.ai.providers.base import ModelTier
 
 logger = structlog.get_logger(__name__)
+
+# ── Exceptions ────────────────────────────────────────────────────
+
+
+class ToolRequiresConfirmation(Exception):
+    """Levée quand un tool dangerous nécessite une confirmation humaine."""
+
+    pass
+
 
 # ── Types ────────────────────────────────────────────────────────
 
@@ -323,17 +334,24 @@ class ReActAgent:
             if step.tool_name and step.tool_name in self.tools:
                 tool = self.tools[step.tool_name]
                 try:
+                    # 1. Validation JSON schema des paramètres
+                    if step.tool_params is not None:
+                        self._validate_params(tool, step.tool_params)
+
+                    # 2. Gate pour tools dangereux : lever une exception
                     if tool.dangerous and tool.requires_confirmation:
-                        logger.warning(
-                            "react_dangerous_tool",
-                            tool=step.tool_name,
-                            params=step.tool_params,
+                        raise ToolRequiresConfirmation(
+                            f"Tool '{tool.name}' blocked — requires human confirmation. "
+                            f"Params: {json.dumps(step.tool_params)}"
                         )
+
                     result = await self._execute_tool(tool, step.tool_params or {})
                     step.result = result
                     # Collecter les findings
                     if isinstance(result, dict) and "findings" in result:
                         findings.extend(result["findings"])
+                except ToolRequiresConfirmation:
+                    raise
                 except Exception as e:
                     logger.error("react_tool_error", tool=step.tool_name, error=str(e))
                     step.error = str(e)
@@ -425,6 +443,17 @@ class ReActAgent:
             if step.tool_name and step.tool_name in self.tools:
                 tool = self.tools[step.tool_name]
                 try:
+                    # 1. Validation JSON schema des paramètres
+                    if step.tool_params is not None:
+                        self._validate_params(tool, step.tool_params)
+
+                    # 2. Gate pour tools dangereux
+                    if tool.dangerous and tool.requires_confirmation:
+                        raise ToolRequiresConfirmation(
+                            f"Tool '{tool.name}' blocked — requires human confirmation. "
+                            f"Params: {json.dumps(step.tool_params)}"
+                        )
+
                     result = await self._execute_tool(tool, step.tool_params or {})
                     step.result = result
                     yield StepUpdate(
@@ -532,20 +561,93 @@ class ReActAgent:
             result = await result
         return result
 
+    def _validate_params(self, tool: Tool, params: dict) -> None:
+        """Valide les paramètres d'un tool contre son JSON schema.
+
+        Utilise jsonschema.validate() pour garantir que les paramètres
+        fournis par l'IA respectent le schema déclaré du tool.
+
+        Args:
+            tool: Le tool à valider.
+            params: Les paramètres à valider.
+
+        Raises:
+            jsonschema.ValidationError: Si les paramètres sont invalides.
+        """
+        if not isinstance(params, dict):
+            raise jsonschema.ValidationError(
+                f"Params for tool '{tool.name}' must be a dict, got {type(params).__name__}"
+            )
+        jsonschema.validate(instance=params, schema=tool.parameters)
+
+    _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
+        (re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", re.IGNORECASE),
+         "[INJECTION BLOCKED: ignore instructions]"),
+        (re.compile(r"forget\s+(all\s+)?(previous|prior)\s+(instructions|context|history)", re.IGNORECASE),
+         "[INJECTION BLOCKED: forget instructions]"),
+        (re.compile(r"you\s+are\s+now\s+", re.IGNORECASE),
+         "[INJECTION BLOCKED: role change]"),
+        (re.compile(r"disregard\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
+         "[INJECTION BLOCKED: disregard]"),
+        (re.compile(r"(new\s+)?system\s+prompt\s*:", re.IGNORECASE),
+         "[INJECTION BLOCKED: system prompt override]"),
+        (re.compile(r"override\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
+         "[INJECTION BLOCKED: override]"),
+        (re.compile(r"you\s+must\s+(not|never|always)", re.IGNORECASE),
+         "[INJECTION BLOCKED: instruction override]"),
+        (re.compile(r"\[\s*(SYSTEM|INJECT|OVERRIDE)\s*\]", re.IGNORECASE),
+         "[INJECTION BLOCKED: system tag]"),
+        (re.compile(r"<\|?(im_start|im_end|sys|system|user|assistant)\|?>", re.IGNORECASE),
+         "[INJECTION BLOCKED: chat token]"),
+    ]
+
+    def _sanitize_for_history(self, text: str) -> str:
+        """Supprime les tentatives d'injection de prompt dans un texte.
+
+        Remplace les patterns d'injection courants par des marqueurs
+        de blocage explicites, puis tronque à 500 caractères.
+
+        Args:
+            text: Le texte à nettoyer.
+
+        Returns:
+            Texte nettoyé et tronqué.
+        """
+        if not isinstance(text, str):
+            return str(text)
+
+        for pattern, replacement in self._INJECTION_PATTERNS:
+            text = pattern.sub(replacement, text)
+
+        if len(text) > 500:
+            text = text[:497] + "..."
+
+        return text
+
     def _step_to_history(self, step: Step) -> str:
-        """Convertit un Step en texte pour l'historique du prompt."""
+        """Convertit un Step en texte pour l'historique du prompt.
+
+        Sanitize les contenus pour prévenir la prompt injection :
+        - Supprime les patterns d'injection du thought et du résultat
+        - Tronque les résultats à 500 caractères
+        """
         tool_info = ""
         if step.tool_name:
-            tool_info = f"\nAction: {step.tool_name}({json.dumps(step.tool_params or {})})"
+            tool_info = (
+                f"\nAction: {step.tool_name}"
+                f"({self._sanitize_for_history(json.dumps(step.tool_params or {}))})"
+            )
             if step.result:
                 result_str = json.dumps(step.result, default=str, indent=2)
                 if len(result_str) > 500:
-                    result_str = result_str[:500] + "..."
+                    result_str = result_str[:497] + "..."
+                result_str = self._sanitize_for_history(result_str)
                 tool_info += f"\nResult: {result_str}"
             if step.error:
-                tool_info += f"\nError: {step.error}"
+                tool_info += f"\nError: {self._sanitize_for_history(step.error)}"
 
-        return f"\nStep {step.step_number}:\nThought: {step.thought}{tool_info}\n"
+        thought_clean = self._sanitize_for_history(step.thought)
+        return f"\nStep {step.step_number}:\nThought: {thought_clean}{tool_info}\n"
 
 
 # ── Wire tools ───────────────────────────────────────────────────

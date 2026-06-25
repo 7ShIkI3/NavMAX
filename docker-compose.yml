@@ -2,14 +2,17 @@ services:
   redis:
     image: redis:7-alpine
     container_name: navmax-redis
+    command: redis-server --bind 127.0.0.1 --requirepass navmax_redis_secret
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "navmax_redis_secret", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    networks:
+      - navmax-net
 
   navmax-api:
     build:
@@ -18,9 +21,9 @@ services:
     container_name: navmax-api
     command: uvicorn navmax.api.app:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
-      - NAVMAX_REDIS_URL=redis://redis:6379/0
+      - NAVMAX_REDIS_URL=redis://:navmax_redis_secret@redis:6379/0
       - NAVMAX_DB_URL=sqlite+aiosqlite:///data/navmax.db
     volumes:
       - .:/app
@@ -29,6 +32,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - navmax-net
 
   navmax-worker:
     build:
@@ -37,7 +42,7 @@ services:
     container_name: navmax-worker
     command: celery -A navmax.tasks worker --loglevel=info --concurrency=4
     environment:
-      - NAVMAX_REDIS_URL=redis://redis:6379/0
+      - NAVMAX_REDIS_URL=redis://:navmax_redis_secret@redis:6379/0
       - NAVMAX_DB_URL=sqlite+aiosqlite:///data/navmax.db
     volumes:
       - .:/app
@@ -46,6 +51,13 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - navmax-net
 
 volumes:
   navmax_data:
+
+networks:
+  navmax-net:
+    driver: bridge
+    internal: false

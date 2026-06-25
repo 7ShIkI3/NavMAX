@@ -34,6 +34,17 @@ class TestAIExploitGenerator:
         return engine
 
     @pytest.fixture
+    def sandbox(self):
+        sb = AsyncMock()
+        result = MagicMock()
+        result.exit_code = 0
+        result.stdout = "[+] OK"
+        result.stderr = ""
+        result.error = None
+        sb.run = AsyncMock(return_value=result)
+        return sb
+
+    @pytest.fixture
     def service(self):
         return ServiceInfo(
             host="10.0.0.1", port=6379, service="redis",
@@ -41,16 +52,16 @@ class TestAIExploitGenerator:
         )
 
     @pytest.mark.asyncio
-    async def test_generate_basic(self, ai_engine, service):
-        gen = AIExploitGenerator(ai_engine)
+    async def test_generate_basic(self, ai_engine, sandbox, service):
+        gen = AIExploitGenerator(ai_engine, sandbox)
         exploit = await gen.generate(service)
         assert exploit.is_valid
         assert "import os" in exploit.code
         assert exploit.attempts == 1
 
     @pytest.mark.asyncio
-    async def test_generate_with_vulnerabilities(self, ai_engine):
-        gen = AIExploitGenerator(ai_engine)
+    async def test_generate_with_vulnerabilities(self, ai_engine, sandbox):
+        gen = AIExploitGenerator(ai_engine, sandbox)
         svc = ServiceInfo(
             host="10.0.0.1", port=80, service="apache",
             version="2.4.49",
@@ -63,27 +74,27 @@ class TestAIExploitGenerator:
         assert "CVE-2021-41773" in call_args.kwargs["prompt"]
 
     @pytest.mark.asyncio
-    async def test_extract_code_from_markdown(self, ai_engine, service):
+    async def test_extract_code_from_markdown(self, ai_engine, sandbox, service):
         from navmax.ai.providers.base import GenerateResult, ProviderType
         ai_engine.generate = AsyncMock(return_value=GenerateResult(
             text="```python\nimport os\nprint('exploit')\n```",
             model="mock", provider=ProviderType.OLLAMA,
             tokens_used=20, tokens_per_second=50.0, finish_reason="stop",
         ))
-        gen = AIExploitGenerator(ai_engine)
+        gen = AIExploitGenerator(ai_engine, sandbox)
         exploit = await gen.generate(service)
         assert "import os" in exploit.code
         assert "```" not in exploit.code
 
     @pytest.mark.asyncio
-    async def test_invalid_python_rejected(self, ai_engine, service):
+    async def test_invalid_python_rejected(self, ai_engine, sandbox, service):
         from navmax.ai.providers.base import GenerateResult, ProviderType
         ai_engine.generate = AsyncMock(return_value=GenerateResult(
             text="this is not python code {{{",
             model="mock", provider=ProviderType.OLLAMA,
             tokens_used=10, tokens_per_second=25.0, finish_reason="stop",
         ))
-        gen = AIExploitGenerator(ai_engine)
+        gen = AIExploitGenerator(ai_engine, sandbox)
         exploit = await gen.generate(service)
         assert exploit.error is not None
 
