@@ -7,6 +7,8 @@ Support :
 - Parsing output (hashcat --show --machine-readable)
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import re
@@ -14,7 +16,7 @@ import shutil
 import time
 from typing import Any
 
-from navmax.core.logging import get_logger
+from ..core.logging import get_logger
 
 from .base import (
     BaseCracker,

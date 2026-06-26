@@ -12,6 +12,8 @@ Fonctionnalités :
 Chaque méthode lève une exception claire si l'outil requis est manquant.
 """
 
+from __future__ import annotations
+
 import csv
 import io
 import re
@@ -21,8 +23,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from navmax.core.logging import get_logger
-from navmax.wireless.base import (
+from ..core.logging import get_logger
+from .base import (
     BaseWirelessScanner,
     Handshake,
     HardwareCapability,

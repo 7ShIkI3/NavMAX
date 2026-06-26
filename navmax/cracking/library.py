@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from navmax.cracking.data import (
+from .data import (
     BUILTIN_MASKS,
     BUILTIN_RULES,
     BUILTIN_WORDLISTS,

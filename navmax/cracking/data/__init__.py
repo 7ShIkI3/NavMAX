@@ -10,6 +10,8 @@ sont disponibles via téléchargement — voir CrackingLibrary.install_rockyou()
 et les URLs de référence dans chaque fichier.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 # ── Chemins ──────────────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ Définit les types partagés :
 - Handshake (BSSID, station, fichier .cap/.22000, PMKID)
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from enum import Enum
 

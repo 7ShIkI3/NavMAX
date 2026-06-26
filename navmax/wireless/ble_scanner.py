@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from navmax.core.logging import get_logger
-from navmax.wireless.base import BLEDevice, BaseWirelessScanner, HardwareCapability, WirelessTech
+from ..core.logging import get_logger
+from .base import BLEDevice, BaseWirelessScanner, HardwareCapability, WirelessTech
 
 logger = get_logger(__name__)
 

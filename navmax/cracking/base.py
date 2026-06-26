@@ -4,6 +4,8 @@ Définit l'interface commune (check_installation, get_version, crack)
 et les dataclasses Pydantic pour les résultats.
 """
 
+from __future__ import annotations
+
 import shutil
 from abc import ABCMeta, abstractmethod
 from enum import StrEnum

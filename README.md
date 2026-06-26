@@ -6,10 +6,10 @@
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-827%2F827-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Tests](https://img.shields.io/badge/tests-1088%2F1088-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.7.0--rc-purple.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK** · **🖥️ Dashboard v2** · **🧠 ConnecteurIA** · **🖥️ Installeur Windows***
+*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (25 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK** · **🖥️ Dashboard v2** · **🧠 ConnecteurIA** · **🖥️ Installeur Windows** · **🔐 Cracking** · **📡 Wireless** · **💻 Pwntools***
 
 </div>
 
@@ -46,7 +46,19 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 | 🏗️ **Plugins** | ❌ Aucun | ✅ **@register_plugin**, discover/load/execute, API REST |
 | 🔒 **Sécurité** | ❌ Aucune | ✅ **Audit P0+P1** (6 fixes), SAST CI/CD (Bandit+Safety) |
 | 🐳 **Docker** | Basique | ✅ **PostgreSQL**, Nginx, volumes persistants, tout-en-un |
-| 🧪 **Tests** | 403 | ✅ **773** |
+| 🔒 **Hermes** | Config faiblesses | ✅ auto_prune, tirith_fail_open→false, skills dupliquées mergées, mémoire consolidée |
+
+### 🆕 v0.7.0-rc — Cracking, Wireless, Web, AD Wrappers
+
+| Module | Description |
+|---|---|
+| 🔐 **Cracking** | hashcat (NTLM/WPA2/bcrypt), john (SSH/ZIP/KRB5), hydra (SSH/FTP/SMB/RDP) + bibliothèque (8 règles, 5 wordlists, 45 masques) |
+| 📡 **Wireless** | WiFi (aircrack-ng, hcxtools, monitor mode, handshake, PMKID, hashcat -m 22000), BLE (bleak scanner/connect/GATT) |
+| 🌐 **Web** | sqlmap (scan/crawl/dump), ffuf (dir busting, vhost discovery, parsing JSON) |
+| 🛡️ **AD** | certipy (ESC1-13 exploitation), responder (NTLM capture, hashcat/john conversion) |
+| 💻 **Pwntools** | shellcode gen, ROP gadgets, format string, pattern create/offset, asm/disasm, SSH remote |
+| 🧪 **Tests** | 1088 (+261 vs v0.5.0) |
+| 🐛 **Fixes** | impacket LOG, bcrypt 4.0.1, __main__.py, dashboard startup |
 
 ### 🆕 v0.5.0 — Installeur, Dashboard v2, Optimisations & Audit
 
@@ -752,7 +764,7 @@ NavMAX/
 │   ├── uninstall.ps1      #   Désinstallation (-KeepData)
 │   ├── launch.bat         #   Lancement + dashboard
 │   └── navmax.ico         #   Icône application
-├── tests/                 # 827 tests (+55 vs v0.4.2)
+├── tests/                 # 1088 tests (+261 vs v0.5.0)
 ├── .github/workflows/     # 🔒 SAST CI/CD (NOUVEAU)
 ├── nginx/                 # 🐳 Reverse proxy (NOUVEAU)
 ├── Dockerfile             # 🐳 Multi-stage (NOUVEAU)

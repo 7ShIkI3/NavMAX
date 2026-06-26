@@ -17,3 +17,5 @@ htmlcov/
 **/PLAN.md
 jwt.txt
 *.jwt
+docs/audits/
+rfcs/

@@ -12,6 +12,8 @@ Usage:
     await wrapper.stop()
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import re
@@ -24,7 +26,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
-from navmax.core.logging import get_logger
+from ..core.logging import get_logger
 
 logger = get_logger(__name__)
 

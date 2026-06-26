@@ -25,6 +25,8 @@ Usage:
         print(f"{f.vulnerability} - {f.template}")
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -34,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from navmax.core.logging import get_logger
+from ..core.logging import get_logger
 
 logger = get_logger(__name__)
 

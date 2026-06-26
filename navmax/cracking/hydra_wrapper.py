@@ -5,6 +5,8 @@ Support :
 - Options : -t (tasks), -w (wait), -f (exit on first)
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import re
@@ -13,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from navmax.core.logging import get_logger
+from ..core.logging import get_logger
 
 from .base import (
     BaseCracker,

@@ -25,7 +25,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
-from navmax.core.logging import get_logger
+from ..core.logging import get_logger
 
 logger = get_logger(__name__)
 
