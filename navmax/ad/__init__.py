@@ -15,6 +15,17 @@ from .attack_paths import (
     RiskFinding,
     quick_analysis,
 )
+from .certipy_wrapper import (
+    CertipyCertInfo,
+    CertipyFinding,
+    CertipyWrapper,
+)
+from .responder_wrapper import (
+    NTLMHash,
+    ResponderMode,
+    ResponderStatus,
+    ResponderWrapper,
+)
 from .bloodhound_export import (
     BloodHoundExporter,
     ExportResult,
@@ -123,7 +134,11 @@ __all__ = [
     # BloodHound Export
     "BloodHoundExporter",
     "CAInfo",
+    "CertipyCertInfo",
+    "CertipyFinding",
+    "CertipyWrapper",
     "CriticalPath",
+    "NTLMHash",
     "DomainMap",
     "EdgeType",
     "EnumerationResult",
@@ -155,4 +170,7 @@ __all__ = [
     "quick_enumeration",
     "quick_smb_scan",
     "quick_vuln_scan",
+    "ResponderMode",
+    "ResponderStatus",
+    "ResponderWrapper",
 ]
