@@ -8,11 +8,11 @@ Teste :
 - CloudScanner class unifiée
 - Graceful degradation sur timeout/erreur
 """
+
+import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-import socket
 
 from navmax.cloud.scanner import (
     CloudFinding,
@@ -26,7 +26,6 @@ from navmax.cloud.scanner import (
     discover_cloud_resources,
     scan_s3_buckets,
 )
-
 
 # ===========================================================================
 # Tests Dataclasses
@@ -160,7 +159,7 @@ class TestAnalyzeIAMPolicy:
                 "Effect": "Allow",
                 "Action": "*",
                 "Resource": "*",
-            }
+            },
         }
         risks = await analyze_iam_policy(policy)
         assert len(risks) >= 3  # wildcard_action + wildcard_resource + admin_policy
@@ -174,8 +173,8 @@ class TestAnalyzeIAMPolicy:
                     "Effect": "Allow",
                     "Action": "*",
                     "Resource": "arn:aws:s3:::my-bucket/*",
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -190,8 +189,8 @@ class TestAnalyzeIAMPolicy:
                     "Effect": "Allow",
                     "Action": "s3:GetObject",
                     "Resource": "*",
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -206,8 +205,8 @@ class TestAnalyzeIAMPolicy:
                     "Effect": "Allow",
                     "Action": "*",
                     "Resource": "*",
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -222,8 +221,8 @@ class TestAnalyzeIAMPolicy:
                     "Effect": "Deny",
                     "Action": "*",
                     "Resource": "*",
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         # Deny avec wildcard n'est pas un risque
@@ -238,8 +237,8 @@ class TestAnalyzeIAMPolicy:
                     "Effect": "Allow",
                     "Action": "iam:CreateUser",
                     "Resource": "arn:aws:iam::123456789012:user/*",
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -255,8 +254,8 @@ class TestAnalyzeIAMPolicy:
                     "Action": "iam:CreateUser",
                     "Resource": "arn:aws:iam::123456789012:user/*",
                     "Condition": {"IpAddress": {"aws:SourceIp": "10.0.0.0/8"}},
-                }
-            ]
+                },
+            ],
         }
         risks = await analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -282,7 +281,7 @@ class TestAnalyzeIAMPolicy:
                     "Action": "*",
                     "Resource": "*",
                 },
-            ]
+            ],
         }
         risks = await analyze_iam_policy(policy)
         assert len(risks) >= 3
@@ -362,6 +361,7 @@ class TestS3BucketScanner:
             mock_client = AsyncMock()
             mock_client_cls.return_value.__aenter__.return_value = mock_client
             from httpx import TimeoutException
+
             mock_client.head.side_effect = TimeoutException("Timeout simulé")
 
             findings = await scan_s3_buckets(["bucket-timeout"])
@@ -370,6 +370,7 @@ class TestS3BucketScanner:
     @pytest.mark.asyncio
     async def test_mixed_results(self) -> None:
         """Plusieurs buckets avec des résultats différents."""
+
         def side_effect(url, **kwargs):
             resp = MagicMock()
             if "prive" in str(url):
@@ -450,9 +451,14 @@ class TestDiscoverCloudResources:
         """Découverte d'un bucket S3."""
         with (
             patch("httpx.AsyncClient") as mock_client_cls,
-            patch("socket.gethostbyname_ex", return_value=(
-                "test.com", ["test.s3.amazonaws.com"], ["1.2.3.4"]
-            )),
+            patch(
+                "socket.gethostbyname_ex",
+                return_value=(
+                    "test.com",
+                    ["test.s3.amazonaws.com"],
+                    ["1.2.3.4"],
+                ),
+            ),
         ):
             mock_client = AsyncMock()
             mock_client_cls.return_value.__aenter__.return_value = mock_client
@@ -524,8 +530,8 @@ class TestCloudScanner:
         scanner = CloudScanner()
         policy = {
             "Statement": [
-                {"Effect": "Allow", "Action": "*", "Resource": "*"}
-            ]
+                {"Effect": "Allow", "Action": "*", "Resource": "*"},
+            ],
         }
         risks = await scanner.analyze_iam_policy(policy)
         risk_types = [r.risk_type for r in risks]
@@ -566,6 +572,7 @@ class TestGracefulDegradation:
             mock_client = AsyncMock()
             mock_client_cls.return_value.__aenter__.return_value = mock_client
             from httpx import ConnectError
+
             mock_client.head.side_effect = ConnectError("Connection refused")
 
             findings = await scan_s3_buckets(["bucket-inaccessible"])

@@ -1,28 +1,27 @@
-"""
-Routes API pour les cibles (Targets).
-"""
+"""Routes API pour les cibles (Targets)."""
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from navmax.db import Target, get_session
-from navmax.core.logging import get_logger
-
-from ..schemas import (
+from navmax.api.schemas import (
     Pagination,
     TargetCreate,
     TargetListResponse,
     TargetResponse,
     TargetUpdate,
 )
+from navmax.core.logging import get_logger
+from navmax.db import Target, get_session
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
 @router.post("/", response_model=TargetResponse, status_code=201)
-async def create_target(body: TargetCreate, db: AsyncSession = Depends(get_session)) -> Target:
+async def create_target(body: TargetCreate, db: Annotated[AsyncSession, Depends(get_session)]) -> Target:
     """Crée une nouvelle cible."""
     target = Target(**body.model_dump())
     db.add(target)
@@ -34,10 +33,10 @@ async def create_target(body: TargetCreate, db: AsyncSession = Depends(get_sessi
 
 @router.get("/", response_model=TargetListResponse)
 async def list_targets(
-    kind: str | None = Query(None, description="Filtrer : host, subnet, domain"),
-    alive: bool | None = Query(None, description="Filtrer par statut vivant"),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    kind: Annotated[str | None, Query(description="Filtrer : host, subnet, domain")] = None,
+    alive: Annotated[bool | None, Query(description="Filtrer par statut vivant")] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Liste les cibles avec pagination et filtres optionnels."""
@@ -52,7 +51,11 @@ async def list_targets(
         count_q = count_q.where(Target.alive == alive)
 
     total = (await db.execute(count_q)).scalar() or 0
-    rows = (await db.execute(q.order_by(Target.created_at.desc()).offset(offset).limit(limit))).scalars().all()
+    rows = (
+        (await db.execute(q.order_by(Target.created_at.desc()).offset(offset).limit(limit)))
+        .scalars()
+        .all()
+    )
 
     return {
         "data": rows,
@@ -61,7 +64,7 @@ async def list_targets(
 
 
 @router.get("/{target_id}", response_model=TargetResponse)
-async def get_target(target_id: str, db: AsyncSession = Depends(get_session)) -> Target:
+async def get_target(target_id: str, db: Annotated[AsyncSession, Depends(get_session)]) -> Target:
     """Récupère une cible par ID."""
     target = await db.get(Target, target_id)
     if target is None:
@@ -70,7 +73,9 @@ async def get_target(target_id: str, db: AsyncSession = Depends(get_session)) ->
 
 
 @router.patch("/{target_id}", response_model=TargetResponse)
-async def update_target(target_id: str, body: TargetUpdate, db: AsyncSession = Depends(get_session)) -> Target:
+async def update_target(
+    target_id: str, body: TargetUpdate, db: Annotated[AsyncSession, Depends(get_session)],
+) -> Target:
     """Met à jour une cible."""
     target = await db.get(Target, target_id)
     if target is None:
@@ -85,7 +90,7 @@ async def update_target(target_id: str, body: TargetUpdate, db: AsyncSession = D
 
 
 @router.delete("/{target_id}", status_code=204)
-async def delete_target(target_id: str, db: AsyncSession = Depends(get_session)) -> None:
+async def delete_target(target_id: str, db: Annotated[AsyncSession, Depends(get_session)]) -> None:
     """Supprime une cible et ses données associées."""
     target = await db.get(Target, target_id)
     if target is None:

@@ -1,5 +1,4 @@
-"""
-Mission Planner — décomposition d'objectifs en langage naturel en phases exécutables.
+"""Mission Planner — décomposition d'objectifs en langage naturel en phases exécutables.
 
 Utilise l'AIEngine (tier MEDIUM) pour transformer un objectif comme
 "Trouve la base de données sensible sur 10.0.0.0/24" en un plan structuré
@@ -10,8 +9,8 @@ Format de sortie: JSON avec phases ordonnancées.
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
+
 import structlog
 
 from navmax.ai.engine import AIEngine
@@ -85,7 +84,8 @@ Focus on the MOST LIKELY attack path — don't enumerate all possibilities."""
 
 # ── Data Models ────────────────────────────────────────────────
 
-class PhaseStatus(str, Enum):
+
+class PhaseStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -96,21 +96,23 @@ class PhaseStatus(str, Enum):
 @dataclass
 class MissionPhase:
     """Une phase du plan de mission."""
+
     id: str
     description: str
-    module_needed: str   # scanner, osint, exploit, proxy, sandbox
+    module_needed: str  # scanner, osint, exploit, proxy, sandbox
     parameters: dict = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
     status: PhaseStatus = PhaseStatus.PENDING
-    result: Optional[dict] = None
-    error: Optional[str] = None
+    result: dict | None = None
+    error: str | None = None
 
 
 @dataclass
 class MissionPlan:
     """Plan de mission complet."""
+
     objective: str
-    target: Optional[str] = None
+    target: str | None = None
     phases: list[MissionPhase] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
@@ -120,15 +122,15 @@ class MissionPlan:
 
     @property
     def modules_used(self) -> list[str]:
-        return list(set(p.module_needed for p in self.phases))
+        return list({p.module_needed for p in self.phases})
 
     def get_ready_phases(self) -> list[MissionPhase]:
         """Phases prêtes à être exécutées (dépendances satisfaites)."""
         completed = {p.id for p in self.phases if p.status == PhaseStatus.COMPLETED}
         return [
-            p for p in self.phases
-            if p.status == PhaseStatus.PENDING
-            and all(dep in completed for dep in p.depends_on)
+            p
+            for p in self.phases
+            if p.status == PhaseStatus.PENDING and all(dep in completed for dep in p.depends_on)
         ]
 
     def topological_order(self) -> list[MissionPhase]:
@@ -138,10 +140,7 @@ class MissionPlan:
         completed = set()
 
         while remaining:
-            ready = [
-                p for p in remaining
-                if all(dep in completed for dep in p.depends_on)
-            ]
+            ready = [p for p in remaining if all(dep in completed for dep in p.depends_on)]
             if not ready:
                 # Cycle ou dépendance manquante — prendre le reste
                 ordered.extend(remaining)
@@ -156,6 +155,7 @@ class MissionPlan:
 
 # ── Planner ────────────────────────────────────────────────────
 
+
 class MissionPlanner:
     """Planificateur de mission utilisant l'IA pour décomposer les objectifs.
 
@@ -166,7 +166,7 @@ class MissionPlanner:
             print(f"→ {phase.id}: {phase.description}")
     """
 
-    def __init__(self, engine: AIEngine):
+    def __init__(self, engine: AIEngine) -> None:
         self.engine = engine
 
     def _sanitize_input(self, text: str) -> str:
@@ -174,19 +174,28 @@ class MissionPlanner:
         if len(text) > 8000:
             text = text[:8000]
         dangerous_patterns = [
-            "<|endoftext|>", "<|im_end|>", "<|im_start|>",
-            "###SYSTEM###", "---SYSTEM---", "IGNORE PREVIOUS INSTRUCTIONS",
-            "\x00", "\x1b",
+            "<|endoftext|>",
+            "<|im_end|>",
+            "<|im_start|>",
+            "###SYSTEM###",
+            "---SYSTEM---",
+            "IGNORE PREVIOUS INSTRUCTIONS",
+            "\x00",
+            "\x1b",
         ]
         for pattern in dangerous_patterns:
             text = text.replace(pattern, "")
         return text.strip()
 
-    async def plan(self, objective: str, *,
-                   target: Optional[str] = None,
-                   known_services: Optional[list[dict]] = None,
-                   known_vulns: Optional[list[str]] = None,
-                   constraints: Optional[str] = None) -> MissionPlan:
+    async def plan(
+        self,
+        objective: str,
+        *,
+        target: str | None = None,
+        known_services: list[dict] | None = None,
+        known_vulns: list[str] | None = None,
+        constraints: str | None = None,
+    ) -> MissionPlan:
         """Génère un plan de mission à partir d'un objectif en langage naturel.
 
         Args:
@@ -198,6 +207,7 @@ class MissionPlanner:
 
         Returns:
             MissionPlan avec les phases ordonnancées
+
         """
         # Sanitise les entrées utilisateur avant tout usage dans les prompts
         objective = self._sanitize_input(objective)
@@ -235,15 +245,14 @@ class MissionPlanner:
             prompt=prompt,
             tier=ModelTier.MEDIUM,
             system=MISSION_PLANNER_SYSTEM,
-            temperature=0.3,        # basse température = plan cohérent
+            temperature=0.3,  # basse température = plan cohérent
             max_tokens=4096,
             json_mode=True,
         )
 
         return self._parse_response(result.text, objective, target)
 
-    def _parse_response(self, response: str, objective: str,
-                        target: Optional[str]) -> MissionPlan:
+    def _parse_response(self, response: str, objective: str, target: str | None) -> MissionPlan:
         """Parse la réponse JSON de l'IA en MissionPlan.
 
         Gère les cas où l'IA wrappe le JSON dans du markdown.
@@ -255,8 +264,8 @@ class MissionPlanner:
             phases = []
             for i, p in enumerate(data.get("phases", [])):
                 phase = MissionPhase(
-                    id=p.get("id", f"phase_{i+1}"),
-                    description=p.get("description", f"Phase {i+1}"),
+                    id=p.get("id", f"phase_{i + 1}"),
+                    description=p.get("description", f"Phase {i + 1}"),
                     module_needed=p.get("module_needed", "scanner"),
                     parameters=p.get("parameters", {}),
                     depends_on=p.get("depends_on", []),
@@ -264,7 +273,8 @@ class MissionPlanner:
                 phases.append(phase)
 
             if not phases:
-                raise ValueError("Empty phases list")
+                msg = "Empty phases list"
+                raise ValueError(msg)
 
             return MissionPlan(
                 objective=objective,
@@ -273,11 +283,10 @@ class MissionPlanner:
                 metadata={
                     "raw_response": response,
                     "model": "ai-generated",
-                }
+                },
             )
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.error("plan_parse_failed", error=str(e),
-                          response_preview=response[:200])
+            logger.exception("plan_parse_failed", error=str(e), response_preview=response[:200])
             return self._fallback_plan(objective, target)
 
     def _extract_json(self, text: str) -> str:
@@ -288,7 +297,7 @@ class MissionPlanner:
         if "```json" in text:
             parts = text.split("```json", 1)[1].split("```", 1)
             return parts[0].strip()
-        elif "```" in text:
+        if "```" in text:
             parts = text.split("```", 1)[1].split("```", 1)
             return parts[0].strip()
 
@@ -304,12 +313,11 @@ class MissionPlanner:
                 elif c == "}":
                     depth -= 1
                     if depth == 0:
-                        return text[:i+1]
+                        return text[: i + 1]
 
         return text
 
-    def _fallback_plan(self, objective: str,
-                       target: Optional[str]) -> MissionPlan:
+    def _fallback_plan(self, objective: str, target: str | None) -> MissionPlan:
         """Plan par défaut quand l'IA échoue à produire du JSON valide."""
         logger.warning("using_fallback_plan", objective=objective)
         return MissionPlan(
@@ -318,7 +326,7 @@ class MissionPlanner:
             phases=[
                 MissionPhase(
                     id="phase_1",
-                    description=f"Port scan the target",
+                    description="Port scan the target",
                     module_needed="scanner",
                     parameters={"target": target} if target else {},
                 ),

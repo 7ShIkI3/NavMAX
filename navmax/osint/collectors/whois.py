@@ -1,11 +1,10 @@
-"""
-Collecteur WHOIS — informations de propriété de domaine.
+"""Collecteur WHOIS — informations de propriété de domaine.
 Utilise le protocole WHOIS (port 43) directement.
 """
 
 import asyncio
+import contextlib
 import re
-import socket
 from dataclasses import dataclass, field
 
 from navmax.core.logging import get_logger
@@ -89,19 +88,17 @@ class WhoisCollector:
                     raw += chunk
                     if len(raw) > 65536:  # 64 KB max
                         break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             writer.close()
-            try:
+            with contextlib.suppress(OSError):
                 await writer.wait_closed()
-            except OSError:
-                pass
 
             text = raw.decode("utf-8", errors="replace")
             return WhoisCollector._parse(text, domain)
 
-        except (asyncio.TimeoutError, ConnectionRefusedError, OSError, UnicodeDecodeError) as e:
+        except (TimeoutError, ConnectionRefusedError, OSError, UnicodeDecodeError) as e:
             logger.debug("whois_échec", domain=domain, erreur=str(e))
             return None
 
@@ -109,7 +106,7 @@ class WhoisCollector:
     def _parse(text: str, domain: str) -> WhoisInfo:
         """Parse la sortie WHOIS brute."""
         info = WhoisInfo(domain=domain, raw_text=text[:5000])
-        text_lower = text.lower()
+        text.lower()
 
         # Registrar
         for pat in [

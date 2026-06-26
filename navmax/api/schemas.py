@@ -1,6 +1,4 @@
-"""
-Schémas Pydantic partagés pour l'API.
-"""
+"""Schémas Pydantic partagés pour l'API."""
 
 import re
 from datetime import datetime
@@ -10,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 # Autorise : alphanumériques, points, tirets, underscores, deux-points, crochets,
 # barres obliques (pour les CIDR/chemins), et @ (pour les domaines internationaux)
-VALID_TARGET_PATTERN = re.compile(r'^[a-zA-Z0-9._\-:/\[\]@]+$')
+VALID_TARGET_PATTERN = re.compile(r"^[a-zA-Z0-9._\-:/\[\]@]+$")
 
 
 # ---- Pagination ----
@@ -37,9 +35,12 @@ class TargetCreate(BaseModel):
     @classmethod
     def validate_target_format(cls, v: str) -> str:
         if v and not VALID_TARGET_PATTERN.match(str(v)):
-            raise ValueError(
+            msg = (
                 "Format cible invalide — seuls alphanumériques, points, tirets, "
                 "deux-points autorisés"
+            )
+            raise ValueError(
+                msg,
             )
         return v
 
@@ -56,9 +57,12 @@ class TargetUpdate(BaseModel):
     @classmethod
     def validate_target_format(cls, v: str | None) -> str | None:
         if v and not VALID_TARGET_PATTERN.match(str(v)):
-            raise ValueError(
+            msg = (
                 "Format cible invalide — seuls alphanumériques, points, tirets, "
                 "deux-points autorisés"
+            )
+            raise ValueError(
+                msg,
             )
         return v
 
@@ -85,7 +89,9 @@ class TargetListResponse(BaseModel):
 # ---- Scan ----
 class ScanCreate(BaseModel):
     target_id: str = Field(..., examples=["uuid-de-la-cible"])
-    scan_type: str = Field(default="tcp_connect", pattern=r"^(tcp_connect|tcp_syn|udp|service_detect|os_detect)$")
+    scan_type: str = Field(
+        default="tcp_connect", pattern=r"^(tcp_connect|tcp_syn|udp|service_detect|os_detect)$",
+    )
     ports: str | None = Field(None, examples=["1-1000,3306,8080"])
 
 
@@ -113,6 +119,7 @@ class ScanListResponse(BaseModel):
 # ---- Task (Celery) ----
 class TaskStatusResponse(BaseModel):
     """Statut d'une tâche Celery."""
+
     task_id: str
     state: str  # PENDING, PROGRESS, SUCCESS, FAILURE
     meta: dict | None = None
@@ -121,6 +128,7 @@ class TaskStatusResponse(BaseModel):
 
 class ScanCreateResponse(BaseModel):
     """Réponse après création d'un scan avec tâche Celery."""
+
     task_id: str
     scan_id: str
     status: str = "PENDING"
@@ -129,6 +137,7 @@ class ScanCreateResponse(BaseModel):
 
 class TaskProgressEvent(BaseModel):
     """Événement SSE pour la progression d'un scan."""
+
     event: str = "progress"
     data: dict
 

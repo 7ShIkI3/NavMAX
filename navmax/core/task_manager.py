@@ -1,6 +1,5 @@
 """Gestionnaire de tâches Celery — statut, annulation, liste des tâches."""
 
-from datetime import datetime, timezone
 from typing import Any
 
 from navmax.core.logging import get_logger
@@ -28,13 +27,14 @@ class TaskManager:
         Returns:
             True si la révocation a été envoyée, False si la tâche
             n'existe pas ou est déjà terminée
+
         """
         try:
             celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
             logger.info("task_annulee", task_id=task_id)
             return True
         except (OSError, RuntimeError, ValueError) as e:
-            logger.error("task_annulation_echouee", task_id=task_id, error=str(e))
+            logger.exception("task_annulation_echouee", task_id=task_id, error=str(e))
             return False
 
     @staticmethod
@@ -46,6 +46,7 @@ class TaskManager:
 
         Returns:
             Dict associant chaque task_id à son statut d'annulation
+
         """
         results = {}
         for tid in task_ids:
@@ -64,6 +65,7 @@ class TaskManager:
             worker, hostname.
 
             Retourne une liste vide si le worker est injoignable.
+
         """
         try:
             i = celery_app.control.inspect()
@@ -76,7 +78,7 @@ class TaskManager:
 
             return tasks
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("list_active_echouee", error=str(e))
+            logger.exception("list_active_echouee", error=str(e))
             return []
 
     @staticmethod
@@ -85,6 +87,7 @@ class TaskManager:
 
         Returns:
             Liste de dicts des tâches programmées avec leur ETA
+
         """
         try:
             i = celery_app.control.inspect()
@@ -94,19 +97,21 @@ class TaskManager:
             for worker_name, worker_tasks in scheduled.items():
                 for t in worker_tasks:
                     request = t.get("request", {})
-                    tasks.append({
-                        "id": request.get("id", ""),
-                        "name": request.get("name", ""),
-                        "args": request.get("args", []),
-                        "kwargs": request.get("kwargs", {}),
-                        "eta": t.get("eta"),
-                        "priority": t.get("priority", 0),
-                        "worker": worker_name,
-                    })
+                    tasks.append(
+                        {
+                            "id": request.get("id", ""),
+                            "name": request.get("name", ""),
+                            "args": request.get("args", []),
+                            "kwargs": request.get("kwargs", {}),
+                            "eta": t.get("eta"),
+                            "priority": t.get("priority", 0),
+                            "worker": worker_name,
+                        },
+                    )
 
             return tasks
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("list_scheduled_echouee", error=str(e))
+            logger.exception("list_scheduled_echouee", error=str(e))
             return []
 
     @staticmethod
@@ -115,6 +120,7 @@ class TaskManager:
 
         Returns:
             Liste de dicts des tâches en attente dans la file
+
         """
         try:
             i = celery_app.control.inspect()
@@ -127,7 +133,7 @@ class TaskManager:
 
             return tasks
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("list_reserved_echouee", error=str(e))
+            logger.exception("list_reserved_echouee", error=str(e))
             return []
 
     @staticmethod
@@ -136,6 +142,7 @@ class TaskManager:
 
         Returns:
             Dict avec trois clés : active, scheduled, reserved
+
         """
         return {
             "active": TaskManager.list_active_tasks(),
@@ -165,6 +172,7 @@ class TaskManager:
             - date_done: timestamp de fin
 
             Retourne None si la tâche est introuvable.
+
         """
         from celery.result import AsyncResult
 
@@ -191,7 +199,7 @@ class TaskManager:
                 "failed": result.failed(),
             }
         except (OSError, RuntimeError, ValueError, AttributeError) as e:
-            logger.error("get_task_status_erreur", task_id=task_id, error=str(e))
+            logger.exception("get_task_status_erreur", task_id=task_id, error=str(e))
             return None
 
     @staticmethod
@@ -203,6 +211,7 @@ class TaskManager:
 
         Returns:
             Dict associant chaque task_id à son statut (ou None si introuvable)
+
         """
         return {tid: TaskManager.get_task_status(tid) for tid in task_ids}
 
@@ -215,6 +224,7 @@ class TaskManager:
         Returns:
             Liste de dicts — un par worker connecté — contenant :
             hostname, pid, broker, clock, stat总数, etc.
+
         """
         try:
             i = celery_app.control.inspect()
@@ -241,7 +251,7 @@ class TaskManager:
 
             return workers
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("list_workers_echouee", error=str(e))
+            logger.exception("list_workers_echouee", error=str(e))
             return []
 
     @staticmethod
@@ -250,13 +260,13 @@ class TaskManager:
 
         Returns:
             Dict {worker_name: "pong" | "timeout" | "error"}
+
         """
         try:
             i = celery_app.control.inspect()
-            result = i.ping() or {}
-            return result
+            return i.ping() or {}
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("ping_workers_echouee", error=str(e))
+            logger.exception("ping_workers_echouee", error=str(e))
             return {}
 
     # ── Configuration du cluster ────────────────────────────────
@@ -267,6 +277,7 @@ class TaskManager:
 
         Returns:
             Liste des noms de tâches (strings)
+
         """
         try:
             i = celery_app.control.inspect()
@@ -276,7 +287,7 @@ class TaskManager:
                 all_tasks.update(t.name if hasattr(t, "name") else str(t) for t in tasks)
             return sorted(all_tasks)
         except (OSError, RuntimeError, AttributeError) as e:
-            logger.error("registered_tasks_echouee", error=str(e))
+            logger.exception("registered_tasks_echouee", error=str(e))
             return list(celery_app.tasks.keys())
 
     # ── Helpers privés ──────────────────────────────────────────

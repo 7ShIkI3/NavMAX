@@ -1,5 +1,4 @@
-"""
-Collecteurs OSINT — reconnaissance passive.
+"""Collecteurs OSINT — reconnaissance passive.
 
 Sources :
 - DNS (A, AAAA, MX, NS, TXT, SOA, CNAME, PTR)
@@ -10,15 +9,9 @@ Sources :
 """
 
 import asyncio
-import json
-import re
+import contextlib
 import socket
-import ssl
-import datetime
 from dataclasses import dataclass, field
-from typing import Any
-
-import httpx
 
 from navmax.core.logging import get_logger
 
@@ -30,7 +23,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 @dataclass
 class DnsRecord:
-    type: str       # A, AAAA, MX, NS, TXT, CNAME, SOA, PTR
+    type: str  # A, AAAA, MX, NS, TXT, CNAME, SOA, PTR
     name: str
     value: str
     ttl: int = 0
@@ -105,12 +98,12 @@ class DnsCollector:
 
     @staticmethod
     async def lookup(domain: str, record_types: list[str] | None = None) -> list[DnsRecord]:
-        """
-        Résout tous les types d'enregistrements DNS pour un domaine.
+        """Résout tous les types d'enregistrements DNS pour un domaine.
 
         Args:
             domain: Nom de domaine (ex: example.com)
             record_types: Types à résoudre. Par défaut : A, AAAA, MX, NS, TXT, CNAME, SOA
+
         """
         record_types = record_types or ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"]
         records: list[DnsRecord] = []
@@ -118,10 +111,8 @@ class DnsCollector:
         domain = domain.rstrip(".")
 
         for rtype in record_types:
-            try:
-                answers = socket.getaddrinfo(domain, None) if rtype in ("A", "AAAA") else []
-            except socket.gaierror:
-                answers = []
+            with contextlib.suppress(socket.gaierror):
+                socket.getaddrinfo(domain, None) if rtype in ("A", "AAAA") else []
 
             # Résolution spécifique par type
             try:
@@ -178,7 +169,9 @@ class DnsCollector:
         records: list[DnsRecord] = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nslookup", "-type=MX", domain,
+                "nslookup",
+                "-type=MX",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -191,10 +184,12 @@ class DnsCollector:
                         try:
                             priority = int(parts[-2])
                             value = parts[-1].rstrip(".")
-                            records.append(DnsRecord(type="MX", name=domain, value=value, priority=priority))
+                            records.append(
+                                DnsRecord(type="MX", name=domain, value=value, priority=priority),
+                            )
                         except ValueError:
                             pass
-        except (asyncio.TimeoutError, OSError, FileNotFoundError):
+        except (TimeoutError, OSError, FileNotFoundError):
             pass
         return records
 
@@ -203,7 +198,9 @@ class DnsCollector:
         records: list[DnsRecord] = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nslookup", "-type=NS", domain,
+                "nslookup",
+                "-type=NS",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -215,7 +212,7 @@ class DnsCollector:
                     if len(parts) >= 2:
                         value = parts[-1].strip().rstrip(".")
                         records.append(DnsRecord(type="NS", name=domain, value=value))
-        except (asyncio.TimeoutError, OSError, FileNotFoundError):
+        except (TimeoutError, OSError, FileNotFoundError):
             pass
         return records
 
@@ -224,7 +221,9 @@ class DnsCollector:
         records: list[DnsRecord] = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nslookup", "-type=TXT", domain,
+                "nslookup",
+                "-type=TXT",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -236,7 +235,7 @@ class DnsCollector:
                     if len(parts) >= 2:
                         value = parts[1].strip().strip('"')
                         records.append(DnsRecord(type="TXT", name=domain, value=value))
-        except (asyncio.TimeoutError, OSError, FileNotFoundError):
+        except (TimeoutError, OSError, FileNotFoundError):
             pass
         return records
 
@@ -245,7 +244,9 @@ class DnsCollector:
         records: list[DnsRecord] = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nslookup", "-type=CNAME", domain,
+                "nslookup",
+                "-type=CNAME",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -257,7 +258,7 @@ class DnsCollector:
                     if len(parts) >= 2:
                         value = parts[-1].strip().rstrip(".")
                         records.append(DnsRecord(type="CNAME", name=domain, value=value))
-        except (asyncio.TimeoutError, OSError, FileNotFoundError):
+        except (TimeoutError, OSError, FileNotFoundError):
             pass
         return records
 
@@ -266,7 +267,9 @@ class DnsCollector:
         records: list[DnsRecord] = []
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nslookup", "-type=SOA", domain,
+                "nslookup",
+                "-type=SOA",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -276,11 +279,21 @@ class DnsCollector:
             soa_data: list[str] = []
             for line in lines:
                 stripped = line.strip()
-                if stripped and not stripped.startswith("Server:") and not stripped.startswith("Address:"):
-                    if "primary name server" in line.lower() or "responsible mail addr" in line.lower() or "serial" in line.lower() or "refresh" in line.lower() or "retry" in line.lower() or "expire" in line.lower():
-                        soa_data.append(stripped)
+                if (
+                    stripped
+                    and not stripped.startswith("Server:")
+                    and not stripped.startswith("Address:")
+                ) and (
+                    "primary name server" in line.lower()
+                    or "responsible mail addr" in line.lower()
+                    or "serial" in line.lower()
+                    or "refresh" in line.lower()
+                    or "retry" in line.lower()
+                    or "expire" in line.lower()
+                ):
+                    soa_data.append(stripped)
             if soa_data:
                 records.append(DnsRecord(type="SOA", name=domain, value=" | ".join(soa_data)))
-        except (asyncio.TimeoutError, OSError, FileNotFoundError):
+        except (TimeoutError, OSError, FileNotFoundError):
             pass
         return records

@@ -1,5 +1,4 @@
-"""
-Proxy MITM basé sur mitmproxy — interception TLS, capture de flux, replay.
+"""Proxy MITM basé sur mitmproxy — interception TLS, capture de flux, replay.
 
 Utilise mitmproxy comme librairie Python (pas le binaire).
 Remplace proxy_server.py avec support HTTP/2, WebSocket, flow viewer.
@@ -16,16 +15,15 @@ import ssl
 import threading
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Awaitable
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
-from navmax.core.config import config
 from navmax.core.logging import get_logger
-from navmax.proxy.certs import generate_host_cert
-from navmax.proxy.interceptor import Interceptor, InterceptedFlow, FlowAction
+from navmax.proxy.interceptor import Interceptor
 
 logger = get_logger(__name__)
 
@@ -33,13 +31,13 @@ logger = get_logger(__name__)
 # Vérification de la disponibilité de mitmproxy
 # ---------------------------------------------------------------------------
 try:
-    from mitmproxy import options, http, connection
-    from mitmproxy.master import Master
+    from mitmproxy import connection, http, options
     from mitmproxy.addonmanager import LoadHook
+    from mitmproxy.master import Master
     from mitmproxy.proxy.layers.http import (
+        HttpErrorHook,
         HttpRequestHook,
         HttpResponseHook,
-        HttpErrorHook,
     )
 
     MITMPROXY_AVAILABLE = True
@@ -56,7 +54,7 @@ class CapturedFlow:
     """Flux HTTP/S capturé par le proxy MITM."""
 
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     method: str = ""
     url: str = ""
     request_headers: dict[str, str] = field(default_factory=dict)
@@ -89,7 +87,7 @@ class CapturedFlow:
 
     def to_har_entry(self) -> dict[str, Any]:
         """Exporte au format HAR (HTTP Archive)."""
-        started = self.timestamp.timestamp()
+        self.timestamp.timestamp()
         return {
             "startedDateTime": self.timestamp.isoformat(),
             "time": self.duration_ms,
@@ -98,9 +96,7 @@ class CapturedFlow:
                 "url": self.url,
                 "httpVersion": "HTTP/1.1",
                 "cookies": [],
-                "headers": [
-                    {"name": k, "value": v} for k, v in self.request_headers.items()
-                ],
+                "headers": [{"name": k, "value": v} for k, v in self.request_headers.items()],
                 "queryString": [],
                 "postData": (
                     {
@@ -118,9 +114,7 @@ class CapturedFlow:
                 "statusText": "",
                 "httpVersion": "HTTP/1.1",
                 "cookies": [],
-                "headers": [
-                    {"name": k, "value": v} for k, v in self.response_headers.items()
-                ],
+                "headers": [{"name": k, "value": v} for k, v in self.response_headers.items()],
                 "content": (
                     {
                         "size": len(self.response_body) if self.response_body else 0,
@@ -194,7 +188,7 @@ if MITMPROXY_AVAILABLE:
                 self._flows.append(captured)
                 # Limiter la taille mémoire
                 if len(self._flows) > self._max_flows:
-                    self._flows = self._flows[-self._max_flows:]
+                    self._flows = self._flows[-self._max_flows :]
 
                 # Notifier les subscribers
                 if self._on_flow_captured:
@@ -207,7 +201,7 @@ if MITMPROXY_AVAILABLE:
                             # On schedule la coroutine dans une approche fire-and-forget
                             asyncio.ensure_future(result)
                     except (RuntimeError, ValueError, TypeError) as e:
-                        logger.error("callback_flux_erreur", erreur=str(e))
+                        logger.exception("callback_flux_erreur", erreur=str(e))
 
                 logger.debug(
                     "proxy_réponse",
@@ -216,7 +210,7 @@ if MITMPROXY_AVAILABLE:
                     status=captured.response_status,
                 )
             except (AttributeError, KeyError, UnicodeDecodeError) as e:
-                logger.error("capture_flux_erreur", erreur=str(e))
+                logger.exception("capture_flux_erreur", erreur=str(e))
 
         def error(self, flow: http.HTTPFlow) -> None:
             """Hook déclenché en cas d'erreur de flux."""
@@ -258,15 +252,20 @@ if MITMPROXY_AVAILABLE:
                 duration = (req.timestamp_end - req.timestamp_start) * 1000
 
             # Timestamp
-            ts = datetime.fromtimestamp(
-                req.timestamp_start, tz=timezone.utc
-            ) if req.timestamp_start else datetime.now(timezone.utc)
+            ts = (
+                datetime.fromtimestamp(
+                    req.timestamp_start,
+                    tz=UTC,
+                )
+                if req.timestamp_start
+                else datetime.now(UTC)
+            )
 
             return CapturedFlow(
                 method=req.method,
                 url=req.url,
                 request_headers=req_headers,
-                request_body=req.raw_content if req.raw_content else None,
+                request_body=req.raw_content or None,
                 response_status=status,
                 response_headers=resp_headers,
                 response_body=resp.raw_content if resp and resp.raw_content else None,
@@ -287,6 +286,7 @@ class NavMITMProxy:
         interceptor: Instance d'Interceptor optionnelle
         verify_upstream: Vérifier les certificats TLS upstream (True par défaut).
             Passer False pour accepter les certificats invalides (⚠️ risque sécurité).
+
     """
 
     def __init__(
@@ -308,9 +308,7 @@ class NavMITMProxy:
         self._running: bool = False
 
         # Callback pour les flux capturés
-        self._on_flow_captured_callbacks: list[
-            Callable[[CapturedFlow], Awaitable[None]]
-        ] = []
+        self._on_flow_captured_callbacks: list[Callable[[CapturedFlow], Awaitable[None]]] = []
 
     # ------------------------------------------------------------------
     # Propriétés (interface compatible ProxyServer)
@@ -353,7 +351,7 @@ class NavMITMProxy:
         """
         if not MITMPROXY_AVAILABLE:
             logger.warning(
-                "mitmproxy non installé — impossible de démarrer le proxy MITM"
+                "mitmproxy non installé — impossible de démarrer le proxy MITM",
             )
             return
 
@@ -366,7 +364,7 @@ class NavMITMProxy:
         if not self.verify_upstream:
             logger.warning(
                 "⚠️ Vérification TLS upstream désactivée — les certificats "
-                "invalides seront acceptés silencieusement"
+                "invalides seront acceptés silencieusement",
             )
 
         # Créer les options mitmproxy
@@ -436,7 +434,8 @@ class NavMITMProxy:
     # Gestion des flux
     # ------------------------------------------------------------------
     async def get_flows(
-        self, since: datetime | None = None
+        self,
+        since: datetime | None = None,
     ) -> list[CapturedFlow]:
         """Récupère les flux capturés, optionnellement filtrés par date.
 
@@ -445,6 +444,7 @@ class NavMITMProxy:
 
         Returns:
             Liste des flux capturés correspondant aux critères
+
         """
         if not self._addon:
             return []
@@ -467,9 +467,11 @@ class NavMITMProxy:
 
         Returns:
             Nouveau flux résultant du replay
+
         """
         if not MITMPROXY_AVAILABLE:
-            raise RuntimeError("mitmproxy non installé — replay impossible")
+            msg = "mitmproxy non installé — replay impossible"
+            raise RuntimeError(msg)
 
         # Trouver le flux original
         original = None
@@ -480,21 +482,31 @@ class NavMITMProxy:
                     break
 
         if not original:
-            raise ValueError(f"Flux introuvable : {flow_id}")
+            msg = f"Flux introuvable : {flow_id}"
+            raise ValueError(msg)
 
         # Appliquer les modifications
         method = modifications.get("method", original.method) if modifications else original.method
         url = modifications.get("url", original.url) if modifications else original.url
-        headers = dict(
-            modifications.get("headers", original.request_headers)
-        ) if modifications else dict(original.request_headers)
+        headers = (
+            dict(
+                modifications.get("headers", original.request_headers),
+            )
+            if modifications
+            else dict(original.request_headers)
+        )
         body = (
-            modifications["body"].encode() if isinstance(modifications.get("body"), str)
-            else modifications.get("body", original.request_body)
-        ) if modifications else original.request_body
+            (
+                modifications["body"].encode()
+                if isinstance(modifications.get("body"), str)
+                else modifications.get("body", original.request_body)
+            )
+            if modifications
+            else original.request_body
+        )
 
         # Créer la requête mitmproxy
-        mitm_request = http.Request.make(
+        http.Request.make(
             method=method,
             url=url,
             content=body or b"",
@@ -505,7 +517,8 @@ class NavMITMProxy:
         t0 = time.monotonic()
         try:
             async with httpx.AsyncClient(
-                verify=self.verify_upstream, timeout=30.0
+                verify=self.verify_upstream,
+                timeout=30.0,
             ) as client:
                 resp = await client.request(
                     method=method,
@@ -556,6 +569,7 @@ class NavMITMProxy:
 
         Returns:
             Chaîne JSON au format HAR
+
         """
         if flows is None:
             flows = self.recent_flows
@@ -568,7 +582,7 @@ class NavMITMProxy:
                     "version": "0.1.0",
                 },
                 "entries": [f.to_har_entry() for f in flows if f.response_status > 0],
-            }
+            },
         }
 
         return json.dumps(har, indent=2, ensure_ascii=False)
@@ -577,12 +591,14 @@ class NavMITMProxy:
     # Callbacks / événements
     # ------------------------------------------------------------------
     def on_flow_captured(
-        self, callback: Callable[[CapturedFlow], Awaitable[None]]
+        self,
+        callback: Callable[[CapturedFlow], Awaitable[None]],
     ) -> None:
         """Enregistre un callback appelé à chaque flux capturé.
 
         Args:
             callback: Fonction asynchrone acceptant un CapturedFlow
+
         """
         self._on_flow_captured_callbacks.append(callback)
 
@@ -606,11 +622,12 @@ class NavMITMProxy:
 
         Args:
             master: Instance Master à exécuter
+
         """
         try:
             master.run()
         except (RuntimeError, OSError) as e:
-            logger.error("master_erreur", erreur=str(e))
+            logger.exception("master_erreur", erreur=str(e))
             self._running = False
 
     async def _on_flow_captured(self, captured: CapturedFlow) -> None:
@@ -622,4 +639,4 @@ class NavMITMProxy:
             try:
                 await cb(captured)
             except (RuntimeError, ValueError, TypeError) as e:
-                logger.error("callback_flux_erreur", erreur=str(e))
+                logger.exception("callback_flux_erreur", erreur=str(e))

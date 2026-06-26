@@ -1,11 +1,9 @@
-"""
-Types d'entités du graphe OSINT NavMAX.
-"""
+"""Types d'entités du graphe OSINT NavMAX."""
 
+import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
-import uuid
 
 
 class EntityType(StrEnum):
@@ -47,9 +45,9 @@ class RelationType(StrEnum):
     SSL_ISSUED_BY = "ssl_issued_by"
     SSL_FOR_HOST = "ssl_for_host"
     SSL_SAN = "ssl_san"
-    HOSTS = "hosts"              # Domaine hébergé sur IP
-    RUNS = "runs"                # Technologie utilisée
-    LINKED_TO = "linked_to"      # Lien web
+    HOSTS = "hosts"  # Domaine hébergé sur IP
+    RUNS = "runs"  # Technologie utilisée
+    LINKED_TO = "linked_to"  # Lien web
     EMAIL_BELONGS_TO = "email_belongs_to"
     MEMBER_OF = "member_of"
     LOCATED_AT = "located_at"
@@ -61,6 +59,7 @@ class RelationType(StrEnum):
 @dataclass
 class Entity:
     """Nœud du graphe."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     type: EntityType = EntityType.UNKNOWN
     value: str = ""
@@ -75,6 +74,7 @@ class Entity:
 @dataclass
 class Relation:
     """Arête du graphe."""
+
     source: Entity
     target: Entity
     type: RelationType

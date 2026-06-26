@@ -1,11 +1,7 @@
-"""
-Collecteur web — scraping léger pour technologies, emails, liens.
-"""
+"""Collecteur web — scraping léger pour technologies, emails, liens."""
 
-import asyncio
 import re
 from dataclasses import dataclass, field
-from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -34,7 +30,7 @@ TECH_PATTERNS: dict[str, list[str]] = {
     "Joomla": [r"Joomla", r"joomla"],
     "jQuery": [r"jquery[\-.]([0-9.]+)", r"jquery"],
     "Bootstrap": [r"bootstrap[\-.]([0-9.]+)", r"bootstrap\.min\.css"],
-    "React": [r"react[\-.]([0-9.]+)", r"react\.js", r'react.production'],
+    "React": [r"react[\-.]([0-9.]+)", r"react\.js", r"react.production"],
     "Vue.js": [r"vue[\-.]([0-9.]+)", r"vue\.js"],
     "Angular": [r"angular[\-.]([0-9.]+)", r"ng-app"],
     "nginx": [r"nginx/([0-9.]+)"],
@@ -53,7 +49,7 @@ TECH_PATTERNS: dict[str, list[str]] = {
 
 # Patterns de découverte d'emails
 EMAIL_PATTERN = re.compile(
-    r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}',
+    r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
     re.IGNORECASE,
 )
 
@@ -131,7 +127,10 @@ class WebCollector:
             for email in emails:
                 if email.lower() not in seen_emails and len(email) < 100:
                     # Filtrer les faux positifs
-                    if not any(fake in email.lower() for fake in ("example.com", "domain.com", "email.com", "@example")):
+                    if not any(
+                        fake in email.lower()
+                        for fake in ("example.com", "domain.com", "email.com", "@example")
+                    ):
                         info.emails_found.append(email.lower())
                         seen_emails.add(email.lower())
 
@@ -155,7 +154,7 @@ class WebCollector:
             info.links_external = info.links_external[:30]
             info.emails_found = info.emails_found[:20]
 
-        except (httpx.RequestError, asyncio.TimeoutError) as e:
+        except (TimeoutError, httpx.RequestError) as e:
             logger.debug("web_échec", url=url, erreur=str(e))
 
         return info

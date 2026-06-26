@@ -1,21 +1,15 @@
-"""
-Routes API pour les scans réseau (Nmap-like) — support Celery async + SSE streaming.
-"""
+"""Routes API pour les scans réseau (Nmap-like) — support Celery async + SSE streaming."""
 
 import asyncio
 import json
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from navmax.core.logging import get_logger
-from navmax.db import Scan, Target, get_session
-from navmax.scanner.engine import parse_ports
-from navmax.tasks import celery_app
-
-from ..schemas import (
+from navmax.api.schemas import (
     Pagination,
     ScanCreate,
     ScanCreateResponse,
@@ -23,13 +17,16 @@ from ..schemas import (
     ScanResponse,
     TaskStatusResponse,
 )
+from navmax.core.logging import get_logger
+from navmax.db import Scan, Target, get_session
+from navmax.tasks import celery_app
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
 @router.post("/", response_model=ScanCreateResponse, status_code=201)
-async def create_scan(body: ScanCreate, db: AsyncSession = Depends(get_session)) -> dict:
+async def create_scan(body: ScanCreate, db: Annotated[AsyncSession, Depends(get_session)]) -> dict:
     """Lance un scan en arrière-plan via une tâche Celery.
 
     Crée l'enregistrement en base, puis soumet la tâche avec task_id = scan.id
@@ -78,11 +75,11 @@ async def create_scan(body: ScanCreate, db: AsyncSession = Depends(get_session))
 
 @router.get("/", response_model=ScanListResponse)
 async def list_scans(
-    target_id: str | None = Query(None),
-    status: str | None = Query(None),
-    scan_type: str | None = Query(None),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    target_id: Annotated[str | None, Query()] = None,
+    status: Annotated[str | None, Query()] = None,
+    scan_type: Annotated[str | None, Query()] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Liste les scans avec pagination et filtres."""
@@ -100,9 +97,15 @@ async def list_scans(
         count_q = count_q.where(Scan.scan_type == scan_type)
 
     total = (await db.execute(count_q)).scalar() or 0
-    rows = (await db.execute(
-        q.order_by(Scan.created_at.desc()).offset(offset).limit(limit)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                q.order_by(Scan.created_at.desc()).offset(offset).limit(limit),
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return {
         "data": rows,
@@ -111,7 +114,7 @@ async def list_scans(
 
 
 @router.get("/{scan_id}", response_model=ScanResponse)
-async def get_scan(scan_id: str, db: AsyncSession = Depends(get_session)) -> Scan:
+async def get_scan(scan_id: str, db: Annotated[AsyncSession, Depends(get_session)]) -> Scan:
     """Récupère un scan par ID (avec sa progression depuis la base)."""
     scan = await db.get(Scan, scan_id)
     if scan is None:
@@ -119,11 +122,11 @@ async def get_scan(scan_id: str, db: AsyncSession = Depends(get_session)) -> Sca
     return scan
 
 
-@router.get("/{scan_id}/status", response_model=TaskStatusResponse)
+@router.get("/{scan_id}/status")
 async def get_scan_status(scan_id: str) -> TaskStatusResponse:
     """Retourne le statut Celery d'une tâche de scan."""
     result = celery_app.AsyncResult(scan_id)
-    meta = result.info if result.info else {}
+    meta = result.info or {}
 
     return TaskStatusResponse(
         task_id=scan_id,
@@ -136,19 +139,17 @@ async def get_scan_status(scan_id: str) -> TaskStatusResponse:
 @router.get("/{scan_id}/stream")
 async def stream_scan_progress(scan_id: str):
     """SSE stream de la progression d'un scan Celery en temps réel."""
-    result = celery_app.AsyncResult(scan_id)
+    celery_app.AsyncResult(scan_id)
 
     async def event_stream(task_id: str) -> str:
-        last_state = None
         while True:
             res = celery_app.AsyncResult(task_id)
             state = res.state
-            meta = res.info if res.info else {}
+            meta = res.info or {}
 
-            if state != last_state or True:  # toujours envoyer la première trame
+            if True:  # toujours envoyer la première trame
                 data = json.dumps({"state": state, **meta})
                 yield f"event: {state.lower()}\ndata: {data}\n\n"
-                last_state = state
 
             if state in ("SUCCESS", "FAILURE", "REVOKED"):
                 break
@@ -166,7 +167,7 @@ async def stream_scan_progress(scan_id: str):
 
 
 @router.delete("/{scan_id}", status_code=204)
-async def delete_scan(scan_id: str, db: AsyncSession = Depends(get_session)) -> None:
+async def delete_scan(scan_id: str, db: Annotated[AsyncSession, Depends(get_session)]) -> None:
     """Supprime un scan et sa tâche Celery associée."""
     # Révoquer la tâche Celery si elle existe encore
     from celery.exceptions import CeleryError  # noqa: PLC0415

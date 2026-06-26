@@ -1,5 +1,4 @@
-"""
-Fuzzer structurel — mutation intelligente par type de contenu.
+"""Fuzzer structurel — mutation intelligente par type de contenu.
 
 Contrairement au fuzzer paramétrique classique :
 - Parse la structure du body (JSON, XML, form-data)
@@ -14,7 +13,7 @@ import copy
 import json
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -35,15 +34,17 @@ class ContentType(StrEnum):
 @dataclass
 class MutationPoint:
     """Un point de mutation dans un body structuré."""
-    path: str           # Chemin JSON (ex: "user.email") ou XPath simplifié
+
+    path: str  # Chemin JSON (ex: "user.email") ou XPath simplifié
     original_value: Any
-    value_type: str     # "string", "number", "boolean", "null", "object", "array"
-    parent_type: str    # "object", "array", "root"
+    value_type: str  # "string", "number", "boolean", "null", "object", "array"
+    parent_type: str  # "object", "array", "root"
 
 
 @dataclass
 class MutationResult:
     """Résultat d'une mutation."""
+
     injection_point: str
     payload: str
     payload_category: str
@@ -57,6 +58,7 @@ class MutationResult:
 @dataclass
 class StructuralFuzzReport:
     """Rapport de fuzzing structurel."""
+
     url: str
     content_type: str
     mutation_points: int
@@ -70,24 +72,48 @@ class StructuralFuzzReport:
 # ---------------------------------------------------------------------------
 STRUCTURAL_PAYLOADS: dict[str, list[str]] = {
     "string_injection": [
-        "' OR '1'='1", "\" OR \"1\"=\"1", "'; DROP TABLE users--",
-        "${7*7}", "{{7*7}}", "<script>alert(1)</script>",
-        "1; DROP TABLE users", "__proto__[test]=injected",
-        "../../../../etc/passwd", "C:\\Windows\\System32\\drivers\\etc\\hosts",
-        "$(cat /etc/passwd)", "`cat /etc/passwd`",
-        "| cat /etc/passwd", "& ping -c 5 127.0.0.1 &",
+        "' OR '1'='1",
+        '" OR "1"="1',
+        "'; DROP TABLE users--",
+        "${7*7}",
+        "{{7*7}}",
+        "<script>alert(1)</script>",
+        "1; DROP TABLE users",
+        "__proto__[test]=injected",
+        "../../../../etc/passwd",
+        "C:\\Windows\\System32\\drivers\\etc\\hosts",
+        "$(cat /etc/passwd)",
+        "`cat /etc/passwd`",
+        "| cat /etc/passwd",
+        "& ping -c 5 127.0.0.1 &",
         "xxe_placeholder",  # Sera remplacé par un vrai payload XXE
     ],
     "number_injection": [
-        "-1", "0", "9999999999", "1e100", "NaN", "Infinity",
-        "1 OR 1=1", "1; DROP TABLE users--", "1 UNION SELECT 1,2,3--",
+        "-1",
+        "0",
+        "9999999999",
+        "1e100",
+        "NaN",
+        "Infinity",
+        "1 OR 1=1",
+        "1; DROP TABLE users--",
+        "1 UNION SELECT 1,2,3--",
         "-1.7976931348623157E+308",  # Overflow float
     ],
     "boolean_injection": [
-        "true", "false", "1", "0", "null", "\"true\"",
+        "true",
+        "false",
+        "1",
+        "0",
+        "null",
+        '"true"',
     ],
     "null_injection": [
-        "\"string\"", "0", "false", "[]", "{}",
+        '"string"',
+        "0",
+        "false",
+        "[]",
+        "{}",
     ],
     "xxe": [
         '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>',
@@ -100,8 +126,12 @@ STRUCTURAL_PAYLOADS: dict[str, list[str]] = {
         "file:///etc/passwd",
     ],
     "ssti": [
-        "{{7*7}}", "${7*7}", "<%= 7*7 %>", "#{7*7}",
-        "{{config}}", "${application}",
+        "{{7*7}}",
+        "${7*7}",
+        "<%= 7*7 %>",
+        "#{7*7}",
+        "{{config}}",
+        "${application}",
     ],
     "header_injection": [
         "X-Forwarded-For: 127.0.0.1",
@@ -112,8 +142,7 @@ STRUCTURAL_PAYLOADS: dict[str, list[str]] = {
 
 
 class StructuralFuzzer:
-    """
-    Fuzzer qui parse le body de la requête et le mute champ par champ.
+    """Fuzzer qui parse le body de la requête et le mute champ par champ.
 
     Usage:
         fuzzer = StructuralFuzzer()
@@ -193,7 +222,9 @@ class StructuralFuzzer:
     # ------------------------------------------------------------------
     # Mutation
     # ------------------------------------------------------------------
-    def mutate_json(self, original: Any, point: MutationPoint, payload: str, value_type: str) -> Any:
+    def mutate_json(
+        self, original: Any, point: MutationPoint, payload: str, value_type: str,
+    ) -> Any:
         """Applique une mutation à un point spécifique d'un objet JSON."""
         mutated = copy.deepcopy(original)
         path_parts = point.path.replace("$", "").lstrip(".").split(".")
@@ -201,7 +232,7 @@ class StructuralFuzzer:
         current = mutated
         for i, part in enumerate(path_parts):
             # Gérer les index de tableau
-            array_match = re.match(r'(.+)\[(\d+)\]', part)
+            array_match = re.match(r"(.+)\[(\d+)\]", part)
             if array_match:
                 key = array_match.group(1)
                 idx = int(array_match.group(2))
@@ -209,24 +240,22 @@ class StructuralFuzzer:
                     current = current[key]
                 if isinstance(current, list) and idx < len(current):
                     current = current[idx]
-            else:
-                if isinstance(current, dict) and part in current:
-                    if i == len(path_parts) - 1:
-                        # Dernier niveau: appliquer la mutation
-                        if value_type == "string":
+            elif isinstance(current, dict) and part in current:
+                if i == len(path_parts) - 1:
+                    # Dernier niveau: appliquer la mutation
+                    if value_type == "string":
+                        current[part] = payload
+                    elif value_type == "number":
+                        try:
+                            current[part] = float(payload) if "." in payload else int(payload)
+                        except ValueError:
                             current[part] = payload
-                        elif value_type == "number":
-                            try:
-                                current[part] = float(payload) if "." in payload else int(payload)
-                            except ValueError:
-                                current[part] = payload
-                        elif value_type == "boolean":
-                            current[part] = payload.lower() in ("true", "1")
-                        elif value_type == "null":
-                            current[part] = payload
-                        return mutated
-                    else:
-                        current = current[part]
+                    elif value_type == "boolean":
+                        current[part] = payload.lower() in ("true", "1")
+                    elif value_type == "null":
+                        current[part] = payload
+                    return mutated
+                current = current[part]
 
         return mutated
 
@@ -258,7 +287,8 @@ class StructuralFuzzer:
 
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     resp = await client.request(
-                        method, url,
+                        method,
+                        url,
                         content=mutated_body,
                         headers=headers,
                     )
@@ -274,7 +304,7 @@ class StructuralFuzzer:
                         anomaly = "Possible SQL injection"
                         evidence = snippet[:200]
                     elif payload in snippet:
-                        anomaly = f"Payload reflété dans la réponse"
+                        anomaly = "Payload reflété dans la réponse"
                         evidence = snippet[:200]
                     elif "root:" in snippet:
                         anomaly = "Possible lecture fichier système"
@@ -312,8 +342,7 @@ class StructuralFuzzer:
         content_type: str = "json",
         extra_headers: dict[str, str] | None = None,
     ) -> StructuralFuzzReport:
-        """
-        Lance le fuzzing structurel.
+        """Lance le fuzzing structurel.
 
         Args:
             url: URL cible
@@ -324,8 +353,10 @@ class StructuralFuzzer:
 
         Returns:
             StructuralFuzzReport avec les anomalies détectées
+
         """
         import time
+
         start = time.time()
 
         # Headers par défaut
@@ -349,7 +380,7 @@ class StructuralFuzzer:
             points = []
 
             # Fallback: chercher les paires clé=valeur
-            for m in re.finditer(r'([^&=]+)=([^&]*)', body_str):
+            for m in re.finditer(r"([^&=]+)=([^&]*)", body_str):
                 points.append(MutationPoint(m.group(1), m.group(2), "string", "form"))
 
         # Sélectionner les payloads pertinents
@@ -376,7 +407,9 @@ class StructuralFuzzer:
         tasks = []
         for cat, payload, point in all_payloads:
             tasks.append(
-                self._test_mutation(url, method, body_str, content_type, headers, point, payload, cat)
+                self._test_mutation(
+                    url, method, body_str, content_type, headers, point, payload, cat,
+                ),
             )
 
         results = await asyncio.gather(*tasks)

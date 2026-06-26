@@ -1,5 +1,4 @@
-"""
-Module Firewall — connecteurs API pour équipements réseau.
+"""Module Firewall — connecteurs API pour équipements réseau.
 
 Fonctionnalités :
 - Connecteurs FortiGate (REST API) avec vérification CVE
@@ -9,25 +8,47 @@ Fonctionnalités :
 """
 
 from .base import (
-    FirewallConnector, FirewallVendor, FirewallConfig,
-    FirewallRule, FirewallInterface, FirewallAddress, FirewallUser,
-    CVECheck, RuleAction, Protocol, RuleSeverity,
+    CVECheck,
+    FirewallAddress,
+    FirewallConfig,
+    FirewallConnector,
+    FirewallInterface,
+    FirewallRule,
+    FirewallUser,
+    FirewallVendor,
+    Protocol,
+    RuleAction,
+    RuleSeverity,
 )
-from .fortigate import FortiGateConnector
-from .stormshield import StormShieldConnector
-from .rule_analyzer import RuleAnalyzer, RuleFinding, RuleAnalysisReport, FindingType
 from .correlation import ADCorrelator, CorrelationFinding, CorrelationReport, CorrelationSeverity
+from .fortigate import FortiGateConnector
+from .rule_analyzer import FindingType, RuleAnalysisReport, RuleAnalyzer, RuleFinding
+from .stormshield import StormShieldConnector
 
 __all__ = [
+    # Correlation
+    "ADCorrelator",
+    "CVECheck",
+    "CorrelationFinding",
+    "CorrelationReport",
+    "CorrelationSeverity",
+    "FindingType",
+    "FirewallAddress",
+    "FirewallConfig",
     # Base
-    "FirewallConnector", "FirewallVendor", "FirewallConfig",
-    "FirewallRule", "FirewallInterface", "FirewallAddress", "FirewallUser",
-    "CVECheck", "RuleAction", "Protocol", "RuleSeverity",
+    "FirewallConnector",
+    "FirewallInterface",
+    "FirewallRule",
+    "FirewallUser",
+    "FirewallVendor",
     # Connectors
     "FortiGateConnector",
-    "StormShieldConnector",
+    "Protocol",
+    "RuleAction",
+    "RuleAnalysisReport",
     # Analysis
-    "RuleAnalyzer", "RuleFinding", "RuleAnalysisReport", "FindingType",
-    # Correlation
-    "ADCorrelator", "CorrelationFinding", "CorrelationReport", "CorrelationSeverity",
+    "RuleAnalyzer",
+    "RuleFinding",
+    "RuleSeverity",
+    "StormShieldConnector",
 ]

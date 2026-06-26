@@ -1,5 +1,4 @@
-"""
-Queue d'interception — permet de mettre en pause, inspecter et modifier
+"""Queue d'interception — permet de mettre en pause, inspecter et modifier
 les requêtes/réponses avant de les forwarder.
 
 Pattern producteur/consommateur avec asyncio.Queue.
@@ -7,9 +6,9 @@ Pattern producteur/consommateur avec asyncio.Queue.
 
 import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Callable, Awaitable
 
 from navmax.core.logging import get_logger
 
@@ -17,9 +16,9 @@ logger = get_logger(__name__)
 
 
 class FlowAction(StrEnum):
-    FORWARD = "forward"    # Laisser passer
-    DROP = "drop"          # Bloquer
-    MODIFY = "modify"      # Remplacer par une version modifiée
+    FORWARD = "forward"  # Laisser passer
+    DROP = "drop"  # Bloquer
+    MODIFY = "modify"  # Remplacer par une version modifiée
 
 
 class FlowStatus(StrEnum):
@@ -32,6 +31,7 @@ class FlowStatus(StrEnum):
 @dataclass
 class InterceptedFlow:
     """Un flux HTTP intercepté (requête + réponse)."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     method: str = ""
     host: str = ""
@@ -52,8 +52,7 @@ class InterceptedFlow:
 
 
 class Interceptor:
-    """
-    Gère la file d'interception des flux HTTP.
+    """Gère la file d'interception des flux HTTP.
 
     Deux modes :
     - intercept_all : tout est mis en pause
@@ -88,12 +87,12 @@ class Interceptor:
         self._on_flow_callbacks.append(callback)
 
     async def submit(self, flow: InterceptedFlow) -> FlowAction:
-        """
-        Soumet un flux à l'intercepteur.
+        """Soumet un flux à l'intercepteur.
         Si l'interception est active, attend une décision.
         Sinon, forwarde immédiatement.
         """
         import time
+
         flow.timestamp = time.time()
         self._flows[flow.id] = flow
 
@@ -101,7 +100,7 @@ class Interceptor:
             try:
                 await cb(flow)
             except (RuntimeError, ValueError, TypeError) as e:
-                logger.error("callback_erreur", erreur=str(e))
+                logger.exception("callback_erreur", erreur=str(e))
 
         if not self._intercept_enabled:
             flow.status = FlowStatus.FORWARDED
@@ -123,9 +122,10 @@ class Interceptor:
         except asyncio.QueueEmpty:
             return None
 
-    def decide(self, flow_id: str, action: FlowAction, modified_flow: InterceptedFlow | None = None) -> bool:
-        """
-        Décide du sort d'un flux intercepté.
+    def decide(
+        self, flow_id: str, action: FlowAction, modified_flow: InterceptedFlow | None = None,
+    ) -> bool:
+        """Décide du sort d'un flux intercepté.
 
         Args:
             flow_id: ID du flux
@@ -134,6 +134,7 @@ class Interceptor:
 
         Returns:
             True si le flux a été trouvé et traité
+
         """
         flow = self._flows.get(flow_id)
         if flow is None:

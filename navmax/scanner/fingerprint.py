@@ -1,12 +1,10 @@
-"""
-Fingerprinting : détection d'OS et identification avancée de services.
-"""
+"""Fingerprinting : détection d'OS et identification avancée de services."""
 
 import asyncio
+import contextlib
 import platform
 import re
 import socket
-import struct
 
 from navmax.core.logging import get_logger
 from navmax.core.utils import safe_close_writer
@@ -37,8 +35,7 @@ for os_name, ttls in TTL_SIGNATURES.items():
 
 
 async def _ping_ttl(ip: str, timeout: float = 2.0) -> int | None:
-    """
-    Envoie un ping ICMP basique et récupère le TTL.
+    """Envoie un ping ICMP basique et récupère le TTL.
     Nécessite admin sur Windows. Utilise `ping` système comme fallback.
     """
     try:
@@ -59,15 +56,14 @@ async def _ping_ttl(ip: str, timeout: float = 2.0) -> int | None:
         m = re.search(r"[tT][tT][lL]\s*[=:]\s*(\d+)", output)
         if m:
             return int(m.group(1))
-    except (asyncio.TimeoutError, OSError) as e:
+    except (TimeoutError, OSError) as e:
         logger.debug("ping_échec", ip=ip, erreur=str(e))
 
     return None
 
 
 async def detect_os(ip: str, timeout: float = 2.0) -> dict:
-    """
-    Tente de détecter l'OS d'une cible.
+    """Tente de détecter l'OS d'une cible.
 
     Méthodes :
     1. TTL du ping ICMP
@@ -75,6 +71,7 @@ async def detect_os(ip: str, timeout: float = 2.0) -> dict:
 
     Returns:
         {"os": "Linux" | "Windows" | ... | "unknown", "confidence": "high" | "medium" | "low", "ttl": int | None}
+
     """
     result = {"os": "unknown", "confidence": "low", "ttl": None, "methods": []}
 
@@ -92,7 +89,7 @@ async def detect_os(ip: str, timeout: float = 2.0) -> dict:
 
     # Méthode 2 : TCP TTL (connexion au port 80)
     try:
-        reader, writer = await asyncio.wait_for(
+        _reader, writer = await asyncio.wait_for(
             asyncio.open_connection(ip, 80),
             timeout=timeout,
         )
@@ -106,7 +103,7 @@ async def detect_os(ip: str, timeout: float = 2.0) -> dict:
                 result["os"] = os_guess
                 result["confidence"] = "medium"
         await safe_close_writer(writer)
-    except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+    except (TimeoutError, ConnectionRefusedError, OSError) as e:
         logger.debug("tcp_ttl_échec", ip=ip, erreur=str(e))
 
     if result["os"] == "unknown":
@@ -119,14 +116,12 @@ async def detect_os(ip: str, timeout: float = 2.0) -> dict:
 # Détection avancée de service HTTP
 # ---------------------------------------------------------------------------
 async def detect_http_service(ip: str, port: int, timeout: float = 2.0) -> dict:
-    """
-    Récupère les en-têtes HTTP et identifie le serveur.
+    """Récupère les en-têtes HTTP et identifie le serveur.
 
     Returns:
         {"server": "nginx/1.24.0", "headers": {"Server": "...", ...}, "title": "..."}
-    """
-    import urllib.parse
 
+    """
     result: dict = {"server": None, "headers": {}, "title": None}
 
     try:
@@ -154,7 +149,7 @@ async def detect_http_service(ip: str, port: int, timeout: float = 2.0) -> dict:
                 raw += chunk
                 if len(raw) > 16384:  # 16 Ko max
                     break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
 
         await safe_close_writer(writer)
@@ -175,7 +170,7 @@ async def detect_http_service(ip: str, port: int, timeout: float = 2.0) -> dict:
         if m:
             result["title"] = m.group(1).strip()
 
-    except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+    except (TimeoutError, ConnectionRefusedError, OSError) as e:
         logger.debug("http_detect_échec", ip=ip, port=port, erreur=str(e))
 
     return result
@@ -185,11 +180,11 @@ async def detect_http_service(ip: str, port: int, timeout: float = 2.0) -> dict:
 # Détection de service (point d'entrée unifié)
 # ---------------------------------------------------------------------------
 async def detect_service(ip: str, port: int, protocol: str = "tcp", timeout: float = 2.0) -> dict:
-    """
-    Détecte le service tournant sur un port ouvert.
+    """Détecte le service tournant sur un port ouvert.
 
     Returns:
         {"service": "http", "version": "2.4.57", "banner": "...", "details": {...}}
+
     """
     result: dict = {"service": "unknown", "version": None, "banner": None, "details": {}}
 
@@ -213,22 +208,21 @@ async def detect_service(ip: str, port: int, protocol: str = "tcp", timeout: flo
         )
         banner_bytes = await asyncio.wait_for(reader.read(2048), timeout=min(timeout, 1.5))
         writer.close()
-        try:
+        with contextlib.suppress(OSError):
             await writer.wait_closed()
-        except OSError:
-            pass
 
         if banner_bytes:
             banner = banner_bytes.decode("utf-8", errors="replace").strip()
             result["banner"] = banner
 
             from .tcp import _parse_banner
+
             service, version = _parse_banner(banner)
             if service:
                 result["service"] = service
                 result["version"] = version
 
-    except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+    except (TimeoutError, ConnectionRefusedError, OSError):
         pass
 
     return result

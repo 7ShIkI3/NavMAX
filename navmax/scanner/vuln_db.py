@@ -1,5 +1,4 @@
-"""
-VulnDatabase — base de signatures CVE locale pour matcher service+version → vulnérabilités.
+"""VulnDatabase — base de signatures CVE locale pour matcher service+version → vulnérabilités.
 
 Format: JSON compact avec service, version_range, CVE, sévérité.
 Fonctionne 100% offline — pas d'appel API externe.
@@ -9,8 +8,8 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-from packaging.version import Version, InvalidVersion
+
+from packaging.version import InvalidVersion, Version
 
 from navmax.core.logging import get_logger
 
@@ -20,12 +19,13 @@ logger = get_logger(__name__)
 @dataclass
 class VulnEntry:
     """Une entrée de vulnérabilité."""
+
     cve: str
     service: str
     version_range: str  # ex: ">=2.4.49,<2.4.51" ou "*"
-    severity: str       # info, low, medium, high, critical
+    severity: str  # info, low, medium, high, critical
     description: str
-    exploit_module: Optional[str] = None  # module NavMAX associé
+    exploit_module: str | None = None  # module NavMAX associé
     references: list[str] = None
 
     def __post_init__(self):
@@ -455,6 +455,7 @@ DEFAULT_SIGNATURES: list[dict] = [
 
 # ── VulnDatabase ────────────────────────────────────────────────
 
+
 class VulnDatabase:
     """Base de signatures CVE avec matching version.
 
@@ -464,7 +465,7 @@ class VulnDatabase:
         # → [{"cve": "CVE-2021-41773", ...}, {"cve": "CVE-2021-42013", ...}]
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or Path(__file__).parent / "data" / "cve_signatures.json"
         self._signatures: list[dict] = []
         self._loaded = False
@@ -476,7 +477,7 @@ class VulnDatabase:
                 with open(self.db_path) as f:
                     self._signatures = json.load(f)
                 logger.info("vulndb_loaded", path=str(self.db_path), count=len(self._signatures))
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 logger.warning("vulndb_parse_error", error=str(e))
                 self._signatures = DEFAULT_SIGNATURES
         else:
@@ -495,6 +496,7 @@ class VulnDatabase:
 
         Returns:
             Liste de signatures CVE correspondantes
+
         """
         if not self._loaded:
             self.load()
@@ -518,6 +520,7 @@ class VulnDatabase:
 
         Returns:
             {service_key: [vulns]}
+
         """
         results = {}
         for svc in services:
@@ -557,7 +560,7 @@ class VulnDatabase:
             for prefix in [">=", "<=", "==", "!=", ">", "<"]:
                 if cond.startswith(prefix):
                     op = prefix
-                    ver_str = cond[len(prefix):].strip()
+                    ver_str = cond[len(prefix) :].strip()
                     break
 
             try:
@@ -565,17 +568,14 @@ class VulnDatabase:
             except InvalidVersion:
                 return False
 
-            if op == ">=" and not (v >= target):
+            if (op == ">=" and not (v >= target)) or (op == "<=" and not (v <= target)):
                 return False
-            elif op == "<=" and not (v <= target):
-                return False
-            elif op == ">" and not (v > target):
-                return False
-            elif op == "<" and not (v < target):
-                return False
-            elif op == "==" and not (v == target):
-                return False
-            elif op == "!=" and v == target:
+            if (
+                (op == ">" and not (v > target))
+                or (op == "<" and not (v < target))
+                or (op == "==" and v != target)
+                or (op == "!=" and v == target)
+            ):
                 return False
 
         return True

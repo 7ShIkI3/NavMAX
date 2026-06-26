@@ -12,12 +12,18 @@ import httpx
 from navmax.core.config import config
 from navmax.core.logging import get_logger
 
+# Rétrocompatibilité : CensysCollector et CensysResult peuvent être importés
+# depuis shodan.py (ils étaient historiquement définis ici).
+# Ils sont maintenant dans le module dédié censys.py.
+from .censys import CensysCollector, CensysResult  # noqa: F401
+
 logger = get_logger(__name__)
 
 
 @dataclass
 class ShodanResult:
     """Résultat d'une requête Shodan."""
+
     ip: str
     ports: list[int] = field(default_factory=list)
     hostnames: list[str] = field(default_factory=list)
@@ -44,7 +50,9 @@ class ShodanCollector:
         """Récupère les infos Shodan pour une IP."""
         if not self.api_key:
             logger.warning("shodan_api_key_manquante", message="Résultats OSINT Shodan ignorés")
-            return ShodanResult(ip=ip, error="Clé API Shodan non configurée (NAVMAX_SHODAN_API_KEY)")
+            return ShodanResult(
+                ip=ip, error="Clé API Shodan non configurée (NAVMAX_SHODAN_API_KEY)",
+            )
 
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
@@ -59,13 +67,15 @@ class ShodanCollector:
 
                 services = []
                 for svc in data.get("data", []):
-                    services.append({
-                        "port": svc.get("port"),
-                        "transport": svc.get("transport", "tcp"),
-                        "product": svc.get("product", ""),
-                        "version": svc.get("version", ""),
-                        "banner": (svc.get("data", "") or "")[:200],
-                    })
+                    services.append(
+                        {
+                            "port": svc.get("port"),
+                            "transport": svc.get("transport", "tcp"),
+                            "product": svc.get("product", ""),
+                            "version": svc.get("version", ""),
+                            "banner": (svc.get("data", "") or "")[:200],
+                        },
+                    )
 
                 return ShodanResult(
                     ip=ip,
@@ -85,65 +95,9 @@ class ShodanCollector:
 
 
 @dataclass
-class CensysResult:
-    """Résultat Censys."""
-    ip: str
-    services: list[dict] = field(default_factory=list)
-    location: str = ""
-    autonomous_system: str = ""
-    error: str | None = None
-
-
-class CensysCollector:
-    """Collecteur via l'API Censys Search v2."""
-
-    BASE_URL = "https://search.censys.io/api/v2"
-
-    def __init__(self, api_id: str | None = None, api_secret: str | None = None) -> None:
-        self.api_id = api_id or getattr(config, "censys_api_id", "")
-        self.api_secret = api_secret or getattr(config, "censys_api_secret", "")
-
-    async def lookup_ip(self, ip: str) -> CensysResult:
-        """Recherche Censys pour une IP."""
-        if not self.api_id:
-            logger.warning("censys_api_key_manquante", message="Résultats OSINT Censys ignorés")
-            return CensysResult(ip=ip, error="API Censys non configurée")
-
-        try:
-            import base64
-            auth = base64.b64encode(f"{self.api_id}:{self.api_secret}".encode()).decode()
-
-            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-                resp = await client.get(
-                    f"{self.BASE_URL}/hosts/{ip}",
-                    headers={"Authorization": f"Basic {auth}"},
-                )
-                if resp.status_code != 200:
-                    return CensysResult(ip=ip, error=f"Censys API: {resp.status_code}")
-
-                data = resp.json().get("result", {})
-                services = []
-                for svc in data.get("services", []):
-                    services.append({
-                        "port": svc.get("port"),
-                        "service_name": svc.get("service_name", ""),
-                        "transport": svc.get("transport_protocol", "tcp"),
-                        "banner": (svc.get("banner", "") or "")[:200],
-                    })
-
-                return CensysResult(
-                    ip=ip,
-                    services=services,
-                    location=f"{data.get('location', {}).get('country', '')} {data.get('location', {}).get('city', '')}",
-                    autonomous_system=data.get("autonomous_system", {}).get("description", ""),
-                )
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError) as e:
-            return CensysResult(ip=ip, error=str(e))
-
-
-@dataclass
 class CrtShResult:
     """Résultat certificate transparency (crt.sh)."""
+
     domain: str
     subdomains: list[str] = field(default_factory=list)
     certificates: list[dict] = field(default_factory=list)
@@ -176,13 +130,15 @@ class CrtShCollector:
                         if sub and sub != domain and not sub.startswith("*."):
                             subdomains_set.add(sub)
 
-                    certs.append({
-                        "id": entry.get("id"),
-                        "issuer": entry.get("issuer_name", ""),
-                        "not_before": entry.get("not_before", ""),
-                        "not_after": entry.get("not_after", ""),
-                        "name": name[:100],
-                    })
+                    certs.append(
+                        {
+                            "id": entry.get("id"),
+                            "issuer": entry.get("issuer_name", ""),
+                            "not_before": entry.get("not_before", ""),
+                            "not_after": entry.get("not_after", ""),
+                            "name": name[:100],
+                        },
+                    )
 
                 return CrtShResult(
                     domain=domain,

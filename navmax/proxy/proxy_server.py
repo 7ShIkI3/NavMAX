@@ -1,5 +1,4 @@
-"""
-Proxy HTTP/HTTPS MITM — intercepte le trafic web pour inspection et modification.
+"""Proxy HTTP/HTTPS MITM — intercepte le trafic web pour inspection et modification.
 
 Architecture :
 - HTTP : forward simple avec inspection du contenu
@@ -7,17 +6,15 @@ Architecture :
 """
 
 import asyncio
+import contextlib
 import re
-import socket
 import ssl
-import time
 from urllib.parse import urlparse
 
-from navmax.core.config import config
 from navmax.core.logging import get_logger
 
-from .certs import generate_host_cert, load_or_generate_ca
-from .interceptor import Interceptor, InterceptedFlow, FlowAction
+from .certs import generate_host_cert
+from .interceptor import FlowAction, InterceptedFlow, Interceptor
 
 logger = get_logger(__name__)
 
@@ -27,9 +24,7 @@ BUFFER_SIZE = 8192
 
 
 class ProxyServer:
-    """
-    Serveur proxy HTTP/HTTPS asynchrone avec interception.
-    """
+    """Serveur proxy HTTP/HTTPS asynchrone avec interception."""
 
     def __init__(
         self,
@@ -76,7 +71,7 @@ class ProxyServer:
             try:
                 await asyncio.wait_for(self._server.wait_closed(), timeout=10.0)
                 logger.info("proxy_arrêt_gracieux")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("proxy_arrêt_forcé")
         self._stopping = False
 
@@ -110,17 +105,15 @@ class ProxyServer:
                 await self._handle_connect(reader, writer, parts[1])
             else:
                 await self._handle_http(reader, writer, method, parts[1])
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         except (ConnectionResetError, OSError) as e:
             logger.debug("connexion_perdue", erreur=str(e))
         except (ssl.SSLError, UnicodeDecodeError) as e:
-            logger.error("erreur_proxy", erreur=str(e))
+            logger.exception("erreur_proxy", erreur=str(e))
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 writer.close()
-            except OSError:
-                pass
 
     # ------------------------------------------------------------------
     # HTTP (non-TLS) — forward + inspection
@@ -165,7 +158,7 @@ class ProxyServer:
                 asyncio.open_connection(host, port),
                 timeout=10.0,
             )
-        except (asyncio.TimeoutError, OSError) as e:
+        except (TimeoutError, OSError):
             self._flows.append(flow)
             flow.response_status = 502
             return
@@ -200,15 +193,13 @@ class ProxyServer:
             flow.response_headers = resp_headers
             flow.response_body = resp_body
 
-        except (asyncio.TimeoutError, ConnectionResetError, OSError) as e:
+        except (TimeoutError, ConnectionResetError, OSError) as e:
             flow.response_status = 502
             logger.debug("erreur_réponse", host=host, erreur=str(e))
         finally:
             remote_writer.close()
-            try:
+            with contextlib.suppress(OSError):
                 await remote_writer.wait_closed()
-            except OSError:
-                pass
 
         self._flows.append(flow)
 
@@ -233,7 +224,7 @@ class ProxyServer:
         try:
             cert_pem, key_pem = generate_host_cert(host)
         except (ValueError, OSError) as e:
-            logger.error("échec_cert", host=host, erreur=str(e))
+            logger.exception("échec_cert", host=host, erreur=str(e))
             return
 
         # 3. Connexion au serveur réel
@@ -242,7 +233,7 @@ class ProxyServer:
                 asyncio.open_connection(host, port),
                 timeout=10.0,
             )
-        except (asyncio.TimeoutError, OSError) as e:
+        except (TimeoutError, OSError) as e:
             logger.debug("connexion_cible_échec", host=host, port=port, erreur=str(e))
             return
 
@@ -264,20 +255,21 @@ class ProxyServer:
 
             # 5. Bidirectional relay avec inspection
             await self._relay_https(
-                client_ssl_reader, client_ssl_writer,
-                remote_reader, remote_writer,
-                host, port,
+                client_ssl_reader,
+                client_ssl_writer,
+                remote_reader,
+                remote_writer,
+                host,
+                port,
             )
         except ssl.SSLError as e:
             logger.debug("tls_client_échec", host=host, erreur=str(e))
-        except (asyncio.TimeoutError, ConnectionResetError, OSError) as e:
-            logger.error("relay_échec", host=host, erreur=str(e))
+        except (TimeoutError, ConnectionResetError, OSError) as e:
+            logger.exception("relay_échec", host=host, erreur=str(e))
         finally:
             remote_writer.close()
-            try:
+            with contextlib.suppress(OSError):
                 await remote_writer.wait_closed()
-            except OSError:
-                pass
 
     async def _relay_https(
         self,
@@ -325,7 +317,7 @@ class ProxyServer:
             # Forwarder au serveur
             request = f"{method} {path} HTTP/1.0\r\n"
             for k, v in headers.items():
-                if k.lower() not in ("proxy-connection",):
+                if k.lower() != "proxy-connection":
                     request += f"{k}: {v}\r\n"
             request += "\r\n"
             remote_writer.write(request.encode() + body)
@@ -351,7 +343,7 @@ class ProxyServer:
             flow.response_body = resp_body
             self._flows.append(flow)
 
-        except (asyncio.TimeoutError, ConnectionResetError, OSError):
+        except (TimeoutError, ConnectionResetError, OSError):
             pass
 
     # ------------------------------------------------------------------
@@ -387,6 +379,7 @@ class ProxyServer:
     def _temp_pem(content: str, suffix: str) -> str:
         """Écrit un PEM temporaire sur disque et retourne le chemin."""
         import tempfile
+
         f = tempfile.NamedTemporaryFile(
             mode="w+",
             suffix=f".{suffix}.pem",

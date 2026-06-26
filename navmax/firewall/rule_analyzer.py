@@ -1,5 +1,4 @@
-"""
-Firewall Rule Analyzer — analyse intelligente des règles de firewall.
+"""Firewall Rule Analyzer — analyse intelligente des règles de firewall.
 
 Détecte :
 - Règles Any/Any (trop permissives)
@@ -19,17 +18,21 @@ Usage:
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional
+
 import structlog
 
 from .base import (
-    FirewallConfig, FirewallRule, RuleAction, RuleSeverity, Protocol,
+    FirewallConfig,
+    FirewallRule,
+    RuleAction,
+    RuleSeverity,
 )
 
 logger = structlog.get_logger(__name__)
 
 
 # ── Types ──────────────────────────────────────────────────────
+
 
 class FindingType(StrEnum):
     ANY_ANY_RULE = "any_any_rule"
@@ -45,6 +48,7 @@ class FindingType(StrEnum):
 @dataclass
 class RuleFinding:
     """Une anomalie détectée dans les règles firewall."""
+
     type: FindingType
     severity: RuleSeverity
     description: str
@@ -57,6 +61,7 @@ class RuleFinding:
 @dataclass
 class RuleAnalysisReport:
     """Rapport d'analyse des règles firewall."""
+
     firewall: str = ""
     total_rules: int = 0
     enabled_rules: int = 0
@@ -71,15 +76,17 @@ class RuleAnalysisReport:
             f"Risk Score: {self.risk_score:.0f}/100",
         ]
         for f in self.findings:
-            marker = {"critical": "🔴", "high": "🟠", "medium": "🟡",
-                      "low": "🟢", "info": "ℹ️"}.get(f.severity, "❓")
+            marker = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "ℹ️"}.get(
+                f.severity, "❓",
+            )
             lines.append(
-                f"  {marker} [{f.type}] {f.description}"
+                f"  {marker} [{f.type}] {f.description}",
             )
         return "\n".join(lines)
 
 
 # ── Analyseur ──────────────────────────────────────────────────
+
 
 class RuleAnalyzer:
     """Analyseur de règles firewall.
@@ -111,7 +118,7 @@ class RuleAnalyzer:
         "636": ("LDAPS", "LDAP sécurisé"),
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._findings: list[RuleFinding] = []
 
     def analyze(self, config: FirewallConfig) -> RuleAnalysisReport:
@@ -122,6 +129,7 @@ class RuleAnalyzer:
 
         Returns:
             RuleAnalysisReport structuré
+
         """
         self._findings = []
 
@@ -155,36 +163,43 @@ class RuleAnalyzer:
             if r.action != RuleAction.ALLOW:
                 continue
 
-            is_any_src = (not r.source_addresses
-                          or "any" in [a.lower().strip() for a in r.source_addresses]
-                          or "all" in [a.lower().strip() for a in r.source_addresses])
-            is_any_dst = (not r.destination_addresses
-                          or "any" in [a.lower().strip() for a in r.destination_addresses]
-                          or "all" in [a.lower().strip() for a in r.destination_addresses])
-            is_any_svc = (not r.destination_ports
-                          or "any" in [p.lower().strip() for p in r.destination_ports])
+            is_any_src = (
+                not r.source_addresses
+                or "any" in [a.lower().strip() for a in r.source_addresses]
+                or "all" in [a.lower().strip() for a in r.source_addresses]
+            )
+            is_any_dst = (
+                not r.destination_addresses
+                or "any" in [a.lower().strip() for a in r.destination_addresses]
+                or "all" in [a.lower().strip() for a in r.destination_addresses]
+            )
+            is_any_svc = not r.destination_ports or "any" in [
+                p.lower().strip() for p in r.destination_ports
+            ]
 
             if is_any_src and is_any_dst and is_any_svc:
                 any_any.append(r)
 
         if any_any:
-            self._findings.append(RuleFinding(
-                type=FindingType.ANY_ANY_RULE,
-                severity=RuleSeverity.HIGH if len(any_any) > 1 else RuleSeverity.MEDIUM,
-                description=(
-                    f"{len(any_any)} règle(s) Any/Any (source=any, dest=any, "
-                    f"service=any) — ces règles autorisent tout le trafic."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.ANY_ANY_RULE,
+                    severity=RuleSeverity.HIGH if len(any_any) > 1 else RuleSeverity.MEDIUM,
+                    description=(
+                        f"{len(any_any)} règle(s) Any/Any (source=any, dest=any, "
+                        f"service=any) — ces règles autorisent tout le trafic."
+                    ),
+                    rule_ids=[r.id for r in any_any],
+                    rule_names=[r.name for r in any_any],
+                    recommendation=(
+                        "Restreindre la source, la destination, et le service "
+                        "au strict nécessaire. Ajouter des zones et adresses "
+                        "spécifiques."
+                    ),
+                    impact="Un attaquant ayant accès au réseau source peut "
+                    "atteindre n'importe quelle destination.",
                 ),
-                rule_ids=[r.id for r in any_any],
-                rule_names=[r.name for r in any_any],
-                recommendation=(
-                    "Restreindre la source, la destination, et le service "
-                    "au strict nécessaire. Ajouter des zones et adresses "
-                    "spécifiques."
-                ),
-                impact="Un attaquant ayant accès au réseau source peut "
-                       "atteindre n'importe quelle destination.",
-            ))
+            )
 
     def _check_high_risk_ports(self, rules: list[FirewallRule]) -> None:
         """Détecte les règles exposant des ports à haut risque."""
@@ -197,30 +212,30 @@ class RuleAnalyzer:
                 port_clean = port.strip()
                 for risk_port, (svc_name, _) in self.HIGH_RISK_PORTS.items():
                     if port_clean == risk_port or port_clean.startswith(
-                        risk_port + ":"
+                        risk_port + ":",
                     ):
                         risky_rules.append((r, f"{risk_port}/{svc_name}"))
 
         if risky_rules:
-            self._findings.append(RuleFinding(
-                type=FindingType.HIGH_RISK_PORT,
-                severity=RuleSeverity.HIGH,
-                description=(
-                    f"{len(risky_rules)} règle(s) exposant des ports à "
-                    f"haut risque (RDP, SSH, bases de données...)."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.HIGH_RISK_PORT,
+                    severity=RuleSeverity.HIGH,
+                    description=(
+                        f"{len(risky_rules)} règle(s) exposant des ports à "
+                        f"haut risque (RDP, SSH, bases de données...)."
+                    ),
+                    rule_ids=[r.id for r, _ in risky_rules],
+                    rule_names=[f"{r.name} → {svc}" for r, svc in risky_rules],
+                    recommendation=(
+                        "1. Restreindre les sources à des IPs spécifiques\n"
+                        "2. Utiliser un VPN plutôt qu'exposer RDP/SSH\n"
+                        "3. Ajouter une restriction par utilisateur/groupe"
+                    ),
+                    impact="Ces services sont des cibles privilégiées pour "
+                    "le bruteforce et l'exploitation de vulnérabilités.",
                 ),
-                rule_ids=[r.id for r, _ in risky_rules],
-                rule_names=[
-                    f"{r.name} → {svc}" for r, svc in risky_rules
-                ],
-                recommendation=(
-                    "1. Restreindre les sources à des IPs spécifiques\n"
-                    "2. Utiliser un VPN plutôt qu'exposer RDP/SSH\n"
-                    "3. Ajouter une restriction par utilisateur/groupe"
-                ),
-                impact="Ces services sont des cibles privilégiées pour "
-                       "le bruteforce et l'exploitation de vulnérabilités.",
-            ))
+            )
 
     def _check_shadowed_rules(self, rules: list[FirewallRule]) -> None:
         """Détecte les règles masquées (shadowing).
@@ -242,47 +257,48 @@ class RuleAnalyzer:
                     break
 
         if shadowed:
-            self._findings.append(RuleFinding(
-                type=FindingType.SHADOWED_RULE,
-                severity=RuleSeverity.MEDIUM,
-                description=(
-                    f"{len(shadowed)} règle(s) masquée(s) par une règle "
-                    f"plus permissive placée avant."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.SHADOWED_RULE,
+                    severity=RuleSeverity.MEDIUM,
+                    description=(
+                        f"{len(shadowed)} règle(s) masquée(s) par une règle "
+                        f"plus permissive placée avant."
+                    ),
+                    rule_ids=[r.id for r, _ in shadowed],
+                    rule_names=[f"{r.name} (shadowed by {prev.name})" for r, prev in shadowed],
+                    recommendation=(
+                        "Réorganiser les règles pour placer les plus spécifiques "
+                        "avant les plus générales."
+                    ),
+                    impact="Ces règles ne seront jamais atteintes : gaspillage "
+                    "de ressources et faux sentiment de sécurité.",
                 ),
-                rule_ids=[r.id for r, _ in shadowed],
-                rule_names=[
-                    f"{r.name} (shadowed by {prev.name})"
-                    for r, prev in shadowed
-                ],
-                recommendation=(
-                    "Réorganiser les règles pour placer les plus spécifiques "
-                    "avant les plus générales."
-                ),
-                impact="Ces règles ne seront jamais atteintes : gaspillage "
-                       "de ressources et faux sentiment de sécurité.",
-            ))
+            )
 
     def _check_zero_hit_rules(self, rules: list[FirewallRule]) -> None:
         """Détecte les règles sans trafic (hit_count=0)."""
         zero_hit = [r for r in rules if r.hit_count == 0]
 
         if len(zero_hit) > len(rules) * 0.3:  # >30% des règles
-            self._findings.append(RuleFinding(
-                type=FindingType.ZERO_HIT_RULE,
-                severity=RuleSeverity.LOW,
-                description=(
-                    f"{len(zero_hit)} règle(s) sans trafic enregistré "
-                    f"({len(zero_hit)/max(len(rules),1)*100:.0f}% du total)."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.ZERO_HIT_RULE,
+                    severity=RuleSeverity.LOW,
+                    description=(
+                        f"{len(zero_hit)} règle(s) sans trafic enregistré "
+                        f"({len(zero_hit) / max(len(rules), 1) * 100:.0f}% du total)."
+                    ),
+                    rule_ids=[r.id for r in zero_hit[:10]],
+                    rule_names=[r.name for r in zero_hit[:10]],
+                    recommendation=(
+                        "Auditer ces règles : sont-elles encore nécessaires ? "
+                        "Si non, les supprimer pour réduire la surface d'attaque."
+                    ),
+                    impact="Règles inutilisées = complexité inutile et risque "
+                    "de mauvaise configuration future.",
                 ),
-                rule_ids=[r.id for r in zero_hit[:10]],
-                rule_names=[r.name for r in zero_hit[:10]],
-                recommendation=(
-                    "Auditer ces règles : sont-elles encore nécessaires ? "
-                    "Si non, les supprimer pour réduire la surface d'attaque."
-                ),
-                impact="Règles inutilisées = complexité inutile et risque "
-                       "de mauvaise configuration future.",
-            ))
+            )
 
     def _check_rule_order(self, rules: list[FirewallRule]) -> None:
         """Détecte les problèmes d'ordonnancement."""
@@ -293,8 +309,10 @@ class RuleAnalyzer:
                 continue
             # Vérifier si cette règle est Any/Any deny avant des allow
             is_any = (
-                (not r.source_addresses or "any" in [a.lower().strip() for a in r.source_addresses])
-                and (not r.destination_addresses or "any" in [a.lower().strip() for a in r.destination_addresses])
+                not r.source_addresses or "any" in [a.lower().strip() for a in r.source_addresses]
+            ) and (
+                not r.destination_addresses
+                or "any" in [a.lower().strip() for a in r.destination_addresses]
             )
             if is_any:
                 for j in range(i + 1, min(i + 5, len(rules))):
@@ -303,58 +321,58 @@ class RuleAnalyzer:
                         break
 
         if issues:
-            self._findings.append(RuleFinding(
-                type=FindingType.RULE_ORDER_ISSUE,
-                severity=RuleSeverity.MEDIUM,
-                description=(
-                    f"{len(issues)} règle(s) Deny Any/Any placée(s) avant "
-                    f"des règles Allow — ces règles Allow sont bloquées."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.RULE_ORDER_ISSUE,
+                    severity=RuleSeverity.MEDIUM,
+                    description=(
+                        f"{len(issues)} règle(s) Deny Any/Any placée(s) avant "
+                        f"des règles Allow — ces règles Allow sont bloquées."
+                    ),
+                    rule_ids=[r_deny.id for r_deny, _ in issues],
+                    rule_names=[
+                        f"{r_deny.name} blocks {r_allow.name}" for r_deny, r_allow in issues
+                    ],
+                    recommendation=(
+                        "Placer les règles Deny Any/Any en fin de politique, "
+                        "après toutes les règles Allow spécifiques."
+                    ),
+                    impact="Trafic légitime bloqué → incidents de production.",
                 ),
-                rule_ids=[r_deny.id for r_deny, _ in issues],
-                rule_names=[
-                    f"{r_deny.name} blocks {r_allow.name}"
-                    for r_deny, r_allow in issues
-                ],
-                recommendation=(
-                    "Placer les règles Deny Any/Any en fin de politique, "
-                    "après toutes les règles Allow spécifiques."
-                ),
-                impact="Trafic légitime bloqué → incidents de production.",
-            ))
+            )
 
     def _check_disabled_orphans(self, all_rules: list[FirewallRule]) -> None:
         """Détecte les règles désactivées orphelines."""
         disabled = [r for r in all_rules if not r.enabled]
 
         if len(disabled) > 20:
-            self._findings.append(RuleFinding(
-                type=FindingType.DISABLED_RULE_ORPHAN,
-                severity=RuleSeverity.LOW,
-                description=(
-                    f"{len(disabled)} règle(s) désactivée(s). "
-                    f"Auditer et supprimer les règles obsolètes."
+            self._findings.append(
+                RuleFinding(
+                    type=FindingType.DISABLED_RULE_ORPHAN,
+                    severity=RuleSeverity.LOW,
+                    description=(
+                        f"{len(disabled)} règle(s) désactivée(s). "
+                        f"Auditer et supprimer les règles obsolètes."
+                    ),
+                    rule_ids=[r.id for r in disabled[:10]],
+                    rule_names=[r.name for r in disabled[:10]],
+                    recommendation=("Supprimer les règles désactivées de plus de 90 jours."),
+                    impact="Complexité inutile et risque de réactivation accidentelle.",
                 ),
-                rule_ids=[r.id for r in disabled[:10]],
-                rule_names=[r.name for r in disabled[:10]],
-                recommendation=(
-                    "Supprimer les règles désactivées de plus de 90 jours."
-                ),
-                impact="Complexité inutile et risque de réactivation "
-                       "accidentelle.",
-            ))
+            )
 
     # ── Helpers ────────────────────────────────────────────────
 
-    def _rule_covers(self, rule_a: FirewallRule,
-                     rule_b: FirewallRule) -> bool:
+    def _rule_covers(self, rule_a: FirewallRule, rule_b: FirewallRule) -> bool:
         """Vérifie si rule_a couvre entièrement rule_b.
 
         Returns:
             True si rule_a est plus large et capture tout ce que rule_b capture
+
         """
         # Source: a doit être plus large que b
-        a_src = set(s.lower() for s in rule_a.source_addresses)
-        b_src = set(s.lower() for s in rule_b.source_addresses)
+        a_src = {s.lower() for s in rule_a.source_addresses}
+        b_src = {s.lower() for s in rule_b.source_addresses}
         if not a_src:
             a_src = {"any"}
         if not b_src:
@@ -364,8 +382,8 @@ class RuleAnalyzer:
             return False
 
         # Destination
-        a_dst = set(d.lower() for d in rule_a.destination_addresses)
-        b_dst = set(d.lower() for d in rule_b.destination_addresses)
+        a_dst = {d.lower() for d in rule_a.destination_addresses}
+        b_dst = {d.lower() for d in rule_b.destination_addresses}
         if not a_dst:
             a_dst = {"any"}
         if not b_dst:
@@ -375,17 +393,14 @@ class RuleAnalyzer:
             return False
 
         # Service (ports)
-        a_svc = set(p.lower() for p in rule_a.destination_ports)
-        b_svc = set(p.lower() for p in rule_b.destination_ports)
+        a_svc = {p.lower() for p in rule_a.destination_ports}
+        b_svc = {p.lower() for p in rule_b.destination_ports}
         if not a_svc:
             a_svc = {"any"}
         if not b_svc:
             b_svc = {"any"}
 
-        if "any" not in a_svc and not a_svc.issuperset(b_svc):
-            return False
-
-        return True
+        return not ("any" not in a_svc and not a_svc.issuperset(b_svc))
 
     def _compute_risk_score(self) -> float:
         """Calcule un score de risque 0-100."""

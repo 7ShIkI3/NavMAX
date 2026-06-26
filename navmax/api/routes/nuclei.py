@@ -1,11 +1,16 @@
-"""Routes API pour le scan de vulnérabilités avec nuclei."""
+"""Routes API pour le scan de vulnérabilités avec nuclei.
+
+Les endpoints sont montés sous ``/api/v1/nuclei`` dans app.py.
+"""
+
+from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from navmax.scanner.nuclei_scanner import (
-    NucleiScanner,
     NucleiNotFoundError,
+    NucleiScanner,
     NucleiTimeoutError,
 )
 
@@ -14,23 +19,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-@router.post("/nuclei", tags=["Nuclei"])
+@router.post("/scan", tags=["Nuclei"])
 async def scan_nuclei(
-    target: str = Query(..., description="Cible à scanner (URL, IP, domaine)"),
-    templates: str | None = Query(
-        None,
-        description="Templates nuclei (séparés par des virgules). Ex: 'cves/,exposed-panels/' ou None pour tout",
-    ),
-    severity: str | None = Query(
-        None,
-        description="Filtrer par sévérité (séparés par des virgules). Ex: 'critical,high'",
-    ),
-    timeout: int = Query(
-        300,
-        ge=30,
-        le=3600,
-        description="Timeout max en secondes (30-3600, défaut: 300)",
-    ),
+    target: Annotated[str, Query(description="Cible à scanner (URL, IP, domaine)")],
+    templates: Annotated[str | None, Query(description="Templates nuclei (séparés par des virgules). Ex: 'cves/,exposed-panels/' ou None pour tout")] = None,
+    severity: Annotated[str | None, Query(description="Filtrer par sévérité (séparés par des virgules). Ex: 'critical,high'")] = None,
+    timeout: Annotated[int, Query(ge=30, le=3600, description="Timeout max en secondes (30-3600, défaut: 300)")] = 300,
 ) -> dict:
     """Lance un scan nuclei sur une cible et retourne les vulnérabilités détectées.
 
@@ -45,6 +39,7 @@ async def scan_nuclei(
 
     Returns:
         Dict avec les findings et métadonnées du scan.
+
     """
     scanner = NucleiScanner()
 
@@ -94,13 +89,13 @@ async def scan_nuclei(
             detail={"error": "nuclei_timeout", "message": str(e)},
         )
     except NucleiNotFoundError as e:
-        logger.error("nuclei_non_trouvé", erreur=str(e))
+        logger.exception("nuclei_non_trouvé", erreur=str(e))
         raise HTTPException(
             status_code=503,
             detail={"error": "nuclei_not_found", "message": str(e)},
         )
-    except Exception as e:  # noqa: BLE001 — erreurs d'exécution nuclei imprévisibles
-        logger.error("nuclei_scan_erreur", target=target, erreur=str(e))
+    except Exception as e:
+        logger.exception("nuclei_scan_erreur", target=target, erreur=str(e))
         raise HTTPException(
             status_code=500,
             detail={"error": "nuclei_scan_failed", "message": str(e)},
@@ -131,12 +126,13 @@ async def scan_nuclei(
     }
 
 
-@router.post("/nuclei/install-templates", tags=["Nuclei"])
-async def install_nuclei_templates() -> dict:
-    """Télécharge/met à jour les templates nuclei officiels.
+@router.post("/update-templates", tags=["Nuclei"])
+async def update_nuclei_templates() -> dict:
+    """Met à jour les templates nuclei officiels.
 
-    Synchronise la dernière version des templates communautaires
-    (10 000+ templates de vulnérabilités).
+    Télécharge la dernière version des templates communautaires
+    (10 000+ templates de vulnérabilités) en exécutant
+    ``nuclei -update-templates``.
     """
     installed = await NucleiScanner().check_installed()
     if not installed:
@@ -149,15 +145,15 @@ async def install_nuclei_templates() -> dict:
         )
 
     try:
-        await NucleiScanner.install_templates()
+        await NucleiScanner.update_templates()
     except OSError as exc:
-        logger.error("nuclei_install_templates_erreur_os", erreur=str(exc))
+        logger.exception("nuclei_install_templates_erreur_os", erreur=str(exc))
         raise HTTPException(
             status_code=500,
             detail={"error": "template_install_failed", "message": str(exc)},
         ) from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs réseau/git imprévisibles
-        logger.error("nuclei_install_templates_erreur", erreur=str(exc))
+    except Exception as exc:
+        logger.exception("nuclei_install_templates_erreur", erreur=str(exc))
         raise HTTPException(
             status_code=500,
             detail={"error": "template_install_failed", "message": str(exc)},
@@ -167,9 +163,14 @@ async def install_nuclei_templates() -> dict:
     return {"status": "ok", "message": "Templates nuclei mis à jour avec succès."}
 
 
-@router.get("/nuclei/status", tags=["Nuclei"])
+@router.get("/status", tags=["Nuclei"])
 async def nuclei_status() -> dict:
-    """Vérifie si nuclei est installé et disponible."""
+    """Vérifie si nuclei est installé et les templates disponibles."""
     scanner = NucleiScanner()
     installed = await scanner.check_installed()
-    return {"installed": installed, "binary_path": scanner._binary if installed else None}
+    templates = await scanner.check_templates() if installed else False
+    return {
+        "installed": installed,
+        "templates_available": templates,
+        "binary_path": scanner._binary if installed else None,
+    }

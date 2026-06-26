@@ -6,17 +6,21 @@ Détecte RAM, GPU, CPU pour auto-configurer les tiers de modèles disponibles.
 import os
 import platform
 import subprocess
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
 class HardwareProfile:
     """Profil hardware de la machine."""
+
     os_name: str
     ram_total_gb: float
-    gpu_name: Optional[str] = None
-    gpu_vram_gb: Optional[float] = None
+    gpu_name: str | None = None
+    gpu_vram_gb: float | None = None
     cpu_cores: int = 4
     cpu_name: str = ""
 
@@ -33,18 +37,16 @@ class HardwareProfile:
     @property
     def can_run_heavy(self) -> bool:
         """Un modèle Heavy (70B+) peut tourner ?"""
-        return self.ram_total_gb >= 32 and (
-            self.gpu_vram_gb is not None and self.gpu_vram_gb >= 16
-        )
+        return self.ram_total_gb >= 32 and (self.gpu_vram_gb is not None and self.gpu_vram_gb >= 16)
 
     @property
-    def max_local_tier(self) -> Optional[str]:
+    def max_local_tier(self) -> str | None:
         """Tier maximum que cette machine peut faire tourner en local."""
         if self.can_run_heavy:
             return "heavy"
-        elif self.can_run_medium:
+        if self.can_run_medium:
             return "medium"
-        elif self.can_run_light:
+        if self.can_run_light:
             return "light"
         return None
 
@@ -80,6 +82,7 @@ def _detect_ram(system: str) -> float:
     if system == "Windows":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
 
             class MEMORYSTATUSEX(ctypes.Structure):
@@ -98,8 +101,9 @@ def _detect_ram(system: str) -> float:
             mem = MEMORYSTATUSEX()
             mem.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
             kernel32.GlobalMemoryStatusEx(ctypes.byref(mem))
-            return round(mem.ullTotalPhys / (1024 ** 3), 1)
-        except Exception:
+            return round(mem.ullTotalPhys / (1024**3), 1)
+        except Exception as _e:
+            logger.warning("windows_ram_detection_failed", error=str(_e))
             return 8.0  # fallback
 
     elif system == "Linux":
@@ -108,31 +112,34 @@ def _detect_ram(system: str) -> float:
                 for line in f:
                     if "MemTotal" in line:
                         kb = int(line.split()[1])
-                        return round(kb / (1024 ** 2), 1)
-        except Exception:
-            pass
+                        return round(kb / (1024**2), 1)
+        except (FileNotFoundError, ValueError, OSError) as _e:
+            logger.warning("cannot_read_meminfo", error=str(_e))
 
     elif system == "Darwin":
         try:
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
-                capture_output=True, text=True, timeout=5
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
-            return round(int(result.stdout.strip()) / (1024 ** 3), 1)
-        except Exception:
-            pass
+            return round(int(result.stdout.strip()) / (1024**3), 1)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, ValueError) as _e:
+            logger.warning("sysctl_memsize_failed", error=str(_e))
 
     return 8.0  # fallback
 
 
-def _detect_gpu(system: str) -> tuple[Optional[str], Optional[float]]:
+def _detect_gpu(system: str) -> tuple[str | None, float | None]:
     """Détecte GPU name + VRAM. Retourne (name, vram_gb)."""
     # NVIDIA (Windows + Linux)
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total",
-             "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=10
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             parts = result.stdout.strip().split(",")
@@ -141,8 +148,8 @@ def _detect_gpu(system: str) -> tuple[Optional[str], Optional[float]]:
                 vram_str = parts[1].strip().replace(" MiB", "")
                 vram_gb = round(int(vram_str) / 1024, 1)
                 return name, vram_gb
-    except Exception:
-        pass
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as _e:
+        logger.debug("nvidia_smi_not_available", error=str(_e))
 
     # Apple Silicon (mémoire unifiée = RAM)
     if system == "Darwin" and platform.processor() == "arm":

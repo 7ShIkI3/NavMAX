@@ -1,21 +1,18 @@
-"""
-Routes API pour le module OSINT (Maltego-like).
-"""
+"""Routes API pour le module OSINT (Maltego-like)."""
 
-from typing import Any
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
+from navmax.core.logging import get_logger
 from navmax.osint import (
     DnsCollector,
-    WhoisCollector,
+    OsintOrchestrator,
     SslCollector,
     WebCollector,
-    OsintOrchestrator,
-    EntityType,
+    WhoisCollector,
 )
-from navmax.core.logging import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -33,7 +30,7 @@ class InvestigateRequest(BaseModel):
 @router.get("/dns/{domain}")
 async def dns_lookup(
     domain: str,
-    types: str | None = Query(None, description="A,AAAA,MX,NS,TXT,CNAME,SOA (séparés par virgule)"),
+    types: Annotated[str | None, Query(description="A,AAAA,MX,NS,TXT,CNAME,SOA (séparés par virgule)")] = None,
 ) -> dict:
     """Résolution DNS d'un domaine."""
     record_types = types.split(",") if types else None
@@ -41,7 +38,9 @@ async def dns_lookup(
     return {
         "domain": domain,
         "count": len(records),
-        "records": [{"type": r.type, "name": r.name, "value": r.value, "ttl": r.ttl} for r in records],
+        "records": [
+            {"type": r.type, "name": r.name, "value": r.value, "ttl": r.ttl} for r in records
+        ],
     }
 
 
@@ -66,7 +65,7 @@ async def whois_lookup(domain: str) -> dict:
 
 
 @router.get("/ssl/{host}")
-async def ssl_lookup(host: str, port: int = Query(443)) -> dict:
+async def ssl_lookup(host: str, port: Annotated[int, Query()] = 443) -> dict:
     """Certificat SSL d'un hôte."""
     info = await SslCollector.get_cert(host, port)
     if info is None:
@@ -91,6 +90,7 @@ async def web_analyze(url: str) -> dict:
     """Analyse d'une page web."""
     # FastAPI décode l'URL → reconstruire
     from urllib.parse import unquote
+
     url = unquote(str(url))
 
     collector = WebCollector()
@@ -118,11 +118,15 @@ async def web_analyze(url: str) -> dict:
 @router.post("/investigate")
 async def investigate(req: InvestigateRequest) -> dict:
     """Investigation OSINT complète (orchestrateur)."""
-    logger.info("osint_investigation_lancée", target=req.target, type=req.target_type, depth=req.max_depth)
+    logger.info(
+        "osint_investigation_lancée", target=req.target, type=req.target_type, depth=req.max_depth,
+    )
     orch = OsintOrchestrator(max_depth=req.max_depth)
     result = await orch.investigate(req.target, req.target_type)
 
-    logger.info("osint_investigation_terminée", target=req.target, nodes=result.get("node_count", 0))
+    logger.info(
+        "osint_investigation_terminée", target=req.target, nodes=result.get("node_count", 0),
+    )
     graph_data = orch.export("cytoscape")
     return {
         "target": result["target"],
@@ -141,6 +145,7 @@ async def investigate(req: InvestigateRequest) -> dict:
 async def list_transforms() -> dict:
     """Liste les transforms OSINT disponibles."""
     from navmax.osint.graph import ALL_TRANSFORMS
+
     return {
         "transforms": [
             {
@@ -149,5 +154,5 @@ async def list_transforms() -> dict:
                 "description": t.description,
             }
             for t in ALL_TRANSFORMS.values()
-        ]
+        ],
     }

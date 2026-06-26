@@ -7,11 +7,9 @@ Scanners implémentés :
 """
 
 import asyncio
-import json
 import re
 import socket
 from dataclasses import dataclass, field
-from typing import Any
 
 import httpx
 import structlog
@@ -22,7 +20,7 @@ logger = structlog.get_logger(__name__)
 # AWS Region validation
 # ---------------------------------------------------------------------------
 
-AWS_REGION_PATTERN = re.compile(r'^[a-z]{2}-[a-z]+-[0-9]+$')
+AWS_REGION_PATTERN = re.compile(r"^[a-z]{2}-[a-z]+-[0-9]+$")
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -64,12 +62,7 @@ class CloudReconResult:
 
     def all_resources(self) -> list[str]:
         """Toutes les ressources découvertes."""
-        return (
-            self.s3_buckets
-            + self.cloudfront_domains
-            + self.azure_resources
-            + self.gcp_resources
-        )
+        return self.s3_buckets + self.cloudfront_domains + self.azure_resources + self.gcp_resources
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +134,7 @@ async def _check_s3_bucket(
                     severity="info",
                     evidence=f"HTTP {status} sur {base_url}",
                     remediation="Aucune — le bucket est correctement restreint.",
-                )
+                ),
             )
             return findings
 
@@ -155,7 +148,7 @@ async def _check_s3_bucket(
                     severity="high",
                     evidence=f"HTTP {status} sur {base_url}",
                     remediation="Restreindre la politique du bucket pour interdire les lectures anonymes.",
-                )
+                ),
             )
 
         # --- Vérification : en-têtes ---
@@ -170,7 +163,7 @@ async def _check_s3_bucket(
                     severity="medium",
                     evidence="Pas d'en-tête x-amz-version-id dans la réponse HEAD",
                     remediation="Activer le versioning sur le bucket S3.",
-                )
+                ),
             )
 
         # --- Vérification : permissions d'écriture ---
@@ -191,7 +184,7 @@ async def _check_s3_bucket(
                         severity="critical",
                         evidence=f"HEAD avec x-amz-acl a retourné HTTP {write_check.status_code}",
                         remediation="Vérifier manuellement la politique du bucket.",
-                    )
+                    ),
                 )
         except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError):
             pass  # graceful degradation
@@ -236,6 +229,7 @@ async def analyze_iam_policy(policy_json: dict) -> list[IAMRisk]:
 
     Returns:
         Liste de IAMRisk détectés
+
     """
     risks: list[IAMRisk] = []
 
@@ -267,7 +261,7 @@ async def analyze_iam_policy(policy_json: dict) -> list[IAMRisk]:
                             description=f"Action wildcard (*) trouvée dans le statement {idx}. "
                             "Cela permet toutes les actions sur le(s) service(s) ciblé(s).",
                             policy_statement_index=idx,
-                        )
+                        ),
                     )
 
             for resource in resources:
@@ -279,16 +273,12 @@ async def analyze_iam_policy(policy_json: dict) -> list[IAMRisk]:
                             description=f"Resource wildcard (*) trouvée dans le statement {idx}. "
                             "Cela donne accès à toutes les ressources du service.",
                             policy_statement_index=idx,
-                        )
+                        ),
                     )
 
             # Politique admin : wildcard action + wildcard resource
-            has_wildcard_action = any(
-                _check_wildcard_action(a) for a in actions
-            )
-            has_wildcard_resource = any(
-                _check_wildcard_resource(r) for r in resources
-            )
+            has_wildcard_action = any(_check_wildcard_action(a) for a in actions)
+            has_wildcard_resource = any(_check_wildcard_resource(r) for r in resources)
             if has_wildcard_action and has_wildcard_resource:
                 risks.append(
                     IAMRisk(
@@ -297,7 +287,7 @@ async def analyze_iam_policy(policy_json: dict) -> list[IAMRisk]:
                         description=f"Politique administrateur détectée dans le statement {idx}. "
                         "Action wildcard + Resource wildcard = accès illimité à tous les services.",
                         policy_statement_index=idx,
-                    )
+                    ),
                 )
 
             # Condition absente ou faible sur des actions sensibles
@@ -325,7 +315,7 @@ async def analyze_iam_policy(policy_json: dict) -> list[IAMRisk]:
                                     "Ajouter une condition (ex: aws:SourceIp, aws:MultiFactorAuthPresent) "
                                     "pour restreindre l'accès.",
                                     policy_statement_index=idx,
-                                )
+                                ),
                             )
                         break
 
@@ -457,6 +447,7 @@ async def discover_cloud_resources(
 
     Returns:
         CloudReconResult contenant les ressources découvertes
+
     """
     if region and not AWS_REGION_PATTERN.match(region):
         logger.warning("aws_region_invalide", region=region)
@@ -478,9 +469,26 @@ async def discover_cloud_resources(
             tasks.append(_check_subdomain(domain, prefix, client, timeout))
 
         domain_prefixes = [
-            "www", "api", "cdn", "static", "assets", "media", "files",
-            "uploads", "storage", "bucket", "s3", "blob", "cloud",
-            "mail", "webmail", "admin", "portal", "app", "dev", "staging",
+            "www",
+            "api",
+            "cdn",
+            "static",
+            "assets",
+            "media",
+            "files",
+            "uploads",
+            "storage",
+            "bucket",
+            "s3",
+            "blob",
+            "cloud",
+            "mail",
+            "webmail",
+            "admin",
+            "portal",
+            "app",
+            "dev",
+            "staging",
         ]
 
         for prefix in domain_prefixes:
@@ -495,9 +503,13 @@ async def discover_cloud_resources(
                     result.s3_buckets.append(url)
                 elif "cloudfront" in url.lower():
                     result.cloudfront_domains.append(url)
-                elif "blob" in url.lower() or "azure" in url.lower() or "windows.net" in url.lower():
+                elif (
+                    "blob" in url.lower() or "azure" in url.lower() or "windows.net" in url.lower()
+                ):
                     result.azure_resources.append(url)
-                elif "google" in url.lower() or "appspot" in url.lower() or "firebase" in url.lower():
+                elif (
+                    "google" in url.lower() or "appspot" in url.lower() or "firebase" in url.lower()
+                ):
                     result.gcp_resources.append(url)
                 else:
                     # Tentative de classification par pattern DNS
@@ -514,9 +526,18 @@ async def discover_cloud_resources(
                         result.s3_buckets.append(cname)
                     elif "cloudfront" in cname_lower:
                         result.cloudfront_domains.append(cname)
-                    elif "blob" in cname_lower or "azure" in cname_lower or "windows.net" in cname_lower:
+                    elif (
+                        "blob" in cname_lower
+                        or "azure" in cname_lower
+                        or "windows.net" in cname_lower
+                    ):
                         result.azure_resources.append(cname)
-                    elif "google" in cname_lower or "appspot" in cname_lower or "firebase" in cname_lower or "storage.googleapis" in cname_lower:
+                    elif (
+                        "google" in cname_lower
+                        or "appspot" in cname_lower
+                        or "firebase" in cname_lower
+                        or "storage.googleapis" in cname_lower
+                    ):
                         result.gcp_resources.append(cname)
                     elif re.match(r"^\d+\.\d+\.\d+\.\d+", cname):
                         result.ips_found.append(cname)
@@ -558,13 +579,12 @@ async def scan_s3_buckets(
 
     Returns:
         Liste de CloudFinding (vide si tous les buckets sont sécurisés)
+
     """
     all_findings: list[CloudFinding] = []
 
     async with httpx.AsyncClient(verify=False, timeout=timeout) as client:
-        tasks = [
-            _check_s3_bucket(client, name, timeout) for name in bucket_names
-        ]
+        tasks = [_check_s3_bucket(client, name, timeout) for name in bucket_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
@@ -577,22 +597,59 @@ async def scan_s3_buckets(
 
 
 # ---------------------------------------------------------------------------
-# CloudScanner — classe unifiée
+# BaseCloudScanner — abstract base
+# ---------------------------------------------------------------------------
+
+from abc import ABC, abstractmethod
+
+
+class BaseCloudScanner(ABC):
+    """Classe de base abstraite pour les scanners cloud.
+
+    Définit le contrat (Base → Connector → Analyzer) que tous les
+    scanners cloud doivent respecter.
+
+    Connectors : scan_s3_buckets (S3), discover_cloud_resources (DNS)
+    Analyzer   : analyze_iam_policy (IAM)
+    """
+
+    @abstractmethod
+    async def scan_s3_buckets(self, bucket_names: list[str]) -> list[CloudFinding]:
+        """Scanne des buckets S3 — rôle Connector."""
+        ...
+
+    @abstractmethod
+    async def analyze_iam_policy(self, policy_json: dict) -> list[IAMRisk]:
+        """Analyse une politique IAM — rôle Analyzer."""
+        ...
+
+    @abstractmethod
+    async def discover_cloud_resources(self, domain: str) -> CloudReconResult:
+        """Découvre les ressources cloud — rôle Connector."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# CloudScanner — implémentation concrète unifiée
 # ---------------------------------------------------------------------------
 
 
-class CloudScanner:
+class CloudScanner(BaseCloudScanner):
     """Scanner cloud unifié avec graceful degradation.
 
     Utilise HTTP + DNS uniquement — pas de dépendances SDK lourdes.
     Chaque méthode retourne ses résultats même en cas d'erreur partielle.
+
+    Pattern : BaseCloudScanner (abstraction)
+              → scan_s3_buckets / discover_cloud_resources (Connectors)
+              → analyze_iam_policy (Analyzer)
     """
 
     def __init__(
         self,
         timeout: float = 10.0,
         resolve_dns: bool = True,
-    ):
+    ) -> None:
         self.timeout = timeout
         self.resolve_dns = resolve_dns
 

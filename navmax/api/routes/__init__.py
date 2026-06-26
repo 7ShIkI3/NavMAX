@@ -1,7 +1,5 @@
-"""
-Routes API NavMAX.
-"""
+"""Routes API NavMAX."""
 
-from . import targets, scans, proxy, exploit, osint, ai, ad, firewall, nuclei
+from . import ad, ai, exploit, firewall, nuclei, osint, proxy, scans, targets
 
-__all__ = ["targets", "scans", "proxy", "exploit", "osint", "ai", "ad", "firewall", "nuclei"]
+__all__ = ["ad", "ai", "exploit", "firewall", "nuclei", "osint", "proxy", "scans", "targets"]

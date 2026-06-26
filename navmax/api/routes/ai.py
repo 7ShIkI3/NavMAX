@@ -1,5 +1,4 @@
-"""
-Routes API pour le module IA.
+"""Routes API pour le module IA.
 
 Endpoints:
     GET  /api/v1/ai/status   — état du moteur IA (providers, hardware, modèles)
@@ -10,7 +9,6 @@ Endpoints:
 """
 
 import json
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -26,15 +24,16 @@ logger = get_logger(__name__)
 
 # ── Schemas ──────────────────────────────────────────────────────
 
+
 class GenerateRequest(BaseModel):
     prompt: str
     tier: str = Field(default="medium", description="light | medium | heavy")
-    system: Optional[str] = None
+    system: str | None = None
     max_tokens: int = Field(default=2048, le=8192)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     json_mode: bool = False
-    provider: Optional[str] = None   # ollama | openai | anthropic | deepseek
-    model: Optional[str] = None      # forcer un modèle spécifique
+    provider: str | None = None  # ollama | openai | anthropic | deepseek
+    model: str | None = None  # forcer un modèle spécifique
 
 
 class GenerateResponse(BaseModel):
@@ -48,6 +47,7 @@ class GenerateResponse(BaseModel):
 
 
 # ── Routes ───────────────────────────────────────────────────────
+
 
 @router.get("/status")
 async def ai_status():
@@ -105,7 +105,7 @@ async def ai_generate(req: GenerateRequest):
             finish_reason=result.finish_reason,
         )
     except RuntimeError as e:
-        logger.error("ai_génération_échouée", erreur=str(e), tier=tier.value)
+        logger.exception("ai_génération_échouée", erreur=str(e), tier=tier.value)
         raise HTTPException(503, str(e))
 
 
@@ -161,21 +161,25 @@ async def list_models():
     models = []
     if engine._selector:
         for result in engine._selector._available.values():
-            models.append({
-                "name": result.model,
-                "provider": result.provider.value,
-                "tier": result.tier.value,
-                "uncensored": result.is_uncensored,
-                "local": result.is_local,
-                "reason": result.reason,
-            })
+            models.append(
+                {
+                    "name": result.model,
+                    "provider": result.provider.value,
+                    "tier": result.tier.value,
+                    "uncensored": result.is_uncensored,
+                    "local": result.is_local,
+                    "reason": result.reason,
+                },
+            )
 
     # Trier: local d'abord, puis uncensored, puis par tier
-    models.sort(key=lambda m: (
-        0 if m["local"] else 1,
-        0 if m["uncensored"] else 1,
-        {"light": 0, "medium": 1, "heavy": 2}[m["tier"]],
-    ))
+    models.sort(
+        key=lambda m: (
+            0 if m["local"] else 1,
+            0 if m["uncensored"] else 1,
+            {"light": 0, "medium": 1, "heavy": 2}[m["tier"]],
+        ),
+    )
 
     return {"models": models}
 

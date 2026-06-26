@@ -1,25 +1,21 @@
-"""
-Moteur de scan — orchestre les scans, persiste les résultats en base.
-"""
+"""Moteur de scan — orchestre les scans, persiste les résultats en base."""
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from navmax.core.config import config
 from navmax.core.logging import get_logger
-from navmax.db import async_session, Scan, Service, Target
+from navmax.db import Scan, Service, Target, async_session
 
-from .tcp import tcp_connect_scan, PortResult
 from .fingerprint import detect_os, detect_service
+from .tcp import PortResult, tcp_connect_scan
 
 logger = get_logger(__name__)
 
 
 def parse_ports(ports_str: str) -> list[int]:
-    """
-    Parse une chaîne de ports style Nmap : "22,80,443" ou "1-1000,3306".
-    """
+    """Parse une chaîne de ports style Nmap : "22,80,443" ou "1-1000,3306"."""
     ports: list[int] = []
     for part in ports_str.split(","):
         part = part.strip()
@@ -33,16 +29,15 @@ def parse_ports(ports_str: str) -> list[int]:
 
 
 async def run_scan(scan_id: str) -> None:
-    """
-    Exécute un scan complet :
+    """Exécute un scan complet :
     1. TCP Connect Scan
     2. Détection de services sur les ports ouverts
     3. Fingerprinting OS
-    4. Persistance en base
+    4. Persistance en base.
 
     Cette fonction est conçue pour tourner en arrière-plan (via asyncio.create_task).
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     async with async_session() as db:
         scan = await db.get(Scan, scan_id)
@@ -88,17 +83,19 @@ async def run_scan(scan_id: str) -> None:
                     port=port_result.port,
                     protocol=port_result.protocol,
                 )
-                db.add(Service(
-                    target_id=scan.target_id,
-                    scan_id=scan.id,
-                    port=port_result.port,
-                    protocol=port_result.protocol,
-                    state=port_result.state,
-                    service_name=service_info.get("service") or port_result.service,
-                    banner=service_info.get("banner") or port_result.banner,
-                    version=service_info.get("version") or port_result.version,
-                    extra_data=json.dumps(service_info.get("details", {})),
-                ))
+                db.add(
+                    Service(
+                        target_id=scan.target_id,
+                        scan_id=scan.id,
+                        port=port_result.port,
+                        protocol=port_result.protocol,
+                        state=port_result.state,
+                        service_name=service_info.get("service") or port_result.service,
+                        banner=service_info.get("banner") or port_result.banner,
+                        version=service_info.get("version") or port_result.version,
+                        extra_data=json.dumps(service_info.get("details", {})),
+                    ),
+                )
 
             scan.progress = 85.0
             await db.commit()
@@ -121,38 +118,41 @@ async def run_scan(scan_id: str) -> None:
                 summary_parts.append(f"Ports ouverts : {ports_str}")
 
             scan.result_summary = " | ".join(summary_parts)
-            scan.raw_result = json.dumps({
-                "ports": [(r.port, r.state, r.service, r.banner) for r in results],
-                "os": os_info,
-            }, ensure_ascii=False)
+            scan.raw_result = json.dumps(
+                {
+                    "ports": [(r.port, r.state, r.service, r.banner) for r in results],
+                    "os": os_info,
+                },
+                ensure_ascii=False,
+            )
 
             scan.status = "completed"
             scan.progress = 100.0
-            scan.finished_at = datetime.now(timezone.utc)
+            scan.finished_at = datetime.now(UTC)
 
             target.alive = True
-            target.updated_at = datetime.now(timezone.utc)
+            target.updated_at = datetime.now(UTC)
 
             await db.commit()
             logger.info("scan_terminé", scan_id=scan_id, open=len(open_results))
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("scan_timeout", scan_id=scan_id)
             scan.status = "failed"
             scan.error_message = "Timeout dépassé"
-            scan.finished_at = datetime.now(timezone.utc)
+            scan.finished_at = datetime.now(UTC)
             await db.commit()
         except (ConnectionRefusedError, ConnectionResetError, OSError) as e:
             logger.warning("scan_erreur_réseau", scan_id=scan_id, error=str(e))
             scan.status = "failed"
             scan.error_message = f"Erreur réseau : {e}"
-            scan.finished_at = datetime.now(timezone.utc)
+            scan.finished_at = datetime.now(UTC)
             await db.commit()
         except Exception as e:
             logger.exception("scan_erreur_inattendue", scan_id=scan_id)
             scan.status = "failed"
             scan.error_message = str(e)
-            scan.finished_at = datetime.now(timezone.utc)
+            scan.finished_at = datetime.now(UTC)
             await db.commit()
 
 
@@ -164,9 +164,7 @@ def _on_scan_task_done(task: asyncio.Task, scan_id: str) -> None:
 
 
 async def run_scan_background(scan_id: str) -> None:
-    """
-    Lance un scan en arrière-plan dans la boucle d'événements.
-    """
+    """Lance un scan en arrière-plan dans la boucle d'événements."""
     task = asyncio.create_task(run_scan(scan_id))
     task.add_done_callback(lambda t: _on_scan_task_done(t, scan_id))
     logger.info("scan_arrière_plan", scan_id=scan_id)

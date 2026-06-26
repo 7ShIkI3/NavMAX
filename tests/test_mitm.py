@@ -1,4 +1,5 @@
 import pytest
+
 pytestmark = pytest.mark.skip(reason="mitmproxy tests require network — skipped in dev")
 """
 Tests pour navmax/proxy/mitm.py — NavMITMProxy basé sur mitmproxy.
@@ -9,17 +10,16 @@ même quand mitmproxy n'est pas installé.
 
 import json
 import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from navmax.proxy.mitm import (
+    MITMPROXY_AVAILABLE,
     CapturedFlow,
     NavMITMProxy,
-    MITMPROXY_AVAILABLE,
 )
-
 
 # ===========================================================================
 # Tests unitaires CapturedFlow
@@ -141,7 +141,7 @@ class TestNavMITMProxy:
 
             # Vérifier que le master a été créé avec les bonnes options
             MockMaster.assert_called_once()
-            call_kwargs = MockMaster.call_args[0][0]
+            MockMaster.call_args[0][0]
 
             # Vérifier ssl_insecure dans les options (False par défaut = sécurisé)
             MockOptions.assert_called_once_with(
@@ -212,11 +212,11 @@ class TestNavMITMProxy:
         """get_flows() filtre par timestamp si since est fourni."""
         proxy = NavMITMProxy()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_flow = CapturedFlow(
             method="GET",
             url="https://example.com/old",
-            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, tzinfo=UTC),
         )
         new_flow = CapturedFlow(
             method="GET",
@@ -228,7 +228,7 @@ class TestNavMITMProxy:
         mock_addon._flows = [old_flow, new_flow]
         proxy._addon = mock_addon
 
-        since = datetime(2024, 6, 1, tzinfo=timezone.utc)
+        since = datetime(2024, 6, 1, tzinfo=UTC)
         flows = await proxy.get_flows(since=since)
         assert len(flows) == 1
         assert flows[0].url == "https://example.com/new"
@@ -254,7 +254,7 @@ class TestNavMITMProxy:
                 response_headers={"Content-Type": "text/html"},
                 response_body=b"<html></html>",
                 duration_ms=50.0,
-            )
+            ),
         ]
         har_json = await proxy.export_har(flows)
         har = json.loads(har_json)
@@ -314,7 +314,7 @@ class TestNavMITMProxy:
 
         with (
             patch("navmax.proxy.mitm.MITMPROXY_AVAILABLE", True),
-            patch("navmax.proxy.mitm.http.Request.make") as MockRequest,
+            patch("navmax.proxy.mitm.http.Request.make"),
             patch("httpx.AsyncClient") as MockClient,
         ):
             mock_client_instance = AsyncMock()
@@ -388,8 +388,7 @@ class TestNavMITMAddon:
         if not MITMPROXY_AVAILABLE:
             pytest.skip("mitmproxy non installé")
 
-        import time
-        from mitmproxy import http, connection
+        from mitmproxy import connection, http
 
         now = time.time()
         client = connection.Client(
@@ -401,7 +400,9 @@ class TestNavMITMAddon:
 
         flow = http.HTTPFlow(client, server)
         flow.request = http.Request.make("GET", "https://example.com/test")
-        flow.response = http.Response.make(200, b'{"ok": true}', {"Content-Type": "application/json"})
+        flow.response = http.Response.make(
+            200, b'{"ok": true}', {"Content-Type": "application/json"},
+        )
         flow.request.timestamp_start = now
         flow.response.timestamp_end = now + 0.1
 

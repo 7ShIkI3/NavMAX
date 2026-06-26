@@ -1,5 +1,4 @@
-"""
-AuditLogger — traçabilité complète de toutes les actions NavMAX.
+"""AuditLogger — traçabilité complète de toutes les actions NavMAX.
 
 Chaque action (scan, exploit, collecte OSINT, appel IA, exécution de mission)
 est horodatée, journalisée en DB, et liée à une mission (workspace).
@@ -13,10 +12,12 @@ Usage:
 
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Optional, AsyncIterator
+
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 
@@ -28,14 +29,15 @@ class AuditContext:
     L'utilisateur peut enrichir le contexte avant la fin (ex: result_summary).
     La sauvegarde en DB est automatique à la sortie du context manager.
     """
+
     entry_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    mission_id: Optional[str] = None
-    phase_id: Optional[str] = None
+    mission_id: str | None = None
+    phase_id: str | None = None
     action: str = ""
     module: str = ""
-    target: Optional[str] = None
-    parameters: Optional[dict] = None
-    result_summary: Optional[dict] = None
+    target: str | None = None
+    parameters: dict | None = None
+    result_summary: dict | None = None
     _start_time: float = field(default_factory=time.monotonic)
 
 
@@ -45,19 +47,24 @@ class AuditLogger:
     Garantit que chaque action est tracée, même en cas d'erreur.
     """
 
-    def __init__(self, session):
-        """
-        Args:
-            session: SQLAlchemy AsyncSession
+    def __init__(self, session: AsyncSession) -> None:
+        """Args:
+        session: SQLAlchemy AsyncSession.
+
         """
         self.session = session
 
     @asynccontextmanager
-    async def track(self, action: str, module: str, *,
-                    mission_id: Optional[str] = None,
-                    phase_id: Optional[str] = None,
-                    target: Optional[str] = None,
-                    parameters: Optional[dict] = None) -> AsyncIterator[AuditContext]:
+    async def track(
+        self,
+        action: str,
+        module: str,
+        *,
+        mission_id: str | None = None,
+        phase_id: str | None = None,
+        target: str | None = None,
+        parameters: dict | None = None,
+    ) -> AsyncIterator[AuditContext]:
         """Context manager qui trace une action du début à la fin.
 
         Usage:
@@ -76,35 +83,45 @@ class AuditLogger:
             target=target,
             parameters=parameters,
         )
-        logger.info("audit_started",
-                     entry_id=ctx.entry_id, action=action, module=module,
-                     target=target)
+        logger.info(
+            "audit_started", entry_id=ctx.entry_id, action=action, module=module, target=target,
+        )
 
         try:
             yield ctx
             await self._save(ctx, status="completed")
-            logger.info("audit_completed",
-                         entry_id=ctx.entry_id,
-                         duration_ms=int((time.monotonic() - ctx._start_time) * 1000))
+            logger.info(
+                "audit_completed",
+                entry_id=ctx.entry_id,
+                duration_ms=int((time.monotonic() - ctx._start_time) * 1000),
+            )
         except Exception as e:
             await self._save(ctx, status="failed", error=str(e))
-            logger.error("audit_failed",
-                          entry_id=ctx.entry_id,
-                          error=str(e),
-                          duration_ms=int((time.monotonic() - ctx._start_time) * 1000))
+            logger.exception(
+                "audit_failed",
+                entry_id=ctx.entry_id,
+                error=str(e),
+                duration_ms=int((time.monotonic() - ctx._start_time) * 1000),
+            )
             raise
 
-    async def log(self, action: str, module: str, *,
-                  mission_id: Optional[str] = None,
-                  phase_id: Optional[str] = None,
-                  target: Optional[str] = None,
-                  parameters: Optional[dict] = None,
-                  result_summary: Optional[dict] = None,
-                  status: str = "completed") -> str:
+    async def log(
+        self,
+        action: str,
+        module: str,
+        *,
+        mission_id: str | None = None,
+        phase_id: str | None = None,
+        target: str | None = None,
+        parameters: dict | None = None,
+        result_summary: dict | None = None,
+        status: str = "completed",
+    ) -> str:
         """Log une action ponctuelle (sans context manager).
 
         Returns:
             L'ID de l'entrée d'audit créée.
+
         """
         from navmax.db.models import AuditEntry
 
@@ -122,8 +139,7 @@ class AuditLogger:
         await self.session.commit()
         return entry.id
 
-    async def _save(self, ctx: AuditContext, status: str,
-                    error: Optional[str] = None) -> None:
+    async def _save(self, ctx: AuditContext, status: str, error: str | None = None) -> None:
         """Sauvegarde l'entrée d'audit en DB."""
         from navmax.db.models import AuditEntry
 
@@ -143,10 +159,13 @@ class AuditLogger:
         self.session.add(entry)
         await self.session.commit()
 
-    async def get_entries(self, mission_id: Optional[str] = None,
-                          action: Optional[str] = None,
-                          status: Optional[str] = None,
-                          limit: int = 50) -> list[dict]:
+    async def get_entries(
+        self,
+        mission_id: str | None = None,
+        action: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
         """Récupère les entrées d'audit avec filtres optionnels.
 
         Args:
@@ -157,8 +176,10 @@ class AuditLogger:
 
         Returns:
             Liste de dicts avec les champs d'audit
+
         """
         from sqlalchemy import select
+
         from navmax.db.models import AuditEntry
 
         stmt = select(AuditEntry).order_by(AuditEntry.created_at.desc())

@@ -1,5 +1,4 @@
-"""
-Moteur de graphe basé sur NetworkX.
+"""Moteur de graphe basé sur NetworkX.
 
 Stocke et interroge les entités et relations découvertes par les collecteurs OSINT.
 """
@@ -9,15 +8,15 @@ from typing import Any
 
 import networkx as nx
 
-from .entities import Entity, Relation, EntityType, RelationType
 from navmax.core.logging import get_logger
+
+from .entities import Entity, EntityType, Relation, RelationType
 
 logger = get_logger(__name__)
 
 
 class GraphEngine:
-    """
-    Moteur de graphe NavMAX.
+    """Moteur de graphe NavMAX.
     Chaque nœud est une Entity, chaque arête est une Relation.
     """
 
@@ -76,13 +75,21 @@ class GraphEngine:
     # ------------------------------------------------------------------
     # CRUD Relations
     # ------------------------------------------------------------------
-    def add_relation(self, src: Entity, tgt: Entity, rel_type: RelationType, confidence: float = 1.0, **props: Any) -> None:
+    def add_relation(
+        self,
+        src: Entity,
+        tgt: Entity,
+        rel_type: RelationType,
+        confidence: float = 1.0,
+        **props: Any,
+    ) -> None:
         """Ajoute une relation entre deux entités."""
         src_id = self.add_entity(src)
         tgt_id = self.add_entity(tgt)
 
         self._graph.add_edge(
-            src_id, tgt_id,
+            src_id,
+            tgt_id,
             key=rel_type.value,
             type=rel_type.value,
             confidence=confidence,
@@ -101,11 +108,11 @@ class GraphEngine:
         return self._graph.number_of_edges()
 
     def get_neighbors(self, entity_id: str, depth: int = 1) -> list[tuple[Entity, Relation]]:
-        """
-        Récupère les voisins d'une entité jusqu'à une profondeur donnée.
+        """Récupère les voisins d'une entité jusqu'à une profondeur donnée.
 
         Returns:
             Liste de (entity, relation) pour chaque voisin.
+
         """
         results: list[tuple[Entity, Relation]] = []
         visited: set[str] = {entity_id}
@@ -187,10 +194,7 @@ class GraphEngine:
             }
             for nid in nodes_set
         ]
-        edges = [
-            {"source": s, "target": t, "type": etype}
-            for s, t, etype in edges_set
-        ]
+        edges = [{"source": s, "target": t, "type": etype} for s, t, etype in edges_set]
 
         return {"nodes": nodes, "edges": edges}
 
@@ -229,26 +233,30 @@ class GraphEngine:
 
         for nid in self._graph.nodes:
             node = self._graph.nodes[nid]
-            elements.append({
-                "data": {
-                    "id": nid,
-                    "label": node.get("label", node.get("value", "")),
-                    "type": node.get("type", "unknown"),
-                    "value": node.get("value", ""),
+            elements.append(
+                {
+                    "data": {
+                        "id": nid,
+                        "label": node.get("label", node.get("value", "")),
+                        "type": node.get("type", "unknown"),
+                        "value": node.get("value", ""),
+                    },
+                    "classes": node.get("type", "unknown"),
                 },
-                "classes": node.get("type", "unknown"),
-            })
+            )
 
         for s, t, data in self._graph.edges(data=True):
-            elements.append({
-                "data": {
-                    "id": f"{s}_{t}_{data.get('type', '')}",
-                    "source": s,
-                    "target": t,
-                    "label": data.get("type", "related_to"),
-                    "confidence": data.get("confidence", 1.0),
+            elements.append(
+                {
+                    "data": {
+                        "id": f"{s}_{t}_{data.get('type', '')}",
+                        "source": s,
+                        "target": t,
+                        "label": data.get("type", "related_to"),
+                        "confidence": data.get("confidence", 1.0),
+                    },
                 },
-            })
+            )
 
         return {"elements": elements}
 

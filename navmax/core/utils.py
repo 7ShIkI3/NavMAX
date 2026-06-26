@@ -1,16 +1,14 @@
-"""
-Utilitaires partagés — fonctions helper utilisées dans plusieurs modules NavMAX.
-"""
+"""Utilitaires partagés — fonctions helper utilisées dans plusieurs modules NavMAX."""
 
 import asyncio
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 async def safe_close_writer(
-    writer: Optional[asyncio.StreamWriter],
+    writer: asyncio.StreamWriter | None,
     module: str = "unknown",
 ) -> None:
     """Ferme proprement un StreamWriter asyncio.
@@ -20,6 +18,7 @@ async def safe_close_writer(
     Args:
         writer: Le writer à fermer (peut être None).
         module: Nom du module appelant pour le logging.
+
     """
     if writer is None:
         return

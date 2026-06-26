@@ -1,5 +1,4 @@
-"""
-SemanticGraphSearch — interrogation du graphe NetworkX en langage naturel via l'IA.
+"""SemanticGraphSearch — interrogation du graphe NetworkX en langage naturel via l'IA.
 
 Transforme des questions comme "Montre-moi tous les sous-domaines qui hébergent
 un formulaire de connexion et qui sont liés à une IP en Russie" en opérations
@@ -8,8 +7,6 @@ sur le graphe.
 
 import json
 from dataclasses import dataclass, field
-from typing import Optional
-import structlog
 
 from navmax.core.logging import get_logger
 
@@ -55,15 +52,17 @@ Output ONLY valid JSON — no markdown, no explanations."""
 
 # ── Data Models ────────────────────────────────────────────────
 
+
 @dataclass
 class GraphQueryResult:
     """Résultat d'une requête sémantique sur le graphe."""
+
     question: str
     explanation: str
     entities: list[dict] = field(default_factory=list)
     relations: list[dict] = field(default_factory=list)
-    raw_plan: Optional[dict] = None
-    error: Optional[str] = None
+    raw_plan: dict | None = None
+    error: str | None = None
 
     @property
     def count(self) -> int:
@@ -71,6 +70,7 @@ class GraphQueryResult:
 
 
 # ── Semantic Graph Search ─────────────────────────────────────
+
 
 class SemanticGraphSearch:
     """Recherche sémantique sur le graphe OSINT.
@@ -84,7 +84,7 @@ class SemanticGraphSearch:
             print(entity["value"])
     """
 
-    def __init__(self, graph_engine, ai_engine):
+    def __init__(self, graph_engine, ai_engine) -> None:
         self.graph = graph_engine
         self.ai = ai_engine
 
@@ -96,6 +96,7 @@ class SemanticGraphSearch:
 
         Returns:
             GraphQueryResult avec entités et relations trouvées
+
         """
         # Étape 1: Traduire la question en opérations graphe
         try:
@@ -149,7 +150,7 @@ class SemanticGraphSearch:
                 elif text[i] == "}":
                     depth -= 1
                     if depth == 0:
-                        text = text[brace:i+1]
+                        text = text[brace : i + 1]
                         break
 
         return json.loads(text)
@@ -173,23 +174,37 @@ class SemanticGraphSearch:
                 for eid in source_ids:
                     neighbors = self.graph.get_neighbors(eid, depth=op.get("depth", 1))
                     for entity, rel in neighbors:
-                        if hasattr(entity, 'id'):
-                            entities.append({
-                                "id": entity.id,
-                                "type": entity.type.value if hasattr(entity.type, 'value') else str(entity.type),
-                                "value": entity.value if hasattr(entity, 'value') else str(entity),
-                            })
-                        relations.append({
-                            "source": rel.source.value if hasattr(rel.source, 'value') else str(rel.source),
-                            "target": rel.target.value if hasattr(rel.target, 'value') else str(rel.target),
-                            "type": rel.type.value if hasattr(rel.type, 'value') else str(rel.type),
-                        })
+                        if hasattr(entity, "id"):
+                            entities.append(
+                                {
+                                    "id": entity.id,
+                                    "type": entity.type.value
+                                    if hasattr(entity.type, "value")
+                                    else str(entity.type),
+                                    "value": entity.value
+                                    if hasattr(entity, "value")
+                                    else str(entity),
+                                },
+                            )
+                        relations.append(
+                            {
+                                "source": rel.source.value
+                                if hasattr(rel.source, "value")
+                                else str(rel.source),
+                                "target": rel.target.value
+                                if hasattr(rel.target, "value")
+                                else str(rel.target),
+                                "type": rel.type.value
+                                if hasattr(rel.type, "value")
+                                else str(rel.type),
+                            },
+                        )
 
             elif op_type == "search":
                 query = op.get("query", "")
-                entity_type = op.get("entity_type")
+                op.get("entity_type")
                 # Utiliser la méthode search du graph engine si dispo
-                if hasattr(self.graph, 'search'):
+                if hasattr(self.graph, "search"):
                     result = self.graph.search(query)
                 else:
                     result = self._op_find(op)
@@ -206,7 +221,7 @@ class SemanticGraphSearch:
 
         results = []
         # Parcourir tous les nœuds
-        if hasattr(self.graph, '_graph'):
+        if hasattr(self.graph, "_graph"):
             for nid, data in self.graph._graph.nodes(data=True):
                 if entity_type and data.get("type") != entity_type:
                     continue
@@ -214,11 +229,13 @@ class SemanticGraphSearch:
                     val = data.get("value", "")
                     if filters["value_contains"].lower() not in val.lower():
                         continue
-                results.append({
-                    "id": nid,
-                    "type": data.get("type", ""),
-                    "value": data.get("value", ""),
-                })
+                results.append(
+                    {
+                        "id": nid,
+                        "type": data.get("type", ""),
+                        "value": data.get("value", ""),
+                    },
+                )
         return results
 
     def _resolve_ref(self, ref: str, context: dict[str, list[str]]) -> list[str]:

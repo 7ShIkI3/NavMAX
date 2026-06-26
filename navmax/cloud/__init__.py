@@ -9,21 +9,23 @@ Tous les scanners fonctionnent sans SDK (HTTP + DNS uniquement).
 """
 
 from .scanner import (
-    CloudScanner,
+    BaseCloudScanner,
     CloudFinding,
-    IAMRisk,
     CloudReconResult,
-    scan_s3_buckets,
+    CloudScanner,
+    IAMRisk,
     analyze_iam_policy,
     discover_cloud_resources,
+    scan_s3_buckets,
 )
 
 __all__ = [
-    "CloudScanner",
+    "BaseCloudScanner",
     "CloudFinding",
-    "IAMRisk",
     "CloudReconResult",
-    "scan_s3_buckets",
+    "CloudScanner",
+    "IAMRisk",
     "analyze_iam_policy",
     "discover_cloud_resources",
+    "scan_s3_buckets",
 ]

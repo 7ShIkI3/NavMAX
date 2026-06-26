@@ -1,5 +1,4 @@
-"""
-Authentification JWT, RBAC, et hash des mots de passe pour NavMAX API.
+"""Authentification JWT, RBAC, et hash des mots de passe pour NavMAX API.
 
 Fonctionnalités :
   - Génération et validation de tokens JWT
@@ -10,10 +9,10 @@ Fonctionnalités :
   - Fallback in-memory si Redis indisponible
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -30,14 +29,15 @@ logger = get_logger(__name__)
 # Configuration JWT
 # ---------------------------------------------------------------------------
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES=60  # 1 heure
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 heure
 
 # Clé secrète — en prod, utiliser une variable d'environnement NAVMAX_JWT_SECRET
 SECRET_KEY: str = config.jwt_secret or "ch@ng3-me-1n-pr0duct10n-2024-navmax"
 
 if len(SECRET_KEY) < 32:
+    msg = "NAVMAX_JWT_SECRET doit faire au moins 32 caractères pour la sécurité"
     raise ValueError(
-        "NAVMAX_JWT_SECRET doit faire au moins 32 caractères pour la sécurité"
+        msg,
     )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +54,7 @@ def hash_password(password: str) -> str:
 
     Returns:
         Hash bcrypt du mot de passe.
+
     """
     return pwd_context.hash(password)
 
@@ -67,6 +68,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     Returns:
         True si le mot de passe correspond.
+
     """
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -75,8 +77,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # Modèle User
 # ---------------------------------------------------------------------------
 
+
 class User(BaseModel):
     """Utilisateur NavMAX avec rôle et statut."""
+
     username: str
     hashed_password: str
     role: str = Field(pattern="^(admin|operator|viewer)$")
@@ -95,6 +99,7 @@ def get_user(username: str) -> User | None:
 
     Returns:
         Instance User ou None si introuvable.
+
     """
     return _users_db.get(username)
 
@@ -109,6 +114,7 @@ def create_user(username: str, password: str, role: str = "viewer") -> User:
 
     Returns:
         Instance User créée.
+
     """
     user = User(
         username=username,
@@ -136,6 +142,7 @@ logger.info(
 # JWT
 # ---------------------------------------------------------------------------
 
+
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Crée un token JWT signé.
 
@@ -145,9 +152,10 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
 
     Returns:
         Token JWT encodé.
+
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -163,10 +171,10 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
     Raises:
         HTTPException: Si le token est invalide ou expiré.
+
     """
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -193,6 +201,7 @@ async def get_current_user(
     Raises:
         HTTPException 401: Si le token est manquant, invalide ou expiré.
         HTTPException 401: Si l'utilisateur est désactivé.
+
     """
     if credentials is None:
         raise HTTPException(
@@ -241,6 +250,7 @@ def require_role(required_role: str):
 
     Returns:
         Dépendance FastAPI qui lève HTTPException 403 si le rôle est insuffisant.
+
     """
     role_hierarchy = {"admin": 3, "operator": 2, "viewer": 1}
 
@@ -251,8 +261,7 @@ def require_role(required_role: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    f"Rôle insuffisant — requis '{required_role}', "
-                    f"vous avez '{current_user.role}'"
+                    f"Rôle insuffisant — requis '{required_role}', vous avez '{current_user.role}'"
                 ),
             )
         return current_user
@@ -269,7 +278,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 # Limiteurs pré-configurés
 auth_limiter = Limiter(
-    key_func=lambda: get_remote_address(),
+    key_func=get_remote_address,
     default_limits=["10/minute"],  # 10 tentatives de login/min
 )
 
@@ -277,14 +286,17 @@ auth_limiter = Limiter(
 # Schémas de requête / réponse
 # ---------------------------------------------------------------------------
 
+
 class LoginRequest(BaseModel):
     """Requête de connexion."""
+
     username: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=1)
 
 
 class TokenResponse(BaseModel):
     """Réponse avec token JWT."""
+
     access_token: str
     token_type: str = "bearer"
     role: str
@@ -292,6 +304,7 @@ class TokenResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     """Requête d'inscription."""
+
     username: str = Field(..., min_length=3, max_length=255, pattern=r"^[a-zA-Z0-9_-]+$")
     password: str = Field(..., min_length=8)
     role: str = Field("viewer", pattern="^(admin|operator|viewer)$")
@@ -299,6 +312,7 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     """Réponse d'insscription."""
+
     username: str
     role: str
     message: str
@@ -344,7 +358,7 @@ async def login(req: LoginRequest):
         data={
             "sub": user.username,
             "role": user.role,
-        }
+        },
     )
 
     logger.info("auth_succès", user=req.username, role=user.role)
@@ -375,7 +389,7 @@ async def register(req: RegisterRequest):
 
 
 @auth_router.get("/me", response_model=dict)
-async def me(current_user: User = Depends(get_current_user)):
+async def me(current_user: Annotated[User, Depends(get_current_user)]):
     """Retourne les informations de l'utilisateur connecté."""
     return {
         "username": current_user.username,

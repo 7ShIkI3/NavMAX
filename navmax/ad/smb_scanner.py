@@ -1,5 +1,4 @@
-"""
-AD SMB Scanner — énumération des partages SMB et configuration.
+"""AD SMB Scanner — énumération des partages SMB et configuration.
 
 Analyse les partages SMB sur les machines du domaine :
 - Liste des partages (administratifs et utilisateur)
@@ -18,13 +17,15 @@ Usage:
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional, Any
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 # ── Types ──────────────────────────────────────────────────────
+
 
 class SharePermission(StrEnum):
     READ = "read"
@@ -43,6 +44,7 @@ class SMBSigningMode(StrEnum):
 @dataclass
 class SMBShare:
     """Un partage SMB découvert."""
+
     name: str
     path: str = ""
     description: str = ""
@@ -57,6 +59,7 @@ class SMBShare:
 @dataclass
 class SMBSigningInfo:
     """Configuration SMB signing d'une machine."""
+
     hostname: str
     signing_required: bool = False
     signing_enabled: bool = True
@@ -67,6 +70,7 @@ class SMBSigningInfo:
 @dataclass
 class SMBComputerResult:
     """Résultat de scan SMB pour une machine."""
+
     hostname: str
     ip_address: str = ""
     reachable: bool = False
@@ -76,7 +80,7 @@ class SMBComputerResult:
     shares: list[SMBShare] = field(default_factory=list)
     accessible_shares: int = 0
     writable_shares: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def has_writable_shares(self) -> bool:
@@ -85,16 +89,13 @@ class SMBComputerResult:
     @property
     def risky(self) -> bool:
         """La machine présente des risques élevés."""
-        return (
-            self.smbv1_enabled
-            or self.signing.vulnerable_to_relay
-            or self.has_writable_shares
-        )
+        return self.smbv1_enabled or self.signing.vulnerable_to_relay or self.has_writable_shares
 
 
 @dataclass
 class SMBDomainReport:
     """Rapport d'énumération SMB sur tout le domaine."""
+
     domain: str
     computers_scanned: int = 0
     computers_reachable: int = 0
@@ -123,15 +124,15 @@ class SMBDomainReport:
             f"Hosts with writable shares: {len(self.hosts_with_writable_shares)}",
         ]
         if self.smbv1_hosts:
-            lines.append(f"\n⚠️  SMBv1 ENABLED on:")
+            lines.append("\n⚠️  SMBv1 ENABLED on:")
             for r in self.smbv1_hosts:
                 lines.append(f"  - {r.hostname}")
         if self.relay_vulnerable_hosts:
-            lines.append(f"\n⚠️  SMB RELAY VULNERABLE on:")
+            lines.append("\n⚠️  SMB RELAY VULNERABLE on:")
             for r in self.relay_vulnerable_hosts:
                 lines.append(f"  - {r.hostname}")
         if self.hosts_with_writable_shares:
-            lines.append(f"\n⚠️  WRITABLE SHARES on:")
+            lines.append("\n⚠️  WRITABLE SHARES on:")
             for r in self.hosts_with_writable_shares:
                 writable = [s.name for s in r.shares if s.is_writable]
                 lines.append(f"  - {r.hostname}: {', '.join(writable)}")
@@ -139,6 +140,7 @@ class SMBDomainReport:
 
 
 # ── Scanner ────────────────────────────────────────────────────
+
 
 class ADSMSScanner:
     """Scanner SMB pour environnement Active Directory.
@@ -156,17 +158,31 @@ class ADSMSScanner:
 
     # Partages à risque élevé
     HIGH_RISK_SHARES = {
-        "C$", "ADMIN$", "SYSVOL", "NETLOGON",
+        "C$",
+        "ADMIN$",
+        "SYSVOL",
+        "NETLOGON",
     }
 
     # Partages communs pouvant contenir des données sensibles
     SENSITIVE_PATTERNS = {
-        "backup", "data", "database", "finance", "hr",
-        "users", "home", "profiles", "transfer", "shared",
-        "public", "tmp", "temp", "install",
+        "backup",
+        "data",
+        "database",
+        "finance",
+        "hr",
+        "users",
+        "home",
+        "profiles",
+        "transfer",
+        "shared",
+        "public",
+        "tmp",
+        "temp",
+        "install",
     }
 
-    def __init__(self, connector=None, timeout: float = 10.0):
+    def __init__(self, connector=None, timeout: float = 10.0) -> None:
         self.connector = connector
         self.timeout = timeout
 
@@ -178,13 +194,14 @@ class ADSMSScanner:
 
         Returns:
             SMBDomainReport complet
+
         """
         report = SMBDomainReport(domain=domain_map.domain.name)
         computers = domain_map.computers
 
-        logger.info("smb_domain_scan_starting",
-                    domain=domain_map.domain.name,
-                    computers=len(computers))
+        logger.info(
+            "smb_domain_scan_starting", domain=domain_map.domain.name, computers=len(computers),
+        )
 
         for computer in computers:
             if not computer.is_enabled:
@@ -204,9 +221,11 @@ class ADSMSScanner:
                 report.errors.append(f"{hostname}: {e}")
                 logger.warning("smb_scan_error", hostname=hostname, error=str(e))
 
-        logger.info("smb_domain_scan_complete",
-                    scanned=report.computers_scanned,
-                    reachable=report.computers_reachable)
+        logger.info(
+            "smb_domain_scan_complete",
+            scanned=report.computers_scanned,
+            reachable=report.computers_reachable,
+        )
 
         return report
 
@@ -218,6 +237,7 @@ class ADSMSScanner:
 
         Returns:
             SMBComputerResult avec shares, signing, version
+
         """
         result = SMBComputerResult(hostname=hostname)
 
@@ -287,7 +307,7 @@ class ADSMSScanner:
                 result = sock.connect_ex((info["ip"], 139))
                 sock.close()
 
-            info["reachable"] = (result == 0)
+            info["reachable"] = result == 0
 
             if not info["reachable"]:
                 return info
@@ -317,19 +337,37 @@ class ADSMSScanner:
             import struct
 
             # SMBv1 Negotiate Protocol Request
-            smb1_negotiate = bytes([
-                0x00,  # SMB_COM_NEGOTIATE
-                0x00, 0x00, 0x00,  # Status
-                0x02,  # Flags
-                0x00, 0x00,  # Flags2
-                0x00, 0x00,  # PID High
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # Signature
-                0x00, 0x00,  # Reserved
-                0x00, 0x00,  # TID
-                0x00, 0x00,  # PID Low
-                0x00, 0x00,  # UID
-                0x00, 0x00,  # MID
-            ])
+            smb1_negotiate = bytes(
+                [
+                    0x00,  # SMB_COM_NEGOTIATE
+                    0x00,
+                    0x00,
+                    0x00,  # Status
+                    0x02,  # Flags
+                    0x00,
+                    0x00,  # Flags2
+                    0x00,
+                    0x00,  # PID High
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,  # Signature
+                    0x00,
+                    0x00,  # Reserved
+                    0x00,
+                    0x00,  # TID
+                    0x00,
+                    0x00,  # PID Low
+                    0x00,
+                    0x00,  # UID
+                    0x00,
+                    0x00,  # MID
+                ],
+            )
 
             # NetBIOS Session Request
             nb_name = b"\x20" + b"CK" + b"A" * 14 + b"\x00"  # *SMBSERVER
@@ -345,7 +383,7 @@ class ADSMSScanner:
 
                 if response and response[0] == 0x82:  # Positive session response
                     # Session établie — tenter negotiate
-                    smb_req = b"\x00\x00\x00\x2b" + smb1_negotiate
+                    b"\x00\x00\x00\x2b" + smb1_negotiate
                     sock.send(struct.pack(">I", len(smb1_negotiate)) + smb1_negotiate)
                     negotiate_resp = sock.recv(4096)
 
@@ -379,7 +417,7 @@ class ADSMSScanner:
             finally:
                 sock.close()
 
-        except (socket.timeout, ConnectionRefusedError, OSError):
+        except (TimeoutError, ConnectionRefusedError, OSError):
             info["version"] = "SMBv2+ (port open, SMBv1 timeout)"
         except Exception as e:
             logger.debug("smb_negotiate_error", ip=ip, error=str(e))
@@ -398,7 +436,9 @@ class ADSMSScanner:
             import asyncio
 
             proc = await asyncio.create_subprocess_exec(
-                "smbclient", "-L", f"//{hostname}",
+                "smbclient",
+                "-L",
+                f"//{hostname}",
                 "-N",  # Pas d'auth
                 "-g",  # Output grepable
                 stdout=asyncio.subprocess.PIPE,
@@ -406,10 +446,11 @@ class ADSMSScanner:
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=self.timeout
+                stdout, _stderr = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=self.timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return shares
@@ -455,7 +496,9 @@ class ADSMSScanner:
         ]
 
     def _check_share_writability(
-        self, hostname: str, share: SMBShare
+        self,
+        hostname: str,
+        share: SMBShare,
     ) -> bool:
         """Vérifie si un partage est accessible en écriture."""
         # Vérification limitée sans authentification.
@@ -469,7 +512,9 @@ class ADSMSScanner:
         return False
 
     def _analyze_signing(
-        self, hostname: str, smb_version: str
+        self,
+        hostname: str,
+        smb_version: str,
     ) -> SMBSigningInfo:
         """Analyse la configuration SMB signing."""
         signing = SMBSigningInfo(hostname=hostname)
@@ -494,6 +539,7 @@ class ADSMSScanner:
 
 
 # ── Fonction utilitaire ────────────────────────────────────────
+
 
 async def quick_smb_scan(domain_map) -> SMBDomainReport:
     """Scan SMB rapide sur tout le domaine.

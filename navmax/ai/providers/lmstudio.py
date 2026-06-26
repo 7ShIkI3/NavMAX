@@ -17,8 +17,7 @@ class LMStudioProvider(OpenAICompatProvider):
     Idéal pour les utilisateurs non techniques sur Windows.
     """
 
-    def __init__(self, base_url: str = "http://localhost:1234/v1",
-                 timeout: int = 120):
+    def __init__(self, base_url: str = "http://localhost:1234/v1", timeout: int = 120) -> None:
         super().__init__(
             provider_type=ProviderType.LMSTUDIO,
             base_url=base_url,

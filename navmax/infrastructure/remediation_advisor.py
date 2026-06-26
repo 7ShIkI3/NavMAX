@@ -1,5 +1,4 @@
-"""
-Remediation Advisor — suggestions de correctifs précises et actionnables.
+"""Remediation Advisor — suggestions de correctifs précises et actionnables.
 
 Génère des recommandations de remédiation concrètes basées sur :
 - Les vulnérabilités AD détectées
@@ -16,7 +15,7 @@ Usage:
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -32,32 +31,34 @@ class ActionType(StrEnum):
 
 
 class Priority(StrEnum):
-    IMMEDIATE = "immediate"   # < 24h
+    IMMEDIATE = "immediate"  # < 24h
     SHORT_TERM = "short_term"  # < 1 semaine
     MEDIUM_TERM = "medium_term"  # < 1 mois
-    LONG_TERM = "long_term"   # > 1 mois
+    LONG_TERM = "long_term"  # > 1 mois
 
 
 @dataclass
 class RemediationAction:
     """Une action de remédiation concrète."""
+
     title: str
     description: str
-    command: str = ""                  # Commande exacte à exécuter
+    command: str = ""  # Commande exacte à exécuter
     command_type: ActionType = ActionType.POWERSHELL
     priority: Priority = Priority.SHORT_TERM
-    category: str = ""               # kerberoasting, delegation...
-    reversible: bool = True          # Peut être annulée ?
+    category: str = ""  # kerberoasting, delegation...
+    reversible: bool = True  # Peut être annulée ?
     requires_reboot: bool = False
     rollback_command: str = ""
-    reference: str = ""              # URL documentation
+    reference: str = ""  # URL documentation
 
 
 @dataclass
 class RemediationPlan:
     """Plan de remédiation complet."""
+
     actions: list[RemediationAction] = field(default_factory=list)
-    estimated_effort: str = ""       # "2h", "3 days"...
+    estimated_effort: str = ""  # "2h", "3 days"...
     risk_after_remediation: str = ""  # "LOW", "MEDIUM"...
 
     @property
@@ -79,9 +80,12 @@ class RemediationPlan:
             "",
         ]
         for action in self.actions:
-            marker = {Priority.IMMEDIATE: "🔴", Priority.SHORT_TERM: "🟠",
-                      Priority.MEDIUM_TERM: "🟡", Priority.LONG_TERM: "🟢"
-                      }.get(action.priority, "❓")
+            marker = {
+                Priority.IMMEDIATE: "🔴",
+                Priority.SHORT_TERM: "🟠",
+                Priority.MEDIUM_TERM: "🟡",
+                Priority.LONG_TERM: "🟢",
+            }.get(action.priority, "❓")
             lines.append(f"{marker} [{action.priority.upper()}] {action.title}")
             if action.command:
                 lines.append(f"   > {action.command}")
@@ -98,7 +102,7 @@ class RemediationAdvisor:
         )
     """
 
-    def __init__(self, ai_engine=None):
+    def __init__(self, ai_engine=None) -> None:
         self.ai = ai_engine
         self._actions: list[RemediationAction] = []
 
@@ -119,6 +123,7 @@ class RemediationAdvisor:
 
         Returns:
             RemediationPlan avec actions ordonnées
+
         """
         self._actions = []
 
@@ -172,144 +177,145 @@ class RemediationAdvisor:
         """Remédiation Kerberoasting."""
         for account in finding.affected_assets[:5]:
             # Option 1: Supprimer les SPNs
-            self._actions.append(RemediationAction(
-                title=f"Remove SPNs from {account}",
-                description=(
-                    f"Remove all servicePrincipalNames from {account} "
-                    f"to prevent Kerberoasting."
+            self._actions.append(
+                RemediationAction(
+                    title=f"Remove SPNs from {account}",
+                    description=(
+                        f"Remove all servicePrincipalNames from {account} to prevent Kerberoasting."
+                    ),
+                    command=(f"Set-ADUser -Identity '{account}' -ServicePrincipalNames @{{}}"),
+                    command_type=ActionType.POWERSHELL,
+                    priority=Priority.IMMEDIATE,
+                    category="kerberoasting",
+                    rollback_command=(
+                        "# Restauration manuelle nécessaire — noter les SPNs avant suppression"
+                    ),
+                    reference="https://attack.mitre.org/techniques/T1558/003/",
                 ),
-                command=(
-                    f"Set-ADUser -Identity '{account}' "
-                    f"-ServicePrincipalNames @{{}}"
-                ),
-                command_type=ActionType.POWERSHELL,
-                priority=Priority.IMMEDIATE,
-                category="kerberoasting",
-                rollback_command=(
-                    f"# Restauration manuelle nécessaire — noter les "
-                    f"SPNs avant suppression"
-                ),
-                reference="https://attack.mitre.org/techniques/T1558/003/",
-            ))
+            )
 
             # Option 2: Mot de passe renforcé
-            self._actions.append(RemediationAction(
-                title=f"Rotate password for {account} (30+ chars)",
-                description=(
-                    f"Set a strong password (30+ characters) for {account} "
-                    f"to make Kerberoasting infeasible."
+            self._actions.append(
+                RemediationAction(
+                    title=f"Rotate password for {account} (30+ chars)",
+                    description=(
+                        f"Set a strong password (30+ characters) for {account} "
+                        f"to make Kerberoasting infeasible."
+                    ),
+                    command=(
+                        f"$pw = Read-Host -AsSecureString; "
+                        f"Set-ADAccountPassword -Identity '{account}' "
+                        f"-NewPassword $pw -Reset"
+                    ),
+                    command_type=ActionType.POWERSHELL,
+                    priority=Priority.SHORT_TERM,
+                    category="kerberoasting",
+                    reference="https://attack.mitre.org/mitigations/M1027/",
                 ),
-                command=(
-                    f"$pw = Read-Host -AsSecureString; "
-                    f"Set-ADAccountPassword -Identity '{account}' "
-                    f"-NewPassword $pw -Reset"
-                ),
-                command_type=ActionType.POWERSHELL,
-                priority=Priority.SHORT_TERM,
-                category="kerberoasting",
-                reference="https://attack.mitre.org/mitigations/M1027/",
-            ))
+            )
 
     def _add_asrep_remediation(self, finding) -> None:
         """Remédiation AS-REP Roasting."""
         for account in finding.affected_assets[:5]:
-            self._actions.append(RemediationAction(
-                title=f"Enable Kerberos preauthentication for {account}",
-                description=(
-                    f"Disable 'Do not require Kerberos preauthentication' "
-                    f"for {account}."
+            self._actions.append(
+                RemediationAction(
+                    title=f"Enable Kerberos preauthentication for {account}",
+                    description=(
+                        f"Disable 'Do not require Kerberos preauthentication' for {account}."
+                    ),
+                    command=(
+                        f"Set-ADAccountControl -Identity '{account}' -DoesNotRequirePreAuth $false"
+                    ),
+                    command_type=ActionType.POWERSHELL,
+                    priority=Priority.IMMEDIATE,
+                    category="asrep_roasting",
+                    rollback_command=(
+                        f"Set-ADAccountControl -Identity '{account}' -DoesNotRequirePreAuth $true"
+                    ),
+                    reference="https://attack.mitre.org/techniques/T1558/004/",
                 ),
-                command=(
-                    f"Set-ADAccountControl -Identity '{account}' "
-                    f"-DoesNotRequirePreAuth $false"
-                ),
-                command_type=ActionType.POWERSHELL,
-                priority=Priority.IMMEDIATE,
-                category="asrep_roasting",
-                rollback_command=(
-                    f"Set-ADAccountControl -Identity '{account}' "
-                    f"-DoesNotRequirePreAuth $true"
-                ),
-                reference="https://attack.mitre.org/techniques/T1558/004/",
-            ))
+            )
 
     def _add_delegation_remediation(self, finding) -> None:
         """Remédiation délégation non contrainte."""
         for host in finding.affected_assets[:5]:
-            self._actions.append(RemediationAction(
-                title=f"Disable unconstrained delegation on {host}",
-                description=(
-                    f"Remove TRUSTED_FOR_DELEGATION flag from {host}. "
-                    f"Replace with constrained delegation if needed."
+            self._actions.append(
+                RemediationAction(
+                    title=f"Disable unconstrained delegation on {host}",
+                    description=(
+                        f"Remove TRUSTED_FOR_DELEGATION flag from {host}. "
+                        f"Replace with constrained delegation if needed."
+                    ),
+                    command=(f"Set-ADComputer -Identity '{host}' -TrustedForDelegation $false"),
+                    command_type=ActionType.POWERSHELL,
+                    priority=Priority.SHORT_TERM,
+                    category="delegation",
+                    requires_reboot=True,
+                    reference="https://attack.mitre.org/techniques/T1558/001/",
                 ),
-                command=(
-                    f"Set-ADComputer -Identity '{host}' "
-                    f"-TrustedForDelegation $false"
-                ),
-                command_type=ActionType.POWERSHELL,
-                priority=Priority.SHORT_TERM,
-                category="delegation",
-                requires_reboot=True,
-                reference="https://attack.mitre.org/techniques/T1558/001/",
-            ))
+            )
 
     def _add_privileged_remediation(self, finding) -> None:
         """Remédiation comptes privilégiés."""
-        self._actions.append(RemediationAction(
-            title="Review and reduce privileged accounts",
-            description=(
-                f"Conduct an audit of all accounts with adminCount=1 "
-                f"and reduce to the minimum necessary for operations."
+        self._actions.append(
+            RemediationAction(
+                title="Review and reduce privileged accounts",
+                description=(
+                    "Conduct an audit of all accounts with adminCount=1 "
+                    "and reduce to the minimum necessary for operations."
+                ),
+                command=(
+                    "Get-ADUser -Filter {adminCount -eq 1} -Properties adminCount | "
+                    "Export-Csv -Path 'admin_audit.csv'"
+                ),
+                command_type=ActionType.POWERSHELL,
+                priority=Priority.MEDIUM_TERM,
+                category="privileged_accounts",
+                reference="https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models",
             ),
-            command=(
-                "Get-ADUser -Filter {adminCount -eq 1} -Properties adminCount | "
-                "Export-Csv -Path 'admin_audit.csv'"
-            ),
-            command_type=ActionType.POWERSHELL,
-            priority=Priority.MEDIUM_TERM,
-            category="privileged_accounts",
-            reference="https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models",
-        ))
+        )
 
     def _add_any_any_remediation(self, finding) -> None:
         """Remédiation règles Any/Any firewall."""
         rule_name = finding.rule_names[0] if finding.rule_names else "unknown"
-        self._actions.append(RemediationAction(
-            title=f"Restrict firewall rule: {rule_name}",
-            description=(
-                f"Replace Any/Any source/destination with specific "
-                f"addresses and services."
+        self._actions.append(
+            RemediationAction(
+                title=f"Restrict firewall rule: {rule_name}",
+                description=(
+                    "Replace Any/Any source/destination with specific addresses and services."
+                ),
+                command=(
+                    "# Via FortiGate CLI:\n"
+                    "config firewall policy\n"
+                    "  edit <rule_id>\n"
+                    '    set srcaddr "specific-address"\n'
+                    '    set dstaddr "specific-destination"\n'
+                    '    set service "specific-service"\n'
+                    "  next\n"
+                    "end"
+                ),
+                command_type=ActionType.CLI,
+                priority=Priority.SHORT_TERM,
+                category="firewall",
+                reference=f"Review rule: {rule_name}",
             ),
-            command=(
-                f"# Via FortiGate CLI:\n"
-                f"config firewall policy\n"
-                f"  edit <rule_id>\n"
-                f"    set srcaddr \"specific-address\"\n"
-                f"    set dstaddr \"specific-destination\"\n"
-                f"    set service \"specific-service\"\n"
-                f"  next\n"
-                f"end"
-            ),
-            command_type=ActionType.CLI,
-            priority=Priority.SHORT_TERM,
-            category="firewall",
-            reference=f"Review rule: {rule_name}",
-        ))
+        )
 
     def _add_port_remediation(self, finding) -> None:
         """Remédiation ports à risque exposés."""
-        self._actions.append(RemediationAction(
-            title="Restrict high-risk port exposure",
-            description=(
-                f"Restrict source IPs for rules exposing RDP, SSH, "
-                f"and database ports."
+        self._actions.append(
+            RemediationAction(
+                title="Restrict high-risk port exposure",
+                description=(
+                    "Restrict source IPs for rules exposing RDP, SSH, and database ports."
+                ),
+                command=(
+                    "Audit all firewall rules allowing ports 22, 3389, 1433, "
+                    "3306, 5432. Add source IP restrictions."
+                ),
+                command_type=ActionType.MANUAL,
+                priority=Priority.IMMEDIATE,
+                category="firewall",
+                reference="https://www.cisecurity.org/controls",
             ),
-            command=(
-                "Audit all firewall rules allowing ports 22, 3389, 1433, "
-                "3306, 5432. Add source IP restrictions."
-            ),
-            command_type=ActionType.MANUAL,
-            priority=Priority.IMMEDIATE,
-            category="firewall",
-            reference="https://www.cisecurity.org/controls",
-        ))
+        )

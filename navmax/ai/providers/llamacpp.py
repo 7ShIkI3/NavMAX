@@ -5,13 +5,18 @@ CUDA (optionnel): CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
 """
 
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional
+
 import structlog
 
 from navmax.ai.providers.base import (
-    BaseProvider, ProviderType, ModelTier, ModelInfo,
-    GenerateParams, GenerateResult,
+    BaseProvider,
+    GenerateParams,
+    GenerateResult,
+    ModelInfo,
+    ModelTier,
+    ProviderType,
 )
 
 logger = structlog.get_logger(__name__)
@@ -26,10 +31,14 @@ class LlamaCppProvider(BaseProvider):
 
     provider_type = ProviderType.LLAMACPP
 
-    def __init__(self, model_path: str | Path, n_ctx: int = 8192,
-                 n_gpu_layers: int = -1,  # -1 = auto (toutes les couches sur GPU)
-                 n_threads: Optional[int] = None,
-                 verbose: bool = False):
+    def __init__(
+        self,
+        model_path: str | Path,
+        n_ctx: int = 8192,
+        n_gpu_layers: int = -1,  # -1 = auto (toutes les couches sur GPU)
+        n_threads: int | None = None,
+        verbose: bool = False,
+    ) -> None:
         self.model_path = Path(model_path)
         self._model = None
         self._n_ctx = n_ctx
@@ -37,10 +46,11 @@ class LlamaCppProvider(BaseProvider):
         self._n_threads = n_threads
         self._verbose = verbose
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         if self._model is not None:
             return
         from llama_cpp import Llama
+
         logger.info("loading_llamacpp_model", path=str(self.model_path))
         self._model = Llama(
             model_path=str(self.model_path),
@@ -60,13 +70,15 @@ class LlamaCppProvider(BaseProvider):
         name = self.model_path.stem
         tier = self._guess_tier(name)
 
-        return [ModelInfo(
-            name=name,
-            provider=ProviderType.LLAMACPP,
-            tier=tier,
-            context_window=self._n_ctx,
-            supports_streaming=True,
-        )]
+        return [
+            ModelInfo(
+                name=name,
+                provider=ProviderType.LLAMACPP,
+                tier=tier,
+                context_window=self._n_ctx,
+                supports_streaming=True,
+            ),
+        ]
 
     def _guess_tier(self, filename: str) -> ModelTier:
         n = filename.lower()
@@ -83,16 +95,14 @@ class LlamaCppProvider(BaseProvider):
         try:
             self._load_model()
         except (ImportError, OSError, RuntimeError) as e:
-            logger.error("llamacpp_load_model_failed",
-                         path=str(self.model_path), error=str(e))
-            raise RuntimeError(f"Impossible de charger le modèle llama.cpp: {e}") from e
+            logger.exception("llamacpp_load_model_failed", path=str(self.model_path), error=str(e))
+            msg = f"Impossible de charger le modèle llama.cpp: {e}"
+            raise RuntimeError(msg) from e
 
         prompt = params.prompt
         if params.system:
             prompt = (
-                f"<|system|>\n{params.system}</s>\n"
-                f"<|user|>\n{params.prompt}</s>\n"
-                f"<|assistant|>\n"
+                f"<|system|>\n{params.system}</s>\n<|user|>\n{params.prompt}</s>\n<|assistant|>\n"
             )
 
         stop = params.stop_sequences or None
@@ -108,9 +118,9 @@ class LlamaCppProvider(BaseProvider):
                 echo=False,
             )
         except (ValueError, RuntimeError) as e:
-            logger.error("llamacpp_generate_failed",
-                         model=self.model_path.stem, error=str(e))
-            raise RuntimeError(f"Erreur de génération llama.cpp: {e}") from e
+            logger.exception("llamacpp_generate_failed", model=self.model_path.stem, error=str(e))
+            msg = f"Erreur de génération llama.cpp: {e}"
+            raise RuntimeError(msg) from e
 
         elapsed = time.monotonic() - t0
         text = result["choices"][0]["text"]
@@ -129,16 +139,14 @@ class LlamaCppProvider(BaseProvider):
         try:
             self._load_model()
         except (ImportError, OSError, RuntimeError) as e:
-            logger.error("llamacpp_load_model_failed",
-                         path=str(self.model_path), error=str(e))
-            raise RuntimeError(f"Impossible de charger le modèle llama.cpp: {e}") from e
+            logger.exception("llamacpp_load_model_failed", path=str(self.model_path), error=str(e))
+            msg = f"Impossible de charger le modèle llama.cpp: {e}"
+            raise RuntimeError(msg) from e
 
         prompt = params.prompt
         if params.system:
             prompt = (
-                f"<|system|>\n{params.system}</s>\n"
-                f"<|user|>\n{params.prompt}</s>\n"
-                f"<|assistant|>\n"
+                f"<|system|>\n{params.system}</s>\n<|user|>\n{params.prompt}</s>\n<|assistant|>\n"
             )
 
         try:
@@ -153,9 +161,9 @@ class LlamaCppProvider(BaseProvider):
                 if text:
                     yield text
         except (ValueError, RuntimeError) as e:
-            logger.error("llamacpp_stream_failed",
-                         model=self.model_path.stem, error=str(e))
-            raise RuntimeError(f"Erreur de streaming llama.cpp: {e}") from e
+            logger.exception("llamacpp_stream_failed", model=self.model_path.stem, error=str(e))
+            msg = f"Erreur de streaming llama.cpp: {e}"
+            raise RuntimeError(msg) from e
 
     def count_tokens(self, text: str, model: str = "") -> int:
         self._load_model()

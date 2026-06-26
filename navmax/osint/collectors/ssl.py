@@ -1,12 +1,10 @@
-"""
-Collecteur SSL/TLS — certificats X.509.
+"""Collecteur SSL/TLS — certificats X.509.
 Récupère le certificat d'un serveur et extrait les informations.
 """
 
-import asyncio
-import ssl
-import socket
 import datetime
+import socket
+import ssl
 from dataclasses import dataclass, field
 
 from navmax.core.logging import get_logger
@@ -90,14 +88,15 @@ class SslCollector:
 
                 # Fingerprint SHA256
                 import hashlib
+
                 if cert_bin:
                     info.fingerprint_sha256 = hashlib.sha256(cert_bin).hexdigest()
 
                 # Validité
                 try:
                     not_after = datetime.datetime.strptime(info.not_after, "%b %d %H:%M:%S %Y %Z")
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    info.days_remaining = (not_after.replace(tzinfo=datetime.timezone.utc) - now).days
+                    now = datetime.datetime.now(datetime.UTC)
+                    info.days_remaining = (not_after.replace(tzinfo=datetime.UTC) - now).days
                     info.is_valid = info.days_remaining > 0
                 except (ValueError, AttributeError):
                     pass
@@ -107,11 +106,13 @@ class SslCollector:
                     if ext[0] == "OCSP":
                         info.ocsp_url.append(ext[1])
 
-                logger.info("ssl_cert_ok", host=host, subject=info.subject[:60], days=info.days_remaining)
+                logger.info(
+                    "ssl_cert_ok", host=host, subject=info.subject[:60], days=info.days_remaining,
+                )
 
         except ssl.SSLError as e:
             logger.debug("ssl_erreur", host=host, erreur=str(e))
-        except (socket.timeout, ConnectionRefusedError, OSError) as e:
+        except (TimeoutError, ConnectionRefusedError, OSError) as e:
             logger.debug("ssl_connexion_échouée", host=host, erreur=str(e))
 
         return info

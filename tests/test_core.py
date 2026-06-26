@@ -1,8 +1,7 @@
-"""
-Tests unitaires NavMAX — Phase 1.
-"""
+"""Tests unitaires NavMAX — Phase 1."""
 
 import pytest
+
 from navmax.scanner.engine import parse_ports
 
 
@@ -36,11 +35,13 @@ class TestParsePorts:
 class TestConfig:
     def test_defaults(self) -> None:
         from navmax.core.config import config
+
         assert config.api_host == "127.0.0.1"
         assert config.api_port == 8443
 
     def test_database_url(self) -> None:
         from navmax.core.config import config
+
         url = config.database_url
         assert "sqlite" in url
         assert "navmax.db" in url
@@ -48,17 +49,20 @@ class TestConfig:
 
 class TestCoreImport:
     def test_import_core(self) -> None:
-        from navmax.core import Config, config, setup_logging, get_logger
+        from navmax.core import config
+
         assert config is not None
 
     def test_import_db(self) -> None:
-        from navmax.db import Target, Scan, Service
+        from navmax.db import Scan, Service, Target
+
         assert Target.__tablename__ == "targets"
         assert Scan.__tablename__ == "scans"
         assert Service.__tablename__ == "services"
 
     def test_import_scanner(self) -> None:
-        from navmax.scanner import tcp_connect_scan, parse_ports, detect_os
+        from navmax.scanner import detect_os, parse_ports, tcp_connect_scan
+
         assert callable(tcp_connect_scan)
         assert callable(parse_ports)
         assert callable(detect_os)
@@ -67,17 +71,20 @@ class TestCoreImport:
 class TestBannerParsing:
     def test_ssh_banner(self) -> None:
         from navmax.scanner.tcp import _parse_banner
+
         svc, ver = _parse_banner("SSH-2.0-OpenSSH_8.9p1 Ubuntu-3")
         assert svc == "ssh"
         assert ver == "2.0" or ver is not None
 
     def test_http_banner(self) -> None:
         from navmax.scanner.tcp import _parse_banner
+
         svc, _ = _parse_banner("HTTP/1.1 200 OK\r\nServer: nginx/1.24.0")
         assert svc == "http"
 
     def test_unknown_banner(self) -> None:
         from navmax.scanner.tcp import _parse_banner
+
         svc, ver = _parse_banner("random garbage data")
         assert svc is None
         assert ver is None
@@ -87,6 +94,7 @@ class TestPluginManager:
     @pytest.mark.asyncio
     async def test_discover_empty(self) -> None:
         from navmax.core.plugins import PluginManager
+
         pm = PluginManager()
         # Pas de plugins dans le package core
         discovered = pm.discover("navmax.core")

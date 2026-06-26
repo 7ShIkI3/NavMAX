@@ -1,28 +1,29 @@
-"""
-Tests for BloodHound export + Infrastructure modules.
-"""
+"""Tests for BloodHound export + Infrastructure modules."""
+
+import json
+import os
+import tempfile
 
 import pytest
-import json
-import tempfile
-import os
-
 
 # ═══════════════════════════════════════════════════════════════
 # BloodHound Export
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestBloodHoundExport:
     def _get_graph(self):
         from navmax.ad.trust_graph import ADTrustGraph
         from tests.test_ad import TestDomainMap
+
         dm = TestDomainMap()._build_domain_map()
         graph = ADTrustGraph()
         graph.build(dm)
         return graph
 
-    def test_export_has_correct_structure(self):
+    def test_export_has_correct_structure(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
+
         exporter = BloodHoundExporter()
         graph = self._get_graph()
         data = exporter.export(graph)
@@ -33,8 +34,9 @@ class TestBloodHoundExport:
         assert "Nodes" in data["data"][0]
         assert "Edges" in data["data"][0]
 
-    def test_export_nodes_have_labels(self):
+    def test_export_nodes_have_labels(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
+
         exporter = BloodHoundExporter()
         graph = self._get_graph()
         data = exporter.export(graph)
@@ -43,8 +45,9 @@ class TestBloodHoundExport:
         labels = {n["Label"] for n in nodes.values()}
         assert "User" in labels or "Group" in labels
 
-    def test_export_edges_have_kind(self):
+    def test_export_edges_have_kind(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
+
         exporter = BloodHoundExporter()
         graph = self._get_graph()
         data = exporter.export(graph)
@@ -55,13 +58,16 @@ class TestBloodHoundExport:
             assert "Kind" in edge
             assert isinstance(edge["Kind"], int)
 
-    def test_save_to_file(self):
+    def test_save_to_file(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
+
         exporter = BloodHoundExporter()
         graph = self._get_graph()
 
         with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, mode="w"
+            suffix=".json",
+            delete=False,
+            mode="w",
         ) as f:
             f.write("{}")
             tmp_path = f.name
@@ -74,13 +80,15 @@ class TestBloodHoundExport:
         finally:
             os.unlink(tmp_path)
 
-    def test_export_and_save(self):
+    def test_export_and_save(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
+
         exporter = BloodHoundExporter()
         graph = self._get_graph()
 
         with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False
+            suffix=".json",
+            delete=False,
         ) as f:
             tmp_path = f.name
 
@@ -94,9 +102,10 @@ class TestBloodHoundExport:
         finally:
             os.unlink(tmp_path)
 
-    def test_empty_graph_export(self):
+    def test_empty_graph_export(self) -> None:
         from navmax.ad.bloodhound_export import BloodHoundExporter
         from navmax.ad.trust_graph import ADTrustGraph
+
         exporter = BloodHoundExporter()
         empty_graph = ADTrustGraph()
         data = exporter.export(empty_graph)
@@ -107,14 +116,17 @@ class TestBloodHoundExport:
 # Infrastructure: Impact Reporter
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestImpactReporter:
     def _get_domain_map(self):
         from tests.test_ad import TestDomainMap
+
         return TestDomainMap()._build_domain_map()
 
     @pytest.mark.asyncio
-    async def test_generate_report(self):
+    async def test_generate_report(self) -> None:
         from navmax.infrastructure.impact_reporter import ImpactReporter
+
         dm = self._get_domain_map()
         reporter = ImpactReporter()
         report = await reporter.generate(domain_map=dm)
@@ -123,8 +135,9 @@ class TestImpactReporter:
         assert len(report.recommendations) > 0
 
     @pytest.mark.asyncio
-    async def test_report_string_representation(self):
+    async def test_report_string_representation(self) -> None:
         from navmax.infrastructure.impact_reporter import ImpactReporter
+
         dm = self._get_domain_map()
         reporter = ImpactReporter()
         report = await reporter.generate(domain_map=dm)
@@ -132,10 +145,12 @@ class TestImpactReporter:
         assert "EXECUTIVE SUMMARY" in report_str
         assert "RECOMMENDATIONS" in report_str or "BUSINESS IMPACTS" in report_str
 
-    def test_business_impact_dataclass(self):
+    def test_business_impact_dataclass(self) -> None:
         from navmax.infrastructure.impact_reporter import (
-            BusinessImpact, ImpactLevel,
+            BusinessImpact,
+            ImpactLevel,
         )
+
         impact = BusinessImpact(
             title="Test",
             description="Test impact",
@@ -152,19 +167,21 @@ class TestImpactReporter:
 # Infrastructure: Remediation Advisor
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestRemediationAdvisor:
-    def test_empty_plan(self):
+    def test_empty_plan(self) -> None:
         from navmax.infrastructure.remediation_advisor import (
             RemediationAdvisor,
         )
+
         advisor = RemediationAdvisor()
         plan = advisor.build_remediation_plan()
         assert len(plan.actions) == 0
 
     @pytest.mark.asyncio
-    async def test_plan_from_vuln_report(self):
-        from navmax.infrastructure.remediation_advisor import RemediationAdvisor
+    async def test_plan_from_vuln_report(self) -> None:
         from navmax.ad.vuln_scanner import ADVulnScanner
+        from navmax.infrastructure.remediation_advisor import RemediationAdvisor
         from tests.test_ad import TestDomainMap
 
         dm = TestDomainMap()._build_domain_map()
@@ -179,10 +196,14 @@ class TestRemediationAdvisor:
         # Vérifier qu'il y a des actions immédiates
         assert len(plan.immediate_actions) >= 1 or len(plan.short_term_actions) >= 1
 
-    def test_plan_summary(self):
+    def test_plan_summary(self) -> None:
         from navmax.infrastructure.remediation_advisor import (
-            RemediationAdvisor, RemediationAction, Priority, ActionType,
+            ActionType,
+            Priority,
+            RemediationAction,
+            RemediationAdvisor,
         )
+
         advisor = RemediationAdvisor()
         # Hack direct pour tester le summary sans rebuild
         action = RemediationAction(
@@ -193,7 +214,7 @@ class TestRemediationAdvisor:
             command_type=ActionType.POWERSHELL,
         )
         advisor._actions = [action]
-        plan = advisor.build_remediation_plan()
+        advisor.build_remediation_plan()
         # build_remediation_plan vide _actions → on re-set
         advisor._actions = [action]
         # Utiliser directement la propriété summary après rebuild
@@ -201,6 +222,7 @@ class TestRemediationAdvisor:
         plan2._actions = [action]
         # Utiliser la dataclass RemediationPlan directement
         from navmax.infrastructure.remediation_advisor import RemediationPlan
+
         plan3 = RemediationPlan(
             actions=[action],
             estimated_effort="30 minutes",
@@ -210,10 +232,13 @@ class TestRemediationAdvisor:
         assert "IMMEDIATE" in summary
         assert "Fix critical issue" in summary
 
-    def test_action_dataclass(self):
+    def test_action_dataclass(self) -> None:
         from navmax.infrastructure.remediation_advisor import (
-            RemediationAction, ActionType, Priority,
+            ActionType,
+            Priority,
+            RemediationAction,
         )
+
         action = RemediationAction(
             title="Test action",
             description="Test description",
@@ -231,13 +256,16 @@ class TestRemediationAdvisor:
 # Infrastructure: Continuous Monitor
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestContinuousMonitor:
     def _get_domain_map(self):
         from tests.test_ad import TestDomainMap
+
         return TestDomainMap()._build_domain_map()
 
-    def test_capture_baseline(self):
+    def test_capture_baseline(self) -> None:
         from navmax.infrastructure.continuous_monitor import ContinuousMonitor
+
         dm = self._get_domain_map()
         monitor = ContinuousMonitor()
         baseline = monitor.capture_baseline(domain_map=dm)
@@ -246,10 +274,12 @@ class TestContinuousMonitor:
         assert len(baseline.admin_users) >= 1  # Administrator
         assert len(baseline.kerberoastable_users) >= 1  # svc_web
 
-    def test_baseline_serialization(self):
+    def test_baseline_serialization(self) -> None:
         from navmax.infrastructure.continuous_monitor import (
-            ContinuousMonitor, Baseline,
+            Baseline,
+            ContinuousMonitor,
         )
+
         dm = self._get_domain_map()
         monitor = ContinuousMonitor()
         baseline = monitor.capture_baseline(domain_map=dm)
@@ -259,8 +289,9 @@ class TestContinuousMonitor:
         assert restored.domain == baseline.domain
         assert restored.admin_users == baseline.admin_users
 
-    def test_check_drift_no_changes(self):
+    def test_check_drift_no_changes(self) -> None:
         from navmax.infrastructure.continuous_monitor import ContinuousMonitor
+
         dm = self._get_domain_map()
         monitor = ContinuousMonitor()
         baseline = monitor.capture_baseline(domain_map=dm)
@@ -270,18 +301,22 @@ class TestContinuousMonitor:
         assert len(drift.alerts) == 0
         assert drift.changes_detected == 0
 
-    def test_drift_report_summary(self):
+    def test_drift_report_summary(self) -> None:
         from navmax.infrastructure.continuous_monitor import (
-            ContinuousMonitor, DriftReport,
+            DriftReport,
         )
+
         report = DriftReport(domain="test.local")
         summary = report.summary()
         assert "test.local" in summary
 
-    def test_alert_dataclass(self):
+    def test_alert_dataclass(self) -> None:
         from navmax.infrastructure.continuous_monitor import (
-            DriftAlert, AlertSeverity, AlertCategory,
+            AlertCategory,
+            AlertSeverity,
+            DriftAlert,
         )
+
         alert = DriftAlert(
             title="New admin detected",
             description="A new admin was added",
@@ -293,8 +328,9 @@ class TestContinuousMonitor:
         assert alert.severity == "critical"
         assert alert.category == "new_admin"
 
-    def test_baseline_empty_domain(self):
+    def test_baseline_empty_domain(self) -> None:
         from navmax.infrastructure.continuous_monitor import ContinuousMonitor
+
         monitor = ContinuousMonitor()
         baseline = monitor.capture_baseline()
         assert baseline.domain == ""

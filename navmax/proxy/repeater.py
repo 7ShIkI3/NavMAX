@@ -1,12 +1,7 @@
-"""
-Repeater — rejoue des requêtes HTTP interceptées avec modifications.
-"""
+"""Repeater — rejoue des requêtes HTTP interceptées avec modifications."""
 
-import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
@@ -18,6 +13,7 @@ logger = get_logger(__name__)
 @dataclass
 class RepeaterRequest:
     """Requête à rejouer."""
+
     method: str = "GET"
     url: str = ""
     headers: dict[str, str] = field(default_factory=dict)
@@ -28,6 +24,7 @@ class RepeaterRequest:
 @dataclass
 class RepeaterResponse:
     """Réponse d'un replay."""
+
     status: int
     headers: dict[str, str]
     body: str
@@ -38,14 +35,14 @@ class RepeaterResponse:
 @dataclass
 class RepeaterHistory:
     """Historique des replays."""
+
     request: RepeaterRequest
     response: RepeaterResponse
     timestamp: float = field(default_factory=time.time)
 
 
 class Repeater:
-    """
-    Rejoue des requêtes HTTP (comme Burp Repeater).
+    """Rejoue des requêtes HTTP (comme Burp Repeater).
     Supporte HTTP et HTTPS.
     """
 
@@ -74,9 +71,7 @@ class Repeater:
         body: bytes | str = b"",
         follow_redirects: bool = True,
     ) -> RepeaterResponse:
-        """
-        Envoie une requête HTTP et retourne la réponse.
-        """
+        """Envoie une requête HTTP et retourne la réponse."""
         client = await self._get_client()
         headers = headers or {}
 

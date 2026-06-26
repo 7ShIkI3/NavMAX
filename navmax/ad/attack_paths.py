@@ -1,5 +1,4 @@
-"""
-AD Attack Paths — analyse IA des chemins d'attaque et rapports d'impact.
+"""AD Attack Paths — analyse IA des chemins d'attaque et rapports d'impact.
 
 Utilise l'AIEngine pour transformer les données brutes du graphe d'attaque
 en rapports compréhensibles avec :
@@ -14,9 +13,9 @@ Usage:
     print(analysis.report)
 """
 
-from dataclasses import dataclass, field
-from typing import Optional
 import json
+from dataclasses import dataclass, field
+
 import structlog
 
 from navmax.ai.providers.base import ModelTier
@@ -69,9 +68,11 @@ RULES:
 
 # ── Data Models ────────────────────────────────────────────────
 
+
 @dataclass
 class CriticalPath:
     """Un chemin d'attaque critique identifié par l'IA."""
+
     name: str = ""
     source: str = ""
     target: str = ""
@@ -85,15 +86,17 @@ class CriticalPath:
 @dataclass
 class RiskFinding:
     """Un risque identifié."""
+
     finding: str = ""
     severity: str = "medium"  # critical, high, medium, low
     affected_assets: int = 0
-    category: str = ""        # kerberoasting, delegation, trust, acl...
+    category: str = ""  # kerberoasting, delegation, trust, acl...
 
 
 @dataclass
 class AttackPathAnalysis:
     """Analyse complète des chemins d'attaque."""
+
     critical_paths: list[CriticalPath] = field(default_factory=list)
     top_risks: list[RiskFinding] = field(default_factory=list)
     exposed_users_count: int = 0
@@ -117,7 +120,7 @@ class AttackPathAnalysis:
             f"  Kerberoastable → DA paths: {self.kerberoastable_accounts_leading_to_da}",
             f"  Cross-Domain Risks: {self.cross_domain_risks}",
             "",
-            f"  Executive Summary:",
+            "  Executive Summary:",
             f"  {self.executive_summary}",
             "",
         ]
@@ -158,6 +161,7 @@ class AttackPathAnalysis:
 
 # ── Analyseur ──────────────────────────────────────────────────
 
+
 class AttackPathAnalyzer:
     """Analyseur IA des chemins d'attaque AD.
 
@@ -170,10 +174,10 @@ class AttackPathAnalyzer:
         print(analysis.report)
     """
 
-    def __init__(self, ai_engine=None):
-        """
-        Args:
-            ai_engine: AIEngine instance (optionnel — mode dégradé sans IA)
+    def __init__(self, ai_engine=None) -> None:
+        """Args:
+        ai_engine: AIEngine instance (optionnel — mode dégradé sans IA).
+
         """
         self.ai = ai_engine
 
@@ -185,6 +189,7 @@ class AttackPathAnalyzer:
 
         Returns:
             AttackPathAnalysis avec le rapport structuré
+
         """
         # ── Collecte des données brutes ─────────────────────────
         context = self._build_analysis_context(trust_graph)
@@ -202,7 +207,7 @@ class AttackPathAnalyzer:
                 )
                 return self._parse_ai_response(result.text, context)
             except Exception as e:
-                logger.error("ai_analysis_failed", error=str(e))
+                logger.exception("ai_analysis_failed", error=str(e))
                 return self._fallback_analysis(trust_graph, context, str(e))
 
         return self._fallback_analysis(trust_graph, context)
@@ -226,11 +231,13 @@ class AttackPathAnalyzer:
         kerb_paths = trust_graph.find_kerberoastable_paths()
         context["kerberoastable_paths"] = []
         for p in kerb_paths[:10]:
-            context["kerberoastable_paths"].append({
-                "path_labels": p.path_labels,
-                "length": p.length,
-                "risk_score": p.risk_score,
-            })
+            context["kerberoastable_paths"].append(
+                {
+                    "path_labels": p.path_labels,
+                    "length": p.length,
+                    "risk_score": p.risk_score,
+                },
+            )
         context["kerberoastable_paths_count"] = len(kerb_paths)
 
         # Utilisateurs les plus exposés
@@ -240,8 +247,7 @@ class AttackPathAnalyzer:
         # Cibles haute valeur
         hv_targets = trust_graph.get_high_value_targets()
         context["high_value_targets"] = [
-            {"name": t.name, "type": t.type, "domain": t.domain}
-            for t in hv_targets[:20]
+            {"name": t.name, "type": t.type, "domain": t.domain} for t in hv_targets[:20]
         ]
         context["high_value_targets_count"] = len(hv_targets)
 
@@ -268,35 +274,35 @@ class AttackPathAnalyzer:
         """Construit le prompt pour l'IA."""
         return f"""Analyze this Active Directory attack graph and produce a structured JSON report.
 
-DOMAIN: {context.get('domain', 'Unknown')}
+DOMAIN: {context.get("domain", "Unknown")}
 
 GRAPH STATS:
-- Nodes: {context.get('node_count', 0)}
-- Edges: {context.get('edge_count', 0)}
-- Effective Domain Admins: {context.get('effective_domain_admins_count', 0)}
-- Kerberoastable attack paths: {context.get('kerberoastable_paths_count', 0)}
-- AS-REP Roastable accounts: {context.get('asrep_roastable_count', 0)}
-- Unconstrained delegation hosts: {context.get('unconstrained_delegation_count', 0)}
-- Cross-domain attack paths: {context.get('cross_domain_paths_count', 0)}
-- High-value targets: {context.get('high_value_targets_count', 0)}
+- Nodes: {context.get("node_count", 0)}
+- Edges: {context.get("edge_count", 0)}
+- Effective Domain Admins: {context.get("effective_domain_admins_count", 0)}
+- Kerberoastable attack paths: {context.get("kerberoastable_paths_count", 0)}
+- AS-REP Roastable accounts: {context.get("asrep_roastable_count", 0)}
+- Unconstrained delegation hosts: {context.get("unconstrained_delegation_count", 0)}
+- Cross-domain attack paths: {context.get("cross_domain_paths_count", 0)}
+- High-value targets: {context.get("high_value_targets_count", 0)}
 
 EFFECTIVE DOMAIN ADMINS (top 20):
-{json.dumps(context.get('effective_domain_admins', []), indent=2)}
+{json.dumps(context.get("effective_domain_admins", []), indent=2)}
 
 KERBEROASTABLE PATHS TO DA (top 10):
-{json.dumps(context.get('kerberoastable_paths', []), indent=2)}
+{json.dumps(context.get("kerberoastable_paths", []), indent=2)}
 
 MOST EXPOSED USERS (ranked by path count to DA):
-{json.dumps(context.get('most_exposed_users', []), indent=2)}
+{json.dumps(context.get("most_exposed_users", []), indent=2)}
 
 HIGH-VALUE TARGETS:
-{json.dumps(context.get('high_value_targets', []), indent=2)}
+{json.dumps(context.get("high_value_targets", []), indent=2)}
 
 UNCONSTRAINED DELEGATION HOSTS:
-{json.dumps(context.get('unconstrained_delegation_sample', []), indent=2)}
+{json.dumps(context.get("unconstrained_delegation_sample", []), indent=2)}
 
 AS-REP ROASTABLE ACCOUNTS:
-{json.dumps(context.get('asrep_roastable_sample', []), indent=2)}
+{json.dumps(context.get("asrep_roastable_sample", []), indent=2)}
 
 Based on this data, identify the most critical attack paths, prioritize risks,
 and suggest concrete remediation steps. Output only valid JSON."""
@@ -304,7 +310,9 @@ and suggest concrete remediation steps. Output only valid JSON."""
     # ── Parsing de la réponse IA ────────────────────────────────
 
     def _parse_ai_response(
-        self, response: str, context: dict
+        self,
+        response: str,
+        context: dict,
     ) -> AttackPathAnalysis:
         """Parse la réponse JSON de l'IA en AttackPathAnalysis."""
         json_str = self._extract_json(response)
@@ -313,45 +321,48 @@ and suggest concrete remediation steps. Output only valid JSON."""
             data = json.loads(json_str)
         except json.JSONDecodeError as e:
             logger.warning("ai_response_parse_failed", error=str(e))
-            return self._fallback_analysis(None, context,
-                                           f"JSON parse error: {e}")
+            return self._fallback_analysis(None, context, f"JSON parse error: {e}")
 
         critical_paths = []
         for cp in data.get("critical_paths", []):
-            critical_paths.append(CriticalPath(
-                name=cp.get("name", "Unnamed path"),
-                source=cp.get("source", "?"),
-                target=cp.get("target", "?"),
-                steps=cp.get("steps", []),
-                technique=cp.get("technique", "Unknown"),
-                risk_score=float(cp.get("risk_score", 0)),
-                business_impact=cp.get("business_impact", ""),
-                remediation=cp.get("remediation", ""),
-            ))
+            critical_paths.append(
+                CriticalPath(
+                    name=cp.get("name", "Unnamed path"),
+                    source=cp.get("source", "?"),
+                    target=cp.get("target", "?"),
+                    steps=cp.get("steps", []),
+                    technique=cp.get("technique", "Unknown"),
+                    risk_score=float(cp.get("risk_score", 0)),
+                    business_impact=cp.get("business_impact", ""),
+                    remediation=cp.get("remediation", ""),
+                ),
+            )
 
         risks = []
         for r in data.get("top_risks", []):
-            risks.append(RiskFinding(
-                finding=r.get("finding", ""),
-                severity=r.get("severity", "medium"),
-                affected_assets=int(r.get("affected_assets", 0)),
-                category=r.get("category", ""),
-            ))
+            risks.append(
+                RiskFinding(
+                    finding=r.get("finding", ""),
+                    severity=r.get("severity", "medium"),
+                    affected_assets=int(r.get("affected_assets", 0)),
+                    category=r.get("category", ""),
+                ),
+            )
 
         return AttackPathAnalysis(
             critical_paths=critical_paths,
             top_risks=risks,
             exposed_users_count=int(
-                data.get("exposed_users_count",
-                         len(context.get("most_exposed_users", [])))
+                data.get("exposed_users_count", len(context.get("most_exposed_users", []))),
             ),
             kerberoastable_accounts_leading_to_da=int(
-                data.get("kerberoastable_accounts_leading_to_da",
-                         context.get("kerberoastable_paths_count", 0))
+                data.get(
+                    "kerberoastable_accounts_leading_to_da",
+                    context.get("kerberoastable_paths_count", 0),
+                ),
             ),
             cross_domain_risks=int(
-                data.get("cross_domain_risks",
-                         context.get("cross_domain_paths_count", 0))
+                data.get("cross_domain_risks", context.get("cross_domain_paths_count", 0)),
             ),
             overall_risk_level=data.get("overall_risk_level", "UNKNOWN"),
             executive_summary=data.get("executive_summary", "No summary available."),
@@ -363,7 +374,7 @@ and suggest concrete remediation steps. Output only valid JSON."""
     def _fallback_analysis(
         self,
         trust_graph,
-        context: Optional[dict] = None,
+        context: dict | None = None,
         error: str = "",
     ) -> AttackPathAnalysis:
         """Analyse dégradée sans IA — purement algorithmique."""
@@ -391,73 +402,88 @@ and suggest concrete remediation steps. Output only valid JSON."""
         critical_paths = []
         if trust_graph:
             for p in trust_graph.find_kerberoastable_paths()[:3]:
-                critical_paths.append(CriticalPath(
-                    name=f"Kerberoasting path via {p.path_labels[0]}",
-                    source=p.path_labels[0],
-                    target=p.path_labels[-1],
-                    steps=[f"{p.path_labels[i]} → {p.path_labels[i+1]}"
-                           for i in range(len(p.path_labels) - 1)],
-                    technique="Kerberoasting + Group Nesting",
-                    risk_score=p.risk_score,
-                    business_impact=(
-                        "Compromission complète du domaine possible via "
-                        "cassage du hash Kerberos du compte de service"
+                critical_paths.append(
+                    CriticalPath(
+                        name=f"Kerberoasting path via {p.path_labels[0]}",
+                        source=p.path_labels[0],
+                        target=p.path_labels[-1],
+                        steps=[
+                            f"{p.path_labels[i]} → {p.path_labels[i + 1]}"
+                            for i in range(len(p.path_labels) - 1)
+                        ],
+                        technique="Kerberoasting + Group Nesting",
+                        risk_score=p.risk_score,
+                        business_impact=(
+                            "Compromission complète du domaine possible via "
+                            "cassage du hash Kerberos du compte de service"
+                        ),
+                        remediation=(
+                            f"Supprimer les SPNs de {p.path_labels[0]} ou "
+                            f"renforcer son mot de passe (30+ caractères)"
+                        ),
                     ),
-                    remediation=(
-                        f"Supprimer les SPNs de {p.path_labels[0]} ou "
-                        f"renforcer son mot de passe (30+ caractères)"
-                    ),
-                ))
+                )
 
             for p in trust_graph.find_cross_domain_attack_paths()[:2]:
-                critical_paths.append(CriticalPath(
-                    name=f"Cross-domain path via {p.path_labels[0]}",
-                    source=p.path_labels[0],
-                    target=p.path_labels[-1],
-                    steps=[f"{p.path_labels[i]} → {p.path_labels[i+1]}"
-                           for i in range(len(p.path_labels) - 1)],
-                    technique="Cross-Domain Trust Exploitation",
-                    risk_score=p.risk_score,
-                    business_impact=(
-                        "Escalade inter-domaine possible via la relation "
-                        "de confiance"
+                critical_paths.append(
+                    CriticalPath(
+                        name=f"Cross-domain path via {p.path_labels[0]}",
+                        source=p.path_labels[0],
+                        target=p.path_labels[-1],
+                        steps=[
+                            f"{p.path_labels[i]} → {p.path_labels[i + 1]}"
+                            for i in range(len(p.path_labels) - 1)
+                        ],
+                        technique="Cross-Domain Trust Exploitation",
+                        risk_score=p.risk_score,
+                        business_impact=(
+                            "Escalade inter-domaine possible via la relation de confiance"
+                        ),
+                        remediation=(
+                            "Activer le SID filtering sur la relation de confiance, "
+                            "réduire les privilèges cross-domaine"
+                        ),
                     ),
-                    remediation=(
-                        "Activer le SID filtering sur la relation de confiance, "
-                        "réduire les privilèges cross-domaine"
-                    ),
-                ))
+                )
 
         # Risques
         risks = []
         if kerb_count > 0:
-            risks.append(RiskFinding(
-                finding=f"{kerb_count} comptes Kerberoastable mènent aux Domain Admins",
-                severity="critical",
-                affected_assets=kerb_count,
-                category="kerberoasting",
-            ))
+            risks.append(
+                RiskFinding(
+                    finding=f"{kerb_count} comptes Kerberoastable mènent aux Domain Admins",
+                    severity="critical",
+                    affected_assets=kerb_count,
+                    category="kerberoasting",
+                ),
+            )
         if asrep_count > 0:
-            risks.append(RiskFinding(
-                finding=f"{asrep_count} comptes vulnérables à l'AS-REP Roasting",
-                severity="high" if asrep_count > 1 else "medium",
-                affected_assets=asrep_count,
-                category="asrep_roasting",
-            ))
+            risks.append(
+                RiskFinding(
+                    finding=f"{asrep_count} comptes vulnérables à l'AS-REP Roasting",
+                    severity="high" if asrep_count > 1 else "medium",
+                    affected_assets=asrep_count,
+                    category="asrep_roasting",
+                ),
+            )
         if unconstrained_count > 0:
-            risks.append(RiskFinding(
-                finding=f"{unconstrained_count} machines avec délégation non contrainte",
-                severity="high",
-                affected_assets=unconstrained_count,
-                category="delegation",
-            ))
+            risks.append(
+                RiskFinding(
+                    finding=f"{unconstrained_count} machines avec délégation non contrainte",
+                    severity="high",
+                    affected_assets=unconstrained_count,
+                    category="delegation",
+                ),
+            )
         if cross_count > 0:
-            risks.append(RiskFinding(
-                finding=f"{cross_count} chemins d'attaque inter-domaines identifiés",
-                severity="critical" if cross_count >= 2 else "high",
-                affected_assets=cross_count + 1,
-                category="cross_domain",
-            ))
+            risks.append(
+                RiskFinding(
+                    finding=f"{cross_count} chemins d'attaque inter-domaines identifiés",
+                    severity="critical" if cross_count >= 2 else "high",
+                    affected_assets=cross_count + 1,
+                    category="cross_domain",
+                ),
+            )
 
         # Résumé exécutif
         if risk_level == "CRITICAL":
@@ -497,7 +523,7 @@ and suggest concrete remediation steps. Output only valid JSON."""
         if "```json" in text:
             parts = text.split("```json", 1)[1].split("```", 1)
             return parts[0].strip()
-        elif "```" in text:
+        if "```" in text:
             parts = text.split("```", 1)[1].split("```", 1)
             return parts[0].strip()
 
@@ -511,12 +537,13 @@ and suggest concrete remediation steps. Output only valid JSON."""
                 elif c == "}":
                     depth -= 1
                     if depth == 0:
-                        return text[:i + 1]
+                        return text[: i + 1]
 
         return text
 
 
 # ── Fonction utilitaire ────────────────────────────────────────
+
 
 async def quick_analysis(
     trust_graph,

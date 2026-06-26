@@ -1,6 +1,4 @@
-"""
-Moteur de plugins — découverte, chargement et cycle de vie des modules NavMAX.
-"""
+"""Moteur de plugins — découverte, chargement et cycle de vie des modules NavMAX."""
 
 import importlib
 import inspect
@@ -46,8 +44,7 @@ class PluginBase:
 
 
 class PluginManager:
-    """
-    Gestionnaire de plugins.
+    """Gestionnaire de plugins.
     Découvre, charge, active/désactive les plugins.
     """
 
@@ -64,14 +61,15 @@ class PluginManager:
         return list(self._plugins.keys())
 
     def discover(self, package_path: str) -> list[str]:
-        """
-        Découvre les plugins dans un package Python.
+        """Découvre les plugins dans un package Python.
         Retourne la liste des noms de modules trouvés.
         """
         discovered: list[str] = []
         try:
             package = importlib.import_module(package_path)
-            for _, mod_name, is_pkg in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
+            for _, mod_name, is_pkg in pkgutil.iter_modules(
+                package.__path__, package.__name__ + ".",
+            ):
                 if not is_pkg:
                     discovered.append(mod_name)
             logger.info("plugins_découverts", count=len(discovered), path=package_path)
@@ -80,14 +78,13 @@ class PluginManager:
         return discovered
 
     async def load(self, module_path: str) -> PluginBase | None:
-        """
-        Charge un plugin depuis un module Python.
+        """Charge un plugin depuis un module Python.
         Cherche une classe héritant de PluginBase.
         """
         try:
             mod = importlib.import_module(module_path)
         except Exception as e:
-            logger.error("échec_import_plugin", module=module_path, erreur=str(e))
+            logger.exception("échec_import_plugin", module=module_path, erreur=str(e))
             return None
 
         for _name, obj in inspect.getmembers(mod, inspect.isclass):
@@ -100,7 +97,7 @@ class PluginManager:
             try:
                 await instance.on_load()
             except Exception as e:
-                logger.error("échec_on_load", plugin=instance.info.name, erreur=str(e))
+                logger.exception("échec_on_load", plugin=instance.info.name, erreur=str(e))
                 return None
 
             self._plugins[instance.info.name] = instance
@@ -152,7 +149,7 @@ class PluginManager:
                     result = callback(*args, **kwargs)
                 results.append(result)
             except Exception as e:
-                logger.error("erreur_hook", hook=hook_name, erreur=str(e))
+                logger.exception("erreur_hook", hook=hook_name, erreur=str(e))
         return results
 
     async def shutdown(self) -> None:

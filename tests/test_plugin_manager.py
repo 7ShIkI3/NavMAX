@@ -1,6 +1,4 @@
-"""
-Tests unitaires pour le système de plugins modulaire (navmax/core/plugin_manager.py).
-"""
+"""Tests unitaires pour le système de plugins modulaire (navmax/core/plugin_manager.py)."""
 
 from __future__ import annotations
 
@@ -8,7 +6,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Never
 
 import pytest
 
@@ -16,11 +14,9 @@ from navmax.core.plugin_manager import (
     PluginBase,
     PluginDescriptor,
     PluginManager,
-    _PLUGIN_REGISTRY,
     make_plugin_api_routes,
     register_plugin,
 )
-
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -43,13 +39,15 @@ def sample_plugin_dir():
         scanner_dir = base / "port_scanner"
         scanner_dir.mkdir()
         (scanner_dir / "manifest.json").write_text(
-            json.dumps({
-                "name": "port_scanner",
-                "version": "2.1.0",
-                "author": "NavMAX Team",
-                "description": "Scan de ports TCP/UDP",
-                "category": "scanner",
-            }),
+            json.dumps(
+                {
+                    "name": "port_scanner",
+                    "version": "2.1.0",
+                    "author": "NavMAX Team",
+                    "description": "Scan de ports TCP/UDP",
+                    "category": "scanner",
+                },
+            ),
             "utf-8",
         )
         (scanner_dir / "plugin.py").write_text(
@@ -70,13 +68,15 @@ class PortScannerPlugin(PluginBase):
         osint_dir = base / "dns_lookup"
         osint_dir.mkdir()
         (osint_dir / "manifest.json").write_text(
-            json.dumps({
-                "name": "dns_lookup",
-                "version": "1.0.0",
-                "author": "OSINT Team",
-                "description": "Résolution DNS avancée",
-                "category": "osint",
-            }),
+            json.dumps(
+                {
+                    "name": "dns_lookup",
+                    "version": "1.0.0",
+                    "author": "OSINT Team",
+                    "description": "Résolution DNS avancée",
+                    "category": "osint",
+                },
+            ),
             "utf-8",
         )
         (osint_dir / "plugin.py").write_text(
@@ -103,7 +103,7 @@ class DnsLookupPlugin(PluginBase):
 class TestRegisterPluginDecorator:
     """Tests unitaires pour le décorateur @register_plugin."""
 
-    def test_register_valid_plugin(self):
+    def test_register_valid_plugin(self) -> None:
         @register_plugin(name="test_ping", version="0.1.0", category="scanner")
         class PingPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -112,7 +112,7 @@ class TestRegisterPluginDecorator:
         assert "test_ping" in PluginManager.registered_plugins()
         assert PluginManager.registered_plugins()["test_ping"] is PingPlugin
 
-    def test_register_duplicate_raises(self):
+    def test_register_duplicate_raises(self) -> None:
         @register_plugin(name="dup", version="1.0", category="scanner")
         class DupA(PluginBase):
             async def execute(self, **kwargs):
@@ -125,14 +125,14 @@ class TestRegisterPluginDecorator:
                 async def execute(self, **kwargs):
                     return {"status": "ok"}
 
-    def test_register_non_plugin_base_raises(self):
+    def test_register_non_plugin_base_raises(self) -> None:
         with pytest.raises(TypeError, match="sous-classe de PluginBase"):
 
             @register_plugin(name="bad", version="1.0", category="scanner")
             class NotAPlugin:
                 pass
 
-    def test_register_invalid_category_raises(self):
+    def test_register_invalid_category_raises(self) -> None:
         with pytest.raises(ValueError, match="Catégorie"):
 
             @register_plugin(name="inv", version="1.0", category="invalid_cat")
@@ -140,8 +140,10 @@ class TestRegisterPluginDecorator:
                 async def execute(self, **kwargs):
                     return {"status": "ok"}
 
-    @pytest.mark.parametrize("cat", ["scanner", "exploit", "osint", "proxy", "ad", "firewall", "reporting", "ai"])
-    def test_all_valid_categories(self, cat):
+    @pytest.mark.parametrize(
+        "cat", ["scanner", "exploit", "osint", "proxy", "ad", "firewall", "reporting", "ai"],
+    )
+    def test_all_valid_categories(self, cat) -> None:
         @register_plugin(name=f"plugin_{cat}", version="1.0", category=cat)
         class CatPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -149,7 +151,7 @@ class TestRegisterPluginDecorator:
 
         assert f"plugin_{cat}" in PluginManager.registered_plugins()
 
-    def test_metadata_attached(self):
+    def test_metadata_attached(self) -> None:
         @register_plugin(
             name="meta_test",
             version="3.0.0",
@@ -168,7 +170,7 @@ class TestRegisterPluginDecorator:
         assert instance.description == "A test plugin with metadata"
         assert instance.category == "reporting"
 
-    def test_register_without_author_and_description(self):
+    def test_register_without_author_and_description(self) -> None:
         @register_plugin(name="minimal", version="1.0", category="ai")
         class MinimalPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -186,12 +188,12 @@ class TestRegisterPluginDecorator:
 class TestPluginBase:
     """Tests unitaires pour la classe de base PluginBase."""
 
-    def test_abstract_execute(self):
+    def test_abstract_execute(self) -> None:
         """PluginBase ne peut pas être instanciée directement car execute est abstrait."""
         with pytest.raises(TypeError):
             PluginBase()
 
-    def test_initialize_and_cleanup(self):
+    def test_initialize_and_cleanup(self) -> None:
         @register_plugin(name="lifecycle", version="1.0", category="scanner")
         class LifecyclePlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -203,6 +205,7 @@ class TestPluginBase:
 
         # initialize
         import asyncio
+
         asyncio.run(instance.initialize())
         assert instance.initialized is True
 
@@ -210,10 +213,13 @@ class TestPluginBase:
         asyncio.run(instance.cleanup())
         assert instance.initialized is False
 
-    def test_metadata_dict(self):
+    def test_metadata_dict(self) -> None:
         @register_plugin(
-            name="meta_dict", version="2.0", author="Alice",
-            description="Plugin metadata test", category="exploit",
+            name="meta_dict",
+            version="2.0",
+            author="Alice",
+            description="Plugin metadata test",
+            category="exploit",
         )
         class DictPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -226,7 +232,7 @@ class TestPluginBase:
         assert meta["author"] == "Alice"
         assert meta["category"] == "exploit"
 
-    def test_unique_instance_ids(self):
+    def test_unique_instance_ids(self) -> None:
         @register_plugin(name="id_test", version="1.0", category="proxy")
         class IdPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -243,19 +249,19 @@ class TestPluginBase:
 class TestPluginManagerDiscovery:
     """Tests de la découverte de plugins par dossier."""
 
-    def test_discover_empty_directory(self, tmp_path):
+    def test_discover_empty_directory(self, tmp_path) -> None:
         empty = tmp_path / "empty_plugins"
         empty.mkdir()
         manager = PluginManager()
         discovered = manager.discover_plugins(str(empty))
         assert discovered == []
 
-    def test_discover_nonexistent_directory(self):
+    def test_discover_nonexistent_directory(self) -> None:
         manager = PluginManager()
         discovered = manager.discover_plugins("/tmp/nonexistent_plugins_xyz")
         assert discovered == []
 
-    def test_discover_without_manifest_skipped(self, tmp_path):
+    def test_discover_without_manifest_skipped(self, tmp_path) -> None:
         d = tmp_path / "no_manifest"
         d.mkdir()
         (d / "plugin.py").write_text("# no manifest", "utf-8")
@@ -263,7 +269,7 @@ class TestPluginManagerDiscovery:
         discovered = manager.discover_plugins(str(tmp_path))
         assert discovered == []
 
-    def test_discover_invalid_manifest_skipped(self, tmp_path):
+    def test_discover_invalid_manifest_skipped(self, tmp_path) -> None:
         d = tmp_path / "bad_manifest"
         d.mkdir()
         (d / "manifest.json").write_text("not json", "utf-8")
@@ -272,7 +278,7 @@ class TestPluginManagerDiscovery:
         discovered = manager.discover_plugins(str(tmp_path))
         assert discovered == []
 
-    def test_discover_sample_plugins(self, sample_plugin_dir):
+    def test_discover_sample_plugins(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         discovered = manager.discover_plugins(sample_plugin_dir)
         names = {d.name for d in discovered}
@@ -280,7 +286,7 @@ class TestPluginManagerDiscovery:
         assert "dns_lookup" in names
         assert len(discovered) == 2
 
-    def test_discover_fills_descriptors(self, sample_plugin_dir):
+    def test_discover_fills_descriptors(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         desc = manager._descriptors.get("port_scanner")
@@ -294,7 +300,7 @@ class TestPluginManagerDiscovery:
 class TestPluginManagerLoad:
     """Tests du chargement de plugins."""
 
-    async def test_load_plugin_from_discovery(self, sample_plugin_dir):
+    async def test_load_plugin_from_discovery(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         instance = await manager.load_plugin("port_scanner")
@@ -302,7 +308,7 @@ class TestPluginManagerLoad:
         assert instance.name == "port_scanner"
         assert instance.initialized is True
 
-    async def test_load_plugin_from_registry_only(self):
+    async def test_load_plugin_from_registry_only(self) -> None:
         @register_plugin(name="registry_only", version="1.0", category="ai")
         class RegistryOnlyPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -314,12 +320,12 @@ class TestPluginManagerLoad:
         assert instance.name == "registry_only"
         assert instance.initialized is True
 
-    async def test_load_nonexistent_plugin(self):
+    async def test_load_nonexistent_plugin(self) -> None:
         manager = PluginManager()
         instance = await manager.load_plugin("does_not_exist")
         assert instance is None
 
-    async def test_load_plugin_updates_descriptor(self, sample_plugin_dir):
+    async def test_load_plugin_updates_descriptor(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         desc_before = manager._descriptors["dns_lookup"]
@@ -330,7 +336,7 @@ class TestPluginManagerLoad:
         assert desc_before.loaded is True
         assert desc_before.instance_id != ""
 
-    async def test_load_twice_returns_same_instance(self, sample_plugin_dir):
+    async def test_load_twice_returns_same_instance(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         inst1 = await manager.load_plugin("port_scanner")
@@ -341,12 +347,12 @@ class TestPluginManagerLoad:
 class TestPluginManagerList:
     """Tests de list_plugins()."""
 
-    async def test_list_empty(self):
+    async def test_list_empty(self) -> None:
         manager = PluginManager()
         plugins = manager.list_plugins()
         assert plugins == []
 
-    async def test_list_after_discovery(self, sample_plugin_dir):
+    async def test_list_after_discovery(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         plugins = manager.list_plugins()
@@ -356,7 +362,7 @@ class TestPluginManagerList:
         for p in plugins:
             assert p["loaded"] is False
 
-    async def test_list_after_load(self, sample_plugin_dir):
+    async def test_list_after_load(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         await manager.load_plugin("port_scanner")
@@ -365,7 +371,7 @@ class TestPluginManagerList:
         assert port_scanner["loaded"] is True
         assert port_scanner["instance_id"] != ""
 
-    async def test_list_includes_registry_only(self):
+    async def test_list_includes_registry_only(self) -> None:
         @register_plugin(name="reg_only_list", version="2.0", category="firewall")
         class RegListPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -380,7 +386,7 @@ class TestPluginManagerList:
 class TestPluginManagerUnload:
     """Tests du déchargement de plugins."""
 
-    async def test_unload_loaded_plugin(self, sample_plugin_dir):
+    async def test_unload_loaded_plugin(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         await manager.load_plugin("port_scanner")
@@ -388,18 +394,18 @@ class TestPluginManagerUnload:
         assert result is True
         assert "port_scanner" not in manager._loaded
 
-    async def test_unload_nonexistent_plugin(self):
+    async def test_unload_nonexistent_plugin(self) -> None:
         manager = PluginManager()
         result = await manager.unload_plugin("ghost")
         assert result is False
 
-    async def test_unload_not_loaded_plugin(self, sample_plugin_dir):
+    async def test_unload_not_loaded_plugin(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         result = await manager.unload_plugin("port_scanner")
         assert result is False
 
-    async def test_unload_resets_descriptor(self, sample_plugin_dir):
+    async def test_unload_resets_descriptor(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         await manager.load_plugin("dns_lookup")
@@ -413,7 +419,7 @@ class TestPluginManagerUnload:
 class TestPluginManagerExecute:
     """Tests de l'exécution des plugins."""
 
-    async def test_execute_loaded_plugin(self, sample_plugin_dir):
+    async def test_execute_loaded_plugin(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         await manager.load_plugin("port_scanner")
@@ -421,7 +427,7 @@ class TestPluginManagerExecute:
         assert result["status"] == "ok"
         assert result["data"]["ports"] == [22, 80, 443]
 
-    async def test_execute_with_kwargs(self, sample_plugin_dir):
+    async def test_execute_with_kwargs(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         await manager.load_plugin("dns_lookup")
@@ -429,13 +435,13 @@ class TestPluginManagerExecute:
         assert result["status"] == "ok"
         assert result["data"]["domain"] == "navmax.io"
 
-    async def test_execute_not_loaded_returns_error(self):
+    async def test_execute_not_loaded_returns_error(self) -> None:
         manager = PluginManager()
         result = await manager.execute_plugin("ghost")
         assert result["status"] == "error"
         assert "non chargé" in result["message"]
 
-    async def test_execute_not_initialized_returns_error(self):
+    async def test_execute_not_initialized_returns_error(self) -> None:
         @register_plugin(name="uninit", version="1.0", category="scanner")
         class UninitPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -451,11 +457,12 @@ class TestPluginManagerExecute:
         assert result["status"] == "error"
         assert "non initialisé" in result["message"]
 
-    async def test_execute_propagates_exception(self):
+    async def test_execute_propagates_exception(self) -> None:
         @register_plugin(name="crash", version="1.0", category="scanner")
         class CrashPlugin(PluginBase):
-            async def execute(self, **kwargs):
-                raise RuntimeError("Boom!")
+            async def execute(self, **kwargs) -> Never:
+                msg = "Boom!"
+                raise RuntimeError(msg)
 
         manager = PluginManager()
         await manager.load_plugin("crash")
@@ -467,7 +474,7 @@ class TestPluginManagerExecute:
 class TestPluginManagerIntegration:
     """Tests d'intégration complets du cycle de vie plugin."""
 
-    async def test_full_lifecycle(self, sample_plugin_dir):
+    async def test_full_lifecycle(self, sample_plugin_dir) -> None:
         """Découverte → chargement → exécution → déchargement."""
         manager = PluginManager()
 
@@ -500,7 +507,7 @@ class TestPluginManagerIntegration:
         scanner_after = next(p for p in listing_after if p["name"] == "port_scanner")
         assert scanner_after["loaded"] is False
 
-    async def test_multiple_plugins_loaded(self, sample_plugin_dir):
+    async def test_multiple_plugins_loaded(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
 
@@ -515,7 +522,7 @@ class TestPluginManagerIntegration:
         assert result_s["status"] == "ok"
         assert result_d["status"] == "ok"
 
-    async def test_clear_registry_affects_discovery(self):
+    async def test_clear_registry_affects_discovery(self) -> None:
         @register_plugin(name="will_be_cleared", version="1.0", category="ai")
         class ClearPlugin(PluginBase):
             async def execute(self, **kwargs):
@@ -532,7 +539,7 @@ class TestPluginManagerIntegration:
 class TestPluginAPIRoutes:
     """Tests de la génération des routes API REST."""
 
-    def test_make_plugin_api_routes_returns_router(self, sample_plugin_dir):
+    def test_make_plugin_api_routes_returns_router(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         router = make_plugin_api_routes(manager)
@@ -544,14 +551,14 @@ class TestPluginAPIRoutes:
         assert router.prefix == "/api/v1/plugins"
         assert len(router.routes) == 2
 
-    def test_router_route_names(self):
+    def test_router_route_names(self) -> None:
         manager = PluginManager()
         router = make_plugin_api_routes(manager)
         routes = {r.path for r in router.routes}
         assert "/api/v1/plugins" in routes
         assert "/api/v1/plugins/{name}/execute" in routes
 
-    async def test_router_list_endpoint(self, sample_plugin_dir):
+    async def test_router_list_endpoint(self, sample_plugin_dir) -> None:
         """Test l'endpoint GET /api/v1/plugins avec le routeur."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -571,7 +578,7 @@ class TestPluginAPIRoutes:
         names = {p["name"] for p in data["plugins"]}
         assert names == {"port_scanner", "dns_lookup"}
 
-    async def test_router_execute_endpoint(self, sample_plugin_dir):
+    async def test_router_execute_endpoint(self, sample_plugin_dir) -> None:
         """Test l'endpoint POST /api/v1/plugins/{name}/execute."""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -590,7 +597,7 @@ class TestPluginAPIRoutes:
         assert data["status"] == "ok"
         assert data["data"]["ports"] == [22, 80, 443]
 
-    async def test_router_execute_not_loaded_returns_400(self):
+    async def test_router_execute_not_loaded_returns_400(self) -> None:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -611,7 +618,7 @@ class TestPluginAPIRoutes:
 class TestPluginManagerRobustness:
     """Tests de robustesse et cas limites."""
 
-    def test_discover_plugin_symlink_loop(self, tmp_path):
+    def test_discover_plugin_symlink_loop(self, tmp_path) -> None:
         """Les liens symboliques ne doivent pas causer d'erreur."""
         d = tmp_path / "plugins"
         d.mkdir()
@@ -635,7 +642,7 @@ class TestPluginManagerRobustness:
         assert len(discovered) >= 1
 
     @pytest.mark.parametrize("bad_json", ["", "not json", "{broken", "[]"])
-    def test_invalid_manifest_does_not_crash(self, tmp_path, bad_json):
+    def test_invalid_manifest_does_not_crash(self, tmp_path, bad_json) -> None:
         d = tmp_path / "bad"
         d.mkdir()
         (d / "manifest.json").write_text(bad_json, "utf-8")
@@ -644,7 +651,7 @@ class TestPluginManagerRobustness:
         discovered = manager.discover_plugins(str(tmp_path))
         assert len(discovered) == 0
 
-    async def test_load_plugin_with_missing_file_returns_none(self, sample_plugin_dir):
+    async def test_load_plugin_with_missing_file_returns_none(self, sample_plugin_dir) -> None:
         manager = PluginManager()
         manager.discover_plugins(sample_plugin_dir)
         # Supprimer le fichier plugin.py
@@ -653,11 +660,12 @@ class TestPluginManagerRobustness:
         instance = await manager.load_plugin("port_scanner")
         assert instance is None
 
-    async def test_cleanup_on_unload_not_crashing(self):
+    async def test_cleanup_on_unload_not_crashing(self) -> None:
         @register_plugin(name="messy", version="1.0", category="scanner")
         class MessyPlugin(PluginBase):
-            async def cleanup(self):
-                raise RuntimeError("Cleanup fails but should not crash")
+            async def cleanup(self) -> Never:
+                msg = "Cleanup fails but should not crash"
+                raise RuntimeError(msg)
 
             async def execute(self, **kwargs):
                 return {"status": "ok"}
@@ -668,13 +676,13 @@ class TestPluginManagerRobustness:
         assert result is True  # Even though cleanup raised
         assert "messy" not in manager._loaded
 
-    def test_make_api_routes_empty_manager(self):
+    def test_make_api_routes_empty_manager(self) -> None:
         manager = PluginManager()
         router = make_plugin_api_routes(manager)
         assert router.prefix == "/api/v1/plugins"
 
     @pytest.mark.parametrize("cat", ["scanner", "exploit", "osint"])
-    def test_descriptor_creation(self, cat):
+    def test_descriptor_creation(self, cat) -> None:
         desc = PluginDescriptor(
             name="test",
             version="1.0",
@@ -687,18 +695,26 @@ class TestPluginManagerRobustness:
         assert desc.category == cat
         assert desc.loaded is False
 
-    def test_descriptor_extra_fields(self):
+    def test_descriptor_extra_fields(self) -> None:
         desc = PluginDescriptor(
-            name="test", version="1.0", author="", description="",
-            category="scanner", path="/tmp/test",
+            name="test",
+            version="1.0",
+            author="",
+            description="",
+            category="scanner",
+            path="/tmp/test",
             extra={"requires": ["nmap"]},
         )
         assert desc.extra["requires"] == ["nmap"]
 
-    def test_descriptor_defaults(self):
+    def test_descriptor_defaults(self) -> None:
         desc = PluginDescriptor(
-            name="min", version="1.0", author="", description="",
-            category="scanner", path="/tmp/min",
+            name="min",
+            version="1.0",
+            author="",
+            description="",
+            category="scanner",
+            path="/tmp/min",
         )
         assert desc.loaded is False
         assert desc.instance_id == ""
@@ -708,14 +724,22 @@ class TestPluginManagerRobustness:
 # ── test que PluginManager est accessible depuis l'API publique ──────────────
 
 
-def test_public_api_imports():
+def test_public_api_imports() -> None:
     """Vérifie que les symboles sont bien dans le namespace attendu."""
     from navmax.core import (
         PluginBase as PB,
-        PluginManager as PM,
+    )
+    from navmax.core import (
         PluginDescriptor as PD,
-        register_plugin as RP,
+    )
+    from navmax.core import (
+        PluginManager as PM,
+    )
+    from navmax.core import (
         make_plugin_api_routes as MR,
+    )
+    from navmax.core import (
+        register_plugin as RP,
     )
 
     assert PB is PluginBase

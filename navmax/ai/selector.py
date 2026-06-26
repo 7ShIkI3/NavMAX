@@ -1,5 +1,4 @@
-"""
-ModelSelector — détection et sélection automatique du meilleur modèle.
+"""ModelSelector — détection et sélection automatique du meilleur modèle.
 
 Scan les providers disponibles, match contre le catalogue, et choisit
 le modèle optimal pour chaque tâche selon :
@@ -9,17 +8,17 @@ le modèle optimal pour chaque tâche selon :
 - Les capacités hardware
 """
 
-import asyncio
 from dataclasses import dataclass, field
-from typing import Optional
+
 import structlog
 
-from navmax.ai.providers.base import ModelTier, ProviderType, ModelInfo
-from navmax.ai.models_catalog import (
-    CatalogEntry, MODEL_CATALOG, get_catalog_by_tier,
-    match_ollama_model, find_best_for_task, ModelTag,
-)
 from navmax.ai.hardware import HardwareProfile
+from navmax.ai.models_catalog import (
+    CatalogEntry,
+    ModelTag,
+    match_ollama_model,
+)
+from navmax.ai.providers.base import ModelInfo, ModelTier, ProviderType
 
 logger = structlog.get_logger(__name__)
 
@@ -27,14 +26,15 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class SelectionResult:
     """Résultat de la sélection de modèle."""
-    entry: Optional[CatalogEntry]   # Entrée catalogue (None si modèle inconnu)
-    model: str                       # Nom du modèle à utiliser
+
+    entry: CatalogEntry | None  # Entrée catalogue (None si modèle inconnu)
+    model: str  # Nom du modèle à utiliser
     provider: ProviderType
     tier: ModelTier
     is_uncensored: bool
     is_local: bool
     ram_required_gb: float
-    reason: str                      # Pourquoi ce modèle a été choisi
+    reason: str  # Pourquoi ce modèle a été choisi
 
     @property
     def display_name(self) -> str:
@@ -52,19 +52,20 @@ class SelectionResult:
 @dataclass
 class SelectionReport:
     """Rapport complet de l'état des modèles disponibles."""
+
     hardware: HardwareProfile
     available_models: list[SelectionResult] = field(default_factory=list)
-    best_per_tier: dict[ModelTier, Optional[SelectionResult]] = field(default_factory=dict)
+    best_per_tier: dict[ModelTier, SelectionResult | None] = field(default_factory=dict)
     abliterated_available: list[SelectionResult] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         lines = [
-            f"=== NavMAX Model Selection Report ===",
+            "=== NavMAX Model Selection Report ===",
             f"Hardware: {self.hardware.ram_total_gb}GB RAM, "
             f"GPU: {self.hardware.gpu_name or 'None'}, "
             f"Max local tier: {self.hardware.max_local_tier}",
-            f"",
+            "",
             f"Available models: {len(self.available_models)}",
         ]
         for tier in [ModelTier.LIGHT, ModelTier.MEDIUM, ModelTier.HEAVY]:
@@ -75,14 +76,14 @@ class SelectionReport:
                 lines.append(f"  {tier.value.upper()}: ❌ Aucun")
 
         if self.abliterated_available:
-            lines.append(f"")
+            lines.append("")
             lines.append(f"🔓 Abliterated/Uncensored ({len(self.abliterated_available)}):")
             for r in self.abliterated_available:
                 lines.append(f"  - {r.model}")
 
         if self.recommendations:
-            lines.append(f"")
-            lines.append(f"📋 Recommandations:")
+            lines.append("")
+            lines.append("📋 Recommandations:")
             for rec in self.recommendations:
                 lines.append(f"  • {rec}")
 
@@ -90,8 +91,7 @@ class SelectionReport:
 
 
 class ModelSelector:
-    """
-    Sélectionneur intelligent de modèles.
+    """Sélectionneur intelligent de modèles.
 
     Utilisation :
         selector = ModelSelector(hardware=hw)
@@ -99,23 +99,28 @@ class ModelSelector:
         best = await selector.select(tier=ModelTier.MEDIUM, prefer_uncensored=True)
     """
 
-    def __init__(self, hardware: Optional[HardwareProfile] = None,
-                 prefer_uncensored: bool = True,
-                 airgap: bool = False):
+    def __init__(
+        self,
+        hardware: HardwareProfile | None = None,
+        prefer_uncensored: bool = True,
+        airgap: bool = False,
+    ) -> None:
         self.hardware = hardware
         self.prefer_uncensored = prefer_uncensored
         self.airgap = airgap
         self._available: dict[str, SelectionResult] = {}  # model_name → result
         self._by_tier: dict[ModelTier, list[SelectionResult]] = {
-            ModelTier.LIGHT: [], ModelTier.MEDIUM: [], ModelTier.HEAVY: []
+            ModelTier.LIGHT: [],
+            ModelTier.MEDIUM: [],
+            ModelTier.HEAVY: [],
         }
 
     async def scan(self, providers: dict[ProviderType, "BaseProvider"]) -> SelectionReport:
-        """
-        Scanne tous les providers et construit le rapport de disponibilité.
+        """Scanne tous les providers et construit le rapport de disponibilité.
 
         Args:
             providers: dict {ProviderType: BaseProvider instance}
+
         """
         self._available.clear()
         for tier in self._by_tier:
@@ -123,6 +128,7 @@ class ModelSelector:
 
         if not self.hardware:
             from navmax.ai.hardware import detect_hardware
+
             self.hardware = detect_hardware()
 
         # Scanner chaque provider
@@ -152,8 +158,8 @@ class ModelSelector:
             # Préférer uncensored si demandé
             if self.prefer_uncensored:
                 uncensored = [m for m in tier_models if m.is_uncensored]
-                report.best_per_tier[tier] = uncensored[0] if uncensored else (
-                    tier_models[0] if tier_models else None
+                report.best_per_tier[tier] = (
+                    uncensored[0] if uncensored else (tier_models[0] if tier_models else None)
                 )
             else:
                 report.best_per_tier[tier] = tier_models[0] if tier_models else None
@@ -163,29 +169,33 @@ class ModelSelector:
 
         return report
 
-    def _classify_model(self, model_info: ModelInfo) -> Optional[SelectionResult]:
+    def _classify_model(self, model_info: ModelInfo) -> SelectionResult | None:
         """Classifie un modèle détecté contre le catalogue."""
         # Chercher dans le catalogue
         entry = match_ollama_model(model_info.name)
 
         if not entry:
             # Modèle inconnu — classification heuristique
-            tier = model_info.tier  # déjà deviné par le provider
             entry = None
 
         # Vérifier si ce modèle peut tourner localement
         ram_needed = entry.ram_required_gb if entry else 6.0
         is_local = model_info.provider in (
-            ProviderType.OLLAMA, ProviderType.LLAMACPP, ProviderType.LMSTUDIO
+            ProviderType.OLLAMA,
+            ProviderType.LLAMACPP,
+            ProviderType.LMSTUDIO,
         )
-        can_run_locally = (
-            not is_local or
-            (self.hardware and self.hardware.ram_total_gb >= ram_needed)
+        can_run_locally = not is_local or (
+            self.hardware and self.hardware.ram_total_gb >= ram_needed
         )
 
         if is_local and not can_run_locally:
-            logger.info("model_too_heavy", model=model_info.name, ram_needed=ram_needed,
-                         ram_available=self.hardware.ram_total_gb if self.hardware else 0)
+            logger.info(
+                "model_too_heavy",
+                model=model_info.name,
+                ram_needed=ram_needed,
+                ram_available=self.hardware.ram_total_gb if self.hardware else 0,
+            )
             return None
 
         return SelectionResult(
@@ -199,8 +209,7 @@ class ModelSelector:
             reason=self._build_reason(entry, model_info, is_local),
         )
 
-    def _build_reason(self, entry: Optional[CatalogEntry],
-                       model: ModelInfo, is_local: bool) -> str:
+    def _build_reason(self, entry: CatalogEntry | None, model: ModelInfo, is_local: bool) -> str:
         if entry:
             tags = []
             if entry.is_abliterated:
@@ -214,9 +223,8 @@ class ModelSelector:
             tag_str = ", ".join(tags) if tags else "standard"
             loc = "local" if is_local else "cloud"
             return f"{tag_str} ({loc}) — {entry.description}"
-        else:
-            loc = "local" if is_local else "cloud"
-            return f"unknown model ({loc}) — no catalog entry"
+        loc = "local" if is_local else "cloud"
+        return f"unknown model ({loc}) — no catalog entry"
 
     def _generate_recommendations(self, report: SelectionReport) -> list[str]:
         """Génère des recommandations humaines."""
@@ -227,42 +235,41 @@ class ModelSelector:
             recs.append(
                 "🔓 Aucun modèle abliterated détecté. "
                 "Pour la cybersécurité offensive, installez :\n"
-                "  ollama pull huihui_ai/llama3.1-abliterated:8b"
+                "  ollama pull huihui_ai/llama3.1-abliterated:8b",
             )
 
         # Vérifier le tier medium
         if not report.best_per_tier.get(ModelTier.MEDIUM):
             if self.hardware and self.hardware.max_local_tier in ("medium", "heavy"):
                 recs.append(
-                    "⚠️  Aucun modèle MEDIUM (7-8B) détecté. "
-                    "Recommandé : ollama pull llama3.1:8b"
+                    "⚠️  Aucun modèle MEDIUM (7-8B) détecté. Recommandé : ollama pull llama3.1:8b",
                 )
             else:
                 recs.append(
                     "💡 Pas assez de RAM pour un modèle MEDIUM local. "
-                    "Le cloud sera utilisé en fallback."
+                    "Le cloud sera utilisé en fallback.",
                 )
 
         # Suggérer si on a un GPU inutilisé
         if self.hardware and self.hardware.gpu_name and self.hardware.gpu_vram_gb:
-            has_llamacpp = any(
-                r.provider == ProviderType.LLAMACPP for r in report.available_models
-            )
+            has_llamacpp = any(r.provider == ProviderType.LLAMACPP for r in report.available_models)
             if not has_llamacpp:
                 recs.append(
                     f"🚀 GPU {self.hardware.gpu_name} détecté mais llama.cpp non utilisé. "
-                    "Installez llama-cpp-python pour 2-3x plus de performance."
+                    "Installez llama-cpp-python pour 2-3x plus de performance.",
                 )
 
         return recs
 
-    async def select(self, tier: ModelTier,
-                     prefer_uncensored: Optional[bool] = None,
-                     prefer_local: bool = True,
-                     provider: Optional[ProviderType] = None,
-                     model: Optional[str] = None) -> SelectionResult:
-        """
-        Sélectionne le meilleur modèle pour un tier donné.
+    async def select(
+        self,
+        tier: ModelTier,
+        prefer_uncensored: bool | None = None,
+        prefer_local: bool = True,
+        provider: ProviderType | None = None,
+        model: str | None = None,
+    ) -> SelectionResult:
+        """Sélectionne le meilleur modèle pour un tier donné.
 
         Args:
             tier: Niveau de capacité requis
@@ -276,30 +283,30 @@ class ModelSelector:
 
         Raises:
             RuntimeError: Si aucun modèle n'est disponible pour ce tier
+
         """
         if prefer_uncensored is None:
             prefer_uncensored = self.prefer_uncensored
 
         # Si modèle forcé
         if model:
-            for key, result in self._available.items():
+            for result in self._available.values():
                 if result.model == model:
                     return result
-            raise RuntimeError(f"Requested model '{model}' not available")
+            msg = f"Requested model '{model}' not available"
+            raise RuntimeError(msg)
 
         # Si provider forcé
         if provider:
-            candidates = [
-                r for r in self._by_tier[tier]
-                if r.provider == provider
-            ]
+            candidates = [r for r in self._by_tier[tier] if r.provider == provider]
             if candidates:
                 if prefer_uncensored:
                     uncensored = [c for c in candidates if c.is_uncensored]
                     if uncensored:
                         return uncensored[0]
                 return candidates[0]
-            raise RuntimeError(f"No model for tier {tier.value} on provider {provider.value}")
+            msg = f"No model for tier {tier.value} on provider {provider.value}"
+            raise RuntimeError(msg)
 
         # Sélection automatique
         candidates = self._by_tier.get(tier, [])
@@ -335,10 +342,13 @@ class ModelSelector:
                         if uncensored:
                             return uncensored[0]
                     return fb_candidates[0]
-            raise RuntimeError(
+            msg = (
                 f"No model available for tier {tier.value} "
                 f"(local={'only' if self.airgap else 'preferred'}). "
                 f"Install a model or disable airgap mode."
+            )
+            raise RuntimeError(
+                msg,
             )
 
         # Préférer uncensored
@@ -360,7 +370,6 @@ class ModelSelector:
             "models_available": len(self._available),
             "abliterated_available": sum(1 for r in self._available.values() if r.is_uncensored),
             "by_tier": {
-                tier.value: [r.model for r in models]
-                for tier, models in self._by_tier.items()
+                tier.value: [r.model for r in models] for tier, models in self._by_tier.items()
             },
         }

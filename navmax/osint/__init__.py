@@ -1,5 +1,4 @@
-"""
-Module OSINT — reconnaissance et graphe (Maltego-like).
+"""Module OSINT — reconnaissance et graphe (Maltego-like).
 
 Fonctionnalités :
 - Collecteurs : DNS, WHOIS, SSL, Web scraping
@@ -10,25 +9,43 @@ Fonctionnalités :
 """
 
 from .collectors import (
-    DnsCollector, DnsRecord,
-    WhoisCollector, WhoisInfo,
-    SslCollector, SslCertInfo,
-    WebCollector, WebTechInfo,
+    DnsCollector,
+    DnsRecord,
+    SslCertInfo,
+    SslCollector,
+    WebCollector,
+    WebTechInfo,
+    WhoisCollector,
+    WhoisInfo,
 )
 from .graph import (
-    Entity, Relation, EntityType, RelationType,
+    ALL_TRANSFORMS,
+    Entity,
+    EntityType,
     GraphEngine,
-    Transform, get_transforms_for, ALL_TRANSFORMS,
+    Relation,
+    RelationType,
+    Transform,
+    get_transforms_for,
 )
 from .orchestrator import OsintOrchestrator
 
 __all__ = [
-    "DnsCollector", "DnsRecord",
-    "WhoisCollector", "WhoisInfo",
-    "SslCollector", "SslCertInfo",
-    "WebCollector", "WebTechInfo",
-    "Entity", "Relation", "EntityType", "RelationType",
+    "ALL_TRANSFORMS",
+    "DnsCollector",
+    "DnsRecord",
+    "Entity",
+    "EntityType",
     "GraphEngine",
-    "Transform", "get_transforms_for", "ALL_TRANSFORMS",
     "OsintOrchestrator",
+    "Relation",
+    "RelationType",
+    "SslCertInfo",
+    "SslCollector",
+    "Transform",
+    "WebCollector",
+    "WebTechInfo",
+    "WhoisCollector",
+    "WhoisInfo",
+    "get_transforms_for",
 ]

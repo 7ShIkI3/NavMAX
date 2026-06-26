@@ -1,5 +1,4 @@
-"""
-Catalogue des modèles recommandés pour NavMAX, classés par tier et provider.
+"""Catalogue des modèles recommandés pour NavMAX, classés par tier et provider.
 
 Inclut les modèles **abliterated** (uncensored/desalignés) — essentiels pour
 la cybersécurité car les modèles standard refusent souvent les requêtes offensives.
@@ -9,39 +8,40 @@ mlabonne) qui supprime le mécanisme de refus sans dégrader les performances.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
-from navmax.ai.providers.base import ModelTier, ProviderType, ModelInfo
+from navmax.ai.providers.base import ModelTier, ProviderType
 
 
-class ModelTag(str, Enum):
+class ModelTag(StrEnum):
     """Tags qualitatifs pour les modèles."""
-    ABLITERATED = "abliterated"     # Uncensored — OK pour cybersécurité offensive
-    UNCENSORED = "uncensored"       # Naturellement non censuré
-    FAST = "fast"                    # Inférence rapide (≤3B)
-    CODE = "code"                    # Optimisé pour la génération de code
-    REASONING = "reasoning"          # Chaîne de pensée (CoT)
-    MULTILINGUAL = "multilingual"    # Support multilingue (dont français)
-    VISION = "vision"                # Support vision (images)
-    RECOMMENDED = "recommended"      # Recommandé par défaut pour ce tier
+
+    ABLITERATED = "abliterated"  # Uncensored — OK pour cybersécurité offensive
+    UNCENSORED = "uncensored"  # Naturellement non censuré
+    FAST = "fast"  # Inférence rapide (≤3B)
+    CODE = "code"  # Optimisé pour la génération de code
+    REASONING = "reasoning"  # Chaîne de pensée (CoT)
+    MULTILINGUAL = "multilingual"  # Support multilingue (dont français)
+    VISION = "vision"  # Support vision (images)
+    RECOMMENDED = "recommended"  # Recommandé par défaut pour ce tier
 
 
 @dataclass
 class CatalogEntry:
     """Entrée dans le catalogue de modèles."""
-    name: str                        # Nom pour Ollama (ex: "huihui_ai/llama3.1-abliterated:8b")
+
+    name: str  # Nom pour Ollama (ex: "huihui_ai/llama3.1-abliterated:8b")
     provider: ProviderType
     tier: ModelTier
     tags: list[ModelTag] = field(default_factory=list)
     context_window: int = 8192
     description: str = ""
     # Noms alternatifs pour d'autres providers
-    ollama_name: Optional[str] = None
-    openai_name: Optional[str] = None
-    deepseek_name: Optional[str] = None
+    ollama_name: str | None = None
+    openai_name: str | None = None
+    deepseek_name: str | None = None
     # GGUF filename hint (pour llama.cpp / LM Studio)
-    gguf_hint: Optional[str] = None
+    gguf_hint: str | None = None
     # RAM approximative nécessaire (Q4_K_M)
     ram_required_gb: float = 4.0
     # Priorité de sélection (plus bas = préféré)
@@ -61,12 +61,11 @@ class CatalogEntry:
 # ═══════════════════════════════════════════════════════════════════
 
 MODEL_CATALOG: list[CatalogEntry] = [
-
     # ── TIER LIGHT (1-3B) — Classification, extraction, validation JSON ──
-
     CatalogEntry(
         name="llama3.2:3b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.LIGHT,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.LIGHT,
         tags=[ModelTag.FAST, ModelTag.RECOMMENDED],
         ollama_name="llama3.2:3b",
         ram_required_gb=2.5,
@@ -75,7 +74,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="qwen2.5:3b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.LIGHT,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.LIGHT,
         tags=[ModelTag.FAST, ModelTag.MULTILINGUAL, ModelTag.CODE],
         ollama_name="qwen2.5:3b",
         ram_required_gb=2.5,
@@ -84,7 +84,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="phi3:3.8b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.LIGHT,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.LIGHT,
         tags=[ModelTag.FAST, ModelTag.CODE],
         ollama_name="phi3:3.8b",
         ram_required_gb=3.0,
@@ -93,20 +94,20 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="gemma2:2b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.LIGHT,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.LIGHT,
         tags=[ModelTag.FAST],
         ollama_name="gemma2:2b",
         ram_required_gb=2.0,
         priority=8,
         description="Google Gemma 2 2B — ultra-léger, parfait pour les petites machines",
     ),
-
     # ── TIER MEDIUM (7-8B) — Planification, analyse, résumé ──
-
     # ★ Abliterated (priorité maximale pour la cybersécurité)
     CatalogEntry(
         name="huihui_ai/llama3.1-abliterated:8b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.ABLITERATED, ModelTag.RECOMMENDED],
         ollama_name="huihui_ai/llama3.1-abliterated:8b",
         ram_required_gb=6.0,
@@ -115,7 +116,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="huihui_ai/deepseek-r1-abliterated:8b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.ABLITERATED, ModelTag.REASONING],
         ollama_name="huihui_ai/deepseek-r1-abliterated:8b",
         ram_required_gb=6.0,
@@ -124,18 +126,19 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="huihui_ai/mistral-7b-instruct-abliterated:7b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.ABLITERATED],
         ollama_name="huihui_ai/mistral-7b-instruct-abliterated:7b",
         ram_required_gb=5.5,
         priority=3,
         description="Mistral 7B ABLITERATED — uncensored, bon français",
     ),
-
     # Standards (fallback si abliterated non dispo)
     CatalogEntry(
         name="llama3.1:8b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.RECOMMENDED],
         ollama_name="llama3.1:8b",
         ram_required_gb=6.0,
@@ -144,7 +147,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="mistral:7b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.MULTILINGUAL],
         ollama_name="mistral:7b",
         ram_required_gb=5.5,
@@ -153,7 +157,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="qwen2.5:7b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.CODE, ModelTag.MULTILINGUAL],
         ollama_name="qwen2.5:7b",
         ram_required_gb=6.0,
@@ -162,7 +167,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="deepseek-r1:8b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.REASONING],
         ollama_name="deepseek-r1:8b",
         ram_required_gb=6.0,
@@ -171,20 +177,20 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="codellama:7b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.MEDIUM,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.CODE],
         ollama_name="codellama:7b",
         ram_required_gb=5.5,
         priority=14,
         description="CodeLlama 7B — spécialisé génération de code",
     ),
-
     # ── TIER HEAVY (70B+) — Génération d'exploit, raisonnement complexe ──
-
     # ★ Abliterated
     CatalogEntry(
         name="huihui_ai/llama3.1-abliterated:70b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.HEAVY,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.ABLITERATED, ModelTag.RECOMMENDED],
         ollama_name="huihui_ai/llama3.1-abliterated:70b",
         gguf_hint="llama-3.1-70b-abliterated-Q4_K_M.gguf",
@@ -192,11 +198,11 @@ MODEL_CATALOG: list[CatalogEntry] = [
         priority=1,
         description="Llama 3.1 70B ABLITERATED — le plus puissant uncensored",
     ),
-
     # Standards
     CatalogEntry(
         name="llama3.1:70b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.HEAVY,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.RECOMMENDED],
         ollama_name="llama3.1:70b",
         gguf_hint="llama-3.1-70b-Q4_K_M.gguf",
@@ -206,7 +212,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="codellama:70b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.HEAVY,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.CODE],
         ollama_name="codellama:70b",
         gguf_hint="codellama-70b-Q4_K_M.gguf",
@@ -216,7 +223,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="deepseek-r1:70b",
-        provider=ProviderType.OLLAMA, tier=ModelTier.HEAVY,
+        provider=ProviderType.OLLAMA,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.REASONING],
         ollama_name="deepseek-r1:70b",
         gguf_hint="deepseek-r1-70b-Q4_K_M.gguf",
@@ -224,12 +232,11 @@ MODEL_CATALOG: list[CatalogEntry] = [
         priority=12,
         description="DeepSeek R1 70B — raisonnement + code",
     ),
-
     # ── CLOUD PROVIDERS (fallback) ──
-
     CatalogEntry(
         name="gpt-4o-mini",
-        provider=ProviderType.OPENAI, tier=ModelTier.LIGHT,
+        provider=ProviderType.OPENAI,
+        tier=ModelTier.LIGHT,
         tags=[ModelTag.FAST],
         openai_name="gpt-4o-mini",
         priority=50,
@@ -237,7 +244,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="gpt-4o",
-        provider=ProviderType.OPENAI, tier=ModelTier.HEAVY,
+        provider=ProviderType.OPENAI,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.REASONING, ModelTag.CODE, ModelTag.VISION],
         openai_name="gpt-4o",
         priority=51,
@@ -245,7 +253,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="claude-sonnet-4-20250514",
-        provider=ProviderType.ANTHROPIC, tier=ModelTier.HEAVY,
+        provider=ProviderType.ANTHROPIC,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.REASONING, ModelTag.CODE],
         openai_name="claude-sonnet-4-20250514",
         priority=52,
@@ -253,7 +262,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="deepseek-chat",
-        provider=ProviderType.DEEPSEEK, tier=ModelTier.MEDIUM,
+        provider=ProviderType.DEEPSEEK,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.CODE, ModelTag.MULTILINGUAL, ModelTag.FAST],
         deepseek_name="deepseek-chat",
         priority=30,
@@ -261,7 +271,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="deepseek-v4-flash",
-        provider=ProviderType.DEEPSEEK, tier=ModelTier.MEDIUM,
+        provider=ProviderType.DEEPSEEK,
+        tier=ModelTier.MEDIUM,
         tags=[ModelTag.REASONING],
         deepseek_name="deepseek-v4-flash",
         priority=32,
@@ -269,7 +280,8 @@ MODEL_CATALOG: list[CatalogEntry] = [
     ),
     CatalogEntry(
         name="deepseek-v4-pro",
-        provider=ProviderType.DEEPSEEK, tier=ModelTier.HEAVY,
+        provider=ProviderType.DEEPSEEK,
+        tier=ModelTier.HEAVY,
         tags=[ModelTag.REASONING, ModelTag.CODE, ModelTag.RECOMMENDED],
         deepseek_name="deepseek-v4-pro",
         priority=31,
@@ -281,6 +293,7 @@ MODEL_CATALOG: list[CatalogEntry] = [
 # ═══════════════════════════════════════════════════════════════════
 # INDEXES
 # ═══════════════════════════════════════════════════════════════════
+
 
 def get_catalog_by_tier(tier: ModelTier) -> list[CatalogEntry]:
     """Retourne les modèles pour un tier donné, triés par priorité."""
@@ -298,7 +311,7 @@ def get_abliterated_models() -> list[CatalogEntry]:
     return [e for e in MODEL_CATALOG if e.is_uncensored]
 
 
-def get_recommended(tier: Optional[ModelTier] = None) -> list[CatalogEntry]:
+def get_recommended(tier: ModelTier | None = None) -> list[CatalogEntry]:
     """Modèles recommandés, optionnellement filtrés par tier."""
     entries = [e for e in MODEL_CATALOG if ModelTag.RECOMMENDED in e.tags]
     if tier:
@@ -306,14 +319,14 @@ def get_recommended(tier: Optional[ModelTier] = None) -> list[CatalogEntry]:
     return sorted(entries, key=lambda e: e.priority)
 
 
-def match_ollama_model(ollama_name: str) -> Optional[CatalogEntry]:
+def match_ollama_model(ollama_name: str) -> CatalogEntry | None:
     """Trouve l'entrée catalogue correspondant à un modèle Ollama détecté."""
     # Match exact
     for entry in MODEL_CATALOG:
         if entry.ollama_name == ollama_name:
             return entry
     # Match fuzzy (ignore tag)
-    base = ollama_name.split(":")[0].lower().replace("-", "").replace("_", "")
+    base = ollama_name.split(":", maxsplit=1)[0].lower().replace("-", "").replace("_", "")
     for entry in MODEL_CATALOG:
         if entry.ollama_name:
             entry_base = entry.ollama_name.split(":")[0].lower().replace("-", "").replace("_", "")
@@ -322,10 +335,10 @@ def match_ollama_model(ollama_name: str) -> Optional[CatalogEntry]:
     return None
 
 
-def find_best_for_task(tier: ModelTier, prefer_uncensored: bool = True,
-                        available_models: Optional[list[str]] = None) -> Optional[CatalogEntry]:
-    """
-    Trouve le meilleur modèle pour un tier donné.
+def find_best_for_task(
+    tier: ModelTier, prefer_uncensored: bool = True, available_models: list[str] | None = None,
+) -> CatalogEntry | None:
+    """Trouve le meilleur modèle pour un tier donné.
 
     Ordre de préférence :
     1. Abliterated/uncensored (si prefer_uncensored=True) → priorité 1-3
@@ -338,8 +351,7 @@ def find_best_for_task(tier: ModelTier, prefer_uncensored: bool = True,
     if available_models:
         available_set = {m.lower() for m in available_models}
         candidates = [
-            c for c in candidates
-            if c.ollama_name and c.ollama_name.lower() in available_set
+            c for c in candidates if c.ollama_name and c.ollama_name.lower() in available_set
         ]
 
     if not candidates:

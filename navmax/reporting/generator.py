@@ -1,5 +1,4 @@
-"""
-AIReportGenerator — génération de rapports d'audit par IA.
+"""AIReportGenerator — génération de rapports d'audit par IA.
 
 Produit des rapports structurés (HTML, Markdown) à partir des résultats
 de mission : synthèse exécutive, méthodologie, findings, recommandations.
@@ -10,9 +9,9 @@ L'IA génère le contenu, le module formate en HTML/MD propre.
 import html
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -52,12 +51,13 @@ JSON FORMAT:
 
 # ── Data Models ────────────────────────────────────────────────
 
+
 @dataclass
 class ReportFinding:
     title: str
     severity: str
     description: str = ""
-    cve: Optional[str] = None
+    cve: str | None = None
     affected: str = ""
     evidence: str = ""
     remediation: str = ""
@@ -66,7 +66,7 @@ class ReportFinding:
 @dataclass
 class AuditReport:
     title: str
-    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     executive_summary: str = ""
     methodology: str = ""
     findings: list[ReportFinding] = field(default_factory=list)
@@ -84,6 +84,7 @@ class AuditReport:
 
 # ── Generator ──────────────────────────────────────────────────
 
+
 class AIReportGenerator:
     """Générateur de rapports d'audit piloté par IA.
 
@@ -94,7 +95,7 @@ class AIReportGenerator:
         md = gen.to_markdown(report)
     """
 
-    def __init__(self, ai_engine):
+    def __init__(self, ai_engine) -> None:
         self.ai = ai_engine
 
     async def generate(self, mission_result) -> AuditReport:
@@ -105,6 +106,7 @@ class AIReportGenerator:
 
         Returns:
             AuditReport structuré
+
         """
         from navmax.ai.providers.base import ModelTier
 
@@ -134,7 +136,7 @@ class AIReportGenerator:
             )
 
             data = self._parse_json(result.text)
-            report = AuditReport(
+            return AuditReport(
                 title=f"Pentest Report — {mission_result.objective[:80]}",
                 executive_summary=data.get("executive_summary", ""),
                 methodology=data.get("methodology", ""),
@@ -153,7 +155,6 @@ class AIReportGenerator:
                 recommendations=data.get("recommendations", []),
                 stats=stats,
             )
-            return report
 
         except Exception as e:
             logger.warning("report_ai_failed", error=str(e))
@@ -166,24 +167,28 @@ class AIReportGenerator:
     def _collect_findings(self, mission_result) -> list[dict]:
         """Extrait les findings des résultats de phase."""
         findings = []
-        for phase_id, result in (mission_result.results or {}).items():
+        for result in (mission_result.results or {}).values():
             if isinstance(result, dict):
                 if "vulnerabilities" in result:
                     for v in result["vulnerabilities"]:
-                        findings.append({
-                            "title": v.get("description", v.get("cve", "Vulnerability")),
-                            "severity": v.get("severity", "MEDIUM"),
-                            "cve": v.get("cve"),
-                            "affected": f"{result.get('host', '?')}:{result.get('port', '?')}",
-                            "evidence": json.dumps(v)[:300],
-                        })
+                        findings.append(
+                            {
+                                "title": v.get("description", v.get("cve", "Vulnerability")),
+                                "severity": v.get("severity", "MEDIUM"),
+                                "cve": v.get("cve"),
+                                "affected": f"{result.get('host', '?')}:{result.get('port', '?')}",
+                                "evidence": json.dumps(v)[:300],
+                            },
+                        )
                 if "services" in result:
                     for s in result["services"]:
-                        findings.append({
-                            "title": f"Service discovered: {s.get('service', '?')} {s.get('version', '')}",
-                            "severity": "INFO",
-                            "affected": f"{result.get('host', '?')}:{s.get('port', '?')}",
-                        })
+                        findings.append(
+                            {
+                                "title": f"Service discovered: {s.get('service', '?')} {s.get('version', '')}",
+                                "severity": "INFO",
+                                "affected": f"{result.get('host', '?')}:{s.get('port', '?')}",
+                            },
+                        )
         return findings
 
     def _compute_stats(self, mission_result) -> dict:
@@ -196,8 +201,7 @@ class AIReportGenerator:
             "duration_seconds": round(mission_result.duration_seconds, 1),
         }
 
-    def _build_prompt(self, mission_result, findings: list[dict],
-                      stats: dict) -> str:
+    def _build_prompt(self, mission_result, findings: list[dict], stats: dict) -> str:
         lines = [
             f"Mission: {mission_result.objective}",
             f"Target: {mission_result.target or 'N/A'}",
@@ -227,7 +231,7 @@ class AIReportGenerator:
                 elif text[i] == "}":
                     depth -= 1
                     if depth == 0:
-                        text = text[brace:i+1]
+                        text = text[brace : i + 1]
                         break
         return json.loads(text)
 
@@ -237,44 +241,49 @@ class AIReportGenerator:
         """Convertit le rapport en Markdown."""
         lines = [
             f"# {report.title}",
-            f"",
+            "",
             f"**Generated:** {report.generated_at[:19]}",
-            f"",
-            f"## Executive Summary",
-            f"",
+            "",
+            "## Executive Summary",
+            "",
             report.executive_summary or "_No summary available._",
-            f"",
-            f"## Statistics",
-            f"",
-            f"| Metric | Value |",
-            f"|---|---|",
+            "",
+            "## Statistics",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
             f"| Phases executed | {report.stats.get('phases_executed', 0)} |",
             f"| Phases succeeded | {report.stats.get('phases_succeeded', 0)} |",
             f"| Duration | {report.stats.get('duration_seconds', 0)}s |",
             f"| Critical findings | {report.critical_count} |",
             f"| High findings | {report.high_count} |",
-            f"",
+            "",
         ]
 
         if report.findings:
             lines.append("## Findings")
             lines.append("")
             for f in report.findings:
-                severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡",
-                                 "LOW": "🟢", "INFO": "🔵"}.get(f.severity.upper(), "⚪")
+                severity_icon = {
+                    "CRITICAL": "🔴",
+                    "HIGH": "🟠",
+                    "MEDIUM": "🟡",
+                    "LOW": "🟢",
+                    "INFO": "🔵",
+                }.get(f.severity.upper(), "⚪")
                 lines.append(f"### {severity_icon} [{f.severity}] {f.title}")
                 if f.cve:
                     lines.append(f"**CVE:** {f.cve}  ")
                 if f.affected:
                     lines.append(f"**Affected:** {f.affected}  ")
                 if f.description:
-                    lines.append(f"")
+                    lines.append("")
                     lines.append(f.description)
                 if f.evidence:
-                    lines.append(f"")
+                    lines.append("")
                     lines.append(f"**Evidence:** `{f.evidence[:200]}`")
                 if f.remediation:
-                    lines.append(f"")
+                    lines.append("")
                     lines.append(f"**Remediation:** {f.remediation}")
                 lines.append("")
 
@@ -292,8 +301,11 @@ class AIReportGenerator:
     def to_html(self, report: AuditReport) -> str:
         """Convertit le rapport en HTML standalone."""
         severity_colors = {
-            "CRITICAL": "#d32f2f", "HIGH": "#f57c00", "MEDIUM": "#fbc02d",
-            "LOW": "#388e3c", "INFO": "#1976d2",
+            "CRITICAL": "#d32f2f",
+            "HIGH": "#f57c00",
+            "MEDIUM": "#fbc02d",
+            "LOW": "#388e3c",
+            "INFO": "#1976d2",
         }
 
         findings_html = ""
@@ -308,10 +320,10 @@ class AIReportGenerator:
             findings_html += f"""
             <div class="finding" style="border-left: 4px solid {color}; margin: 1em 0; padding: 0.5em 1em; background: #fafafa;">
                 <h3 style="color:{color}">[{safe_severity}] {safe_title}</h3>
-                {f'<p><strong>CVE:</strong> {safe_cve}</p>' if safe_cve else ''}
-                {f'<p><strong>Affected:</strong> {safe_affected}</p>' if safe_affected else ''}
-                {f'<p>{safe_description}</p>' if safe_description else ''}
-                {f'<p><strong>Remediation:</strong> {safe_remediation}</p>' if safe_remediation else ''}
+                {f"<p><strong>CVE:</strong> {safe_cve}</p>" if safe_cve else ""}
+                {f"<p><strong>Affected:</strong> {safe_affected}</p>" if safe_affected else ""}
+                {f"<p>{safe_description}</p>" if safe_description else ""}
+                {f"<p><strong>Remediation:</strong> {safe_remediation}</p>" if safe_remediation else ""}
             </div>"""
 
         safe_title_html = html.escape(report.title or "")
@@ -338,7 +350,7 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 <p>{safe_summary}</p>
 <h2>Statistics</h2>
 <div class="stats">
-<div class="stat"><div class="value">{report.stats.get('phases_executed', 0)}</div>Phases</div>
+<div class="stat"><div class="value">{report.stats.get("phases_executed", 0)}</div>Phases</div>
 <div class="stat"><div class="value">{report.critical_count}</div>Critical</div>
 <div class="stat"><div class="value">{report.high_count}</div>High</div>
 </div>
@@ -359,10 +371,12 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 
         Raises:
             ValueError: Si le chemin contient '..' ou est invalide.
+
         """
         resolved = Path(output_path).resolve()
         if ".." in str(Path(output_path)):
-            raise ValueError(f"Chemin de sortie invalide : {output_path}")
+            msg = f"Chemin de sortie invalide : {output_path}"
+            raise ValueError(msg)
         return resolved
 
     def save_html(self, report: AuditReport, output_path: str) -> Path:
@@ -374,6 +388,7 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 
         Returns:
             Path absolu du fichier créé.
+
         """
         path = self._validate_output_path(output_path)
         content = self.to_html(report)
@@ -391,6 +406,7 @@ h1 {{ border-bottom: 2px solid #1976d2; padding-bottom: 0.3em; }}
 
         Returns:
             Path absolu du fichier créé.
+
         """
         path = self._validate_output_path(output_path)
         content = self.to_markdown(report)

@@ -1,31 +1,29 @@
-"""
-Application FastAPI — point d'entrée de l'API NavMAX.
+"""Application FastAPI — point d'entrée de l'API NavMAX.
 
 Protection : JWT (sauf /docs, /redoc, /health, /api/v1/auth/*),
 RBAC (admin/operator/viewer), rate limiting (slowapi), CORS.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from navmax.core.config import config
-from navmax.core.logging import setup_logging, get_logger
-from navmax.db import create_all
 from navmax.api.auth import (
     auth_router,
     limiter,
-    get_current_user,
     require_role,
 )
+from navmax.core.config import config
+from navmax.core.logging import get_logger, setup_logging
+from navmax.db import create_all
 
-from .routes import targets, scans, proxy, exploit, osint, workspaces, ai, ad, firewall, nuclei
+from .routes import ad, ai, exploit, firewall, nuclei, osint, proxy, scans, targets, workspaces
 
 logger = get_logger(__name__)
 
@@ -41,11 +39,47 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         port=config.api_port,
         debug=getattr(config, "debug", False),
     )
+
+    # ── Vérification startup : nuclei ───────────────────────────
+    try:
+        from navmax.scanner.nuclei_scanner import NucleiScanner
+
+        nuclei_scanner = NucleiScanner()
+        nuclei_ok = await nuclei_scanner.check_installed()
+        if nuclei_ok:
+            logger.info("nuclei_startup_ok", path=nuclei_scanner._binary)
+            templates_ok = await nuclei_scanner.check_templates()
+            if not templates_ok:
+                logger.warning(
+                    "nuclei_templates_manquants_startup",
+                    message=(
+                        "Templates nuclei non trouvés. "
+                        "Exécutez 'nuclei -update-templates' ou "
+                        "appelez POST /api/v1/nuclei/update-templates"
+                    ),
+                )
+        else:
+            logger.warning(
+                "nuclei_non_installé_startup",
+                message=(
+                    "Le binaire nuclei n'est pas installé. "
+                    "Le scanner de vulnérabilités sera indisponible. "
+                    "Installez-le via : go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+                ),
+            )
+    except Exception as exc:
+        logger.exception("nuclei_startup_erreur", erreur=str(exc))
+    # ── Fin vérification startup ────────────────────────────────
     yield
     # Nettoyer le proxy
-    from navmax.api.routes.proxy import _proxy_server as _ps, _web_scanner as _ws, _fuzzer as _fz
+    from navmax.api.routes.proxy import _proxy_server as _ps
+
     if _ps and _ps.running:
         await _ps.stop()
+
+    # Nettoyer les pools HTTP
+    from navmax.core.http_client import close_all
+    await close_all()
 
     logger.info("api_arrêtée")
 
@@ -160,6 +194,7 @@ app.include_router(
 # Nuclei (vulnérabilités → operator+)
 app.include_router(
     nuclei.router,
+    prefix="/api/v1/nuclei",
     tags=["Nuclei"],
     dependencies=operator_or_admin,
 )
@@ -167,6 +202,7 @@ app.include_router(
 
 # ── Dashboard (static files) ─────────────────────────────────────
 import os
+
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/dashboard", StaticFiles(directory=static_dir, html=True), name="dashboard")

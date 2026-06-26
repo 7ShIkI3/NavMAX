@@ -1,5 +1,4 @@
-"""
-SARIF 2.1.0 Exporter — export des findings NavMAX au format SARIF standard.
+"""SARIF 2.1.0 Exporter — export des findings NavMAX au format SARIF standard.
 
 Le format SARIF (Static Analysis Results Interchange Format) est le standard
 industriel pour l'échange de résultats d'analyse de sécurité. Compatible avec
@@ -13,7 +12,7 @@ Usage:
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -64,6 +63,7 @@ class SARIFExporter:
 
         Returns:
             Document SARIF JSON complet.
+
         """
         results: list[dict] = []
 
@@ -89,7 +89,7 @@ class SARIFExporter:
                     "region": {
                         "snippet": {"text": title},
                     },
-                }
+                },
             }
 
             # Properties
@@ -103,20 +103,23 @@ class SARIFExporter:
 
             # MITRE ATT&CK
             from navmax.reporting.cvss_scorer import get_mitre_techniques
+
             mitre_ids = get_mitre_techniques(properties["cve_ids"])
             if mitre_ids:
                 properties["mitre_attack_techniques"] = mitre_ids
 
-            results.append({
-                "ruleId": cve_id or str(uuid.uuid4()),
-                "ruleIndex": 0,
-                "level": level,
-                "message": {
-                    "text": message_text,
+            results.append(
+                {
+                    "ruleId": cve_id or str(uuid.uuid4()),
+                    "ruleIndex": 0,
+                    "level": level,
+                    "message": {
+                        "text": message_text,
+                    },
+                    "locations": [location],
+                    "properties": properties,
                 },
-                "locations": [location],
-                "properties": properties,
-            })
+            )
 
         target = scan_info.get("target", "") if scan_info else ""
 
@@ -131,21 +134,21 @@ class SARIFExporter:
                             "version": self.tool_version,
                             "informationUri": "https://github.com/7ShIkI3/NavMAX",
                             "rules": self._build_rules(findings),
-                        }
+                        },
                     },
                     "results": results,
                     "invocations": [
                         {
                             "executionSuccessful": True,
-                            "endTimeUtc": datetime.now(timezone.utc).isoformat(),
-                        }
+                            "endTimeUtc": datetime.now(UTC).isoformat(),
+                        },
                     ],
                     "originalUriBaseIds": {
                         "TARGET": {
                             "uri": target,
-                        }
+                        },
                     },
-                }
+                },
             ],
         }
 
@@ -162,6 +165,7 @@ class SARIFExporter:
 
         Returns:
             Chaîne JSON indentée.
+
         """
         doc = self.export(findings, scan_info)
         return json.dumps(doc, indent=2, ensure_ascii=False)
@@ -181,12 +185,14 @@ class SARIFExporter:
 
         Raises:
             ValueError: Si le chemin contient '..'.
+
         """
         from pathlib import Path
 
         resolved = Path(output_path).resolve()
         if ".." in str(Path(output_path)):
-            raise ValueError(f"Chemin de sortie invalide : {output_path}")
+            msg = f"Chemin de sortie invalide : {output_path}"
+            raise ValueError(msg)
 
         content = self.export_json(findings, scan_info)
         with open(resolved, "w", encoding="utf-8") as f:
@@ -202,12 +208,11 @@ class SARIFExporter:
         severity_lower = severity.lower()
         if severity_lower in ("critical", "high"):
             return "error"
-        elif severity_lower == "medium":
+        if severity_lower == "medium":
             return "warning"
-        elif severity_lower == "low":
+        if severity_lower == "low":
             return "note"
-        else:
-            return "none"
+        return "none"
 
     @staticmethod
     def _build_rules(findings: list[dict]) -> list[dict]:
@@ -221,14 +226,17 @@ class SARIFExporter:
                 continue
             seen.add(rule_id)
 
-            rules.append({
-                "id": rule_id,
-                "name": f.get("title", f.get("name", rule_id)),
-                "shortDescription": {
-                    "text": f.get("description", "")[:200],
+            rules.append(
+                {
+                    "id": rule_id,
+                    "name": f.get("title", f.get("name", rule_id)),
+                    "shortDescription": {
+                        "text": f.get("description", "")[:200],
+                    },
+                    "helpUri": f"https://nvd.nist.gov/vuln/detail/{rule_id}"
+                    if rule_id.startswith("CVE-")
+                    else "",
                 },
-                "helpUri": f"https://nvd.nist.gov/vuln/detail/{rule_id}"
-                           if rule_id.startswith("CVE-") else "",
-            })
+            )
 
         return rules

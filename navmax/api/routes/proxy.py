@@ -1,24 +1,21 @@
-"""
-Routes API pour le proxy web (Burp-like).
-"""
+"""Routes API pour le proxy web (Burp-like)."""
 
 import asyncio
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from navmax.core.logging import get_logger
 from navmax.proxy import (
-    ProxyServer,
-    Interceptor,
-    InterceptedFlow,
     FlowAction,
-    FlowStatus,
+    Fuzzer,
+    InterceptedFlow,
+    Interceptor,
+    ProxyServer,
     Repeater,
     WebScanner,
-    Fuzzer,
 )
-from navmax.core.logging import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -111,7 +108,11 @@ async def proxy_stop() -> dict:
 async def proxy_status() -> dict:
     """État du proxy."""
     if not _proxy_server:
-        return {"running": False, "flow_count": 0, "intercept_enabled": _interceptor.intercept_enabled}
+        return {
+            "running": False,
+            "flow_count": 0,
+            "intercept_enabled": _interceptor.intercept_enabled,
+        }
     return {
         "running": _proxy_server.running,
         "host": _proxy_server.host,
@@ -134,7 +135,7 @@ async def intercept_toggle() -> dict:
 
 @router.get("/flows")
 async def list_flows(
-    limit: int = Query(50, ge=1, le=200),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> dict:
     """Liste les flux interceptés."""
     if _proxy_server:
@@ -151,10 +152,14 @@ async def list_flows(
                 "port": f.port,
                 "path": f.path,
                 "request_headers": f.request_headers,
-                "request_body": f.request_body.decode("utf-8", errors="replace")[:5000] if f.request_body else None,
+                "request_body": f.request_body.decode("utf-8", errors="replace")[:5000]
+                if f.request_body
+                else None,
                 "response_status": f.response_status,
                 "response_headers": f.response_headers,
-                "response_body": f.response_body.decode("utf-8", errors="replace")[:5000] if f.response_body else None,
+                "response_body": f.response_body.decode("utf-8", errors="replace")[:5000]
+                if f.response_body
+                else None,
                 "status": f.status.value,
             }
             for f in flows
@@ -268,7 +273,7 @@ async def replay_request(req: ReplayRequest) -> dict:
 
 
 @router.get("/replay/history")
-async def replay_history(limit: int = Query(20, ge=1, le=100)) -> dict:
+async def replay_history(limit: Annotated[int, Query(ge=1, le=100)] = 20) -> dict:
     """Historique des replays."""
     history = _repeater.history[-limit:]
     return {
@@ -286,5 +291,5 @@ async def replay_history(limit: int = Query(20, ge=1, le=100)) -> dict:
                 "timestamp": h.timestamp,
             }
             for h in history
-        ]
+        ],
     }

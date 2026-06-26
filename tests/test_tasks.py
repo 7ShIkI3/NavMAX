@@ -3,9 +3,10 @@
 Mock complet de Celery (pas de Redis nécessaire).
 Tous les tests sont synchrones ou asynchrones selon la route testée.
 """
-import json
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 pytestmark = pytest.mark.skip(reason="Celery tests require Redis + JWT auth — skipped in dev")
 
@@ -14,12 +15,13 @@ from navmax.core.config import config as _cfg
 
 _cfg.redis_url = ""  # Pas de Redis en test → fallback in-memory
 
-from navmax.tasks import celery_app
-from navmax.api.app import app
-
 # HACK: s'assurer que les tables DB existent (le lifespan de TestClient ne les crée pas)
 import asyncio as _asyncio
+from typing import Never
+
+from navmax.api.app import app
 from navmax.db import create_all as _create_all
+from navmax.tasks import celery_app
 
 _asyncio.run(_create_all())
 
@@ -30,18 +32,18 @@ _asyncio.run(_create_all())
 class TestCeleryApp:
     """Vérifie que l'application Celery est correctement configurée."""
 
-    def test_celery_app_created(self):
+    def test_celery_app_created(self) -> None:
         """L'instance Celery doit avoir le bon nom et le bon broker."""
         assert celery_app.main == "navmax"
         assert "redis://localhost:6379/0" in celery_app.conf.broker_url
         assert celery_app.conf.task_serializer == "json"
         assert celery_app.conf.timezone == "UTC"
 
-    def test_celery_eager_default(self):
+    def test_celery_eager_default(self) -> None:
         """Par défaut, task_always_eager est à False (Redis requis)."""
         assert celery_app.conf.task_always_eager is False
 
-    def test_celery_timeouts(self):
+    def test_celery_timeouts(self) -> None:
         """Les timeouts doivent être raisonnables pour des scans longs."""
         assert celery_app.conf.task_time_limit == 3600
         assert celery_app.conf.task_soft_time_limit == 3300
@@ -55,7 +57,7 @@ class TestTaskSubmission:
 
     @patch("navmax.api.routes.scans.celery_app.send_task")
     @pytest.mark.asyncio
-    async def test_create_scan_triggers_send_task(self, mock_send_task):
+    async def test_create_scan_triggers_send_task(self, mock_send_task) -> None:
         """POST /api/v1/scans/ doit appeler celery_app.send_task()."""
         mock_send_task.return_value = MagicMock(id="mock-task-id")
 
@@ -81,7 +83,7 @@ class TestTaskSubmission:
 
         # Vérifier que send_task a été appelé avec les bons arguments
         mock_send_task.assert_called_once()
-        args, kwargs = mock_send_task.call_args
+        _args, kwargs = mock_send_task.call_args
         assert kwargs["args"] == ["10.0.0.1", "22,80", "tcp_connect"]
 
         # Vérifier la réponse
@@ -90,7 +92,7 @@ class TestTaskSubmission:
 
     @patch("navmax.api.routes.scans.celery_app.send_task")
     @pytest.mark.asyncio
-    async def test_create_scan_returns_task_id(self, mock_send_task):
+    async def test_create_scan_returns_task_id(self, mock_send_task) -> None:
         """L'ID de la tâche doit être le même que le scan ID."""
         mock_send_task.return_value = MagicMock(id="scan-id-123")
 
@@ -121,7 +123,7 @@ class TestTaskStatus:
 
     @patch("navmax.api.routes.scans.celery_app.AsyncResult")
     @pytest.mark.asyncio
-    async def test_get_task_status_pending(self, mock_async_result):
+    async def test_get_task_status_pending(self, mock_async_result) -> None:
         """Un scan récemment créé doit retourner PENDING."""
         mock_result = MagicMock()
         mock_result.state = "PENDING"
@@ -140,7 +142,7 @@ class TestTaskStatus:
 
     @patch("navmax.api.routes.scans.celery_app.AsyncResult")
     @pytest.mark.asyncio
-    async def test_get_task_status_progress(self, mock_async_result):
+    async def test_get_task_status_progress(self, mock_async_result) -> None:
         """Un scan en cours doit retourner PROGRESS avec meta."""
         mock_result = MagicMock()
         mock_result.state = "PROGRESS"
@@ -159,7 +161,7 @@ class TestTaskStatus:
 
     @patch("navmax.api.routes.scans.celery_app.AsyncResult")
     @pytest.mark.asyncio
-    async def test_get_task_status_completed(self, mock_async_result):
+    async def test_get_task_status_completed(self, mock_async_result) -> None:
         """Un scan terminé doit retourner SUCCESS avec son résultat."""
         mock_result = MagicMock()
         mock_result.state = "SUCCESS"
@@ -179,7 +181,7 @@ class TestTaskStatus:
 
     @patch("navmax.api.routes.scans.celery_app.AsyncResult")
     @pytest.mark.asyncio
-    async def test_get_task_status_failure(self, mock_async_result):
+    async def test_get_task_status_failure(self, mock_async_result) -> None:
         """Un scan en échec doit retourner FAILURE avec le message d'erreur."""
         mock_result = MagicMock()
         mock_result.state = "FAILURE"
@@ -204,7 +206,7 @@ class TestTaskStream:
     """Vérifie le streaming SSE de progression."""
 
     @pytest.mark.asyncio
-    async def test_sse_stream_returns_events(self):
+    async def test_sse_stream_returns_events(self) -> None:
         """Le endpoint /stream doit retourner une réponse SSE (StreamingResponse)."""
         from fastapi.testclient import TestClient
 
@@ -216,7 +218,7 @@ class TestTaskStream:
 
     @patch("navmax.api.routes.scans.celery_app.AsyncResult")
     @pytest.mark.asyncio
-    async def test_sse_stream_events_content(self, mock_async_result):
+    async def test_sse_stream_events_content(self, mock_async_result) -> None:
         """Le flux SSE doit contenir des événements formatés."""
         # Simuler un résultat qui passe de PROGRESS à SUCCESS en 2 itérations
         mock_result_progress = MagicMock()
@@ -262,7 +264,7 @@ class TestCancelTask:
 
     @patch("navmax.api.routes.scans.celery_app.control.revoke")
     @pytest.mark.asyncio
-    async def test_delete_scan_calls_revoke(self, mock_revoke):
+    async def test_delete_scan_calls_revoke(self, mock_revoke) -> None:
         """DELETE /api/v1/scans/{id} doit appeler revoke()."""
         from fastapi.testclient import TestClient
 
@@ -281,7 +283,7 @@ class TestCancelTask:
 
         scan_id = None
 
-        async def _create_scan():
+        async def _create_scan() -> None:
             nonlocal scan_id
             async with async_session() as db:
                 scan = Scan(target_id=target_id, scan_type="tcp_connect", ports="80")
@@ -304,7 +306,7 @@ class TestCancelTask:
 
     @patch("navmax.api.routes.scans.celery_app.control.revoke")
     @pytest.mark.asyncio
-    async def test_cancel_nonexistent_task_does_not_crash(self, mock_revoke):
+    async def test_cancel_nonexistent_task_does_not_crash(self, mock_revoke) -> None:
         """Annuler une tâche déjà terminée ne doit pas lever d'exception."""
         mock_revoke.side_effect = None  # Simuler une révocation sans erreur
 
@@ -319,7 +321,7 @@ class TestListActiveTasks:
     """Vérifie la liste des tâches actives via inspect()."""
 
     @patch("navmax.tasks.celery_app.control.inspect")
-    def test_list_active_tasks(self, mock_inspect):
+    def test_list_active_tasks(self, mock_inspect) -> None:
         """Inspecter les tâches actives doit retourner la liste des tâches en cours."""
         mock_inspector = MagicMock()
         mock_inspect.return_value = mock_inspector
@@ -343,7 +345,7 @@ class TestListActiveTasks:
         assert active_tasks["worker1@host"][0]["name"] == "navmax.tasks.scan_tasks.run_nmap_scan"
 
     @patch("navmax.tasks.celery_app.control.inspect")
-    def test_list_active_tasks_empty(self, mock_inspect):
+    def test_list_active_tasks_empty(self, mock_inspect) -> None:
         """Quand aucun worker n'est actif, inspect() doit retourner None ou dict vide."""
         mock_inspector = MagicMock()
         mock_inspect.return_value = mock_inspector
@@ -354,7 +356,7 @@ class TestListActiveTasks:
         assert active_tasks == {}
 
     @patch("navmax.tasks.celery_app.control.inspect")
-    def test_list_scheduled_tasks(self, mock_inspect):
+    def test_list_scheduled_tasks(self, mock_inspect) -> None:
         """Inspecter les tâches planifiées doit fonctionner."""
         mock_inspector = MagicMock()
         mock_inspect.return_value = mock_inspector
@@ -381,7 +383,7 @@ class TestListActiveTasks:
 class TestEagerMode:
     """Vérifie le comportement du mode eager (sans Redis)."""
 
-    def test_eager_fallback_executes_synchronously(self):
+    def test_eager_fallback_executes_synchronously(self) -> None:
         """En mode eager, une tâche s'exécute immédiatement et retourne son résultat."""
         # On utilise un patch temporaire du mode eager
         original_eager = celery_app.conf.task_always_eager
@@ -400,12 +402,12 @@ class TestEagerMode:
         finally:
             celery_app.conf.task_always_eager = original_eager
 
-    def test_eager_mode_disabled_by_default(self):
+    def test_eager_mode_disabled_by_default(self) -> None:
         """Le mode eager est désactivé par défaut (Redis requis en production)."""
         assert celery_app.conf.task_always_eager is False
 
     @patch.dict(celery_app.conf, {"task_always_eager": True})
-    def test_eager_fallback_with_dict_patch(self):
+    def test_eager_fallback_with_dict_patch(self) -> None:
         """Le mode eager peut être activé via patch.dict sur la config."""
 
         @celery_app.task(bind=True)
@@ -417,11 +419,11 @@ class TestEagerMode:
         assert result.successful()
 
     @patch.dict(celery_app.conf, {"task_always_eager": True})
-    def test_eager_fallback_raises_exception(self):
+    def test_eager_fallback_raises_exception(self) -> None:
         """En mode eager, une tâche qui lève une exception doit propager l'erreur."""
 
         @celery_app.task(bind=True)
-        def failing_task(self):
+        def failing_task(self) -> Never:
             msg = "Erreur intentionnelle pendant le test"
             raise ValueError(msg)
 
@@ -430,7 +432,7 @@ class TestEagerMode:
         assert "Erreur intentionnelle" in str(result.result)
 
     @patch.dict(celery_app.conf, {"task_always_eager": True})
-    def test_eager_fallback_with_scan_task_signature(self):
+    def test_eager_fallback_with_scan_task_signature(self) -> None:
         """En mode eager, run_nmap_scan peut être soumise mais échoue par manque de Redis/Nmap.
 
         On vérifie au moins que la tâche est bien dispatchée et que le résultat

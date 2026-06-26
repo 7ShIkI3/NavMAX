@@ -1,10 +1,9 @@
-"""
-Configuration centralisée via variables d'environnement et fichier .env.
-"""
+"""Configuration centralisée via variables d'environnement et fichier .env."""
 
 import re
 import warnings
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,7 +52,9 @@ class Config(BaseSettings):
 
     # --- Scanner ---
     scanner_default_timeout: float = 2.0  # secondes
-    scanner_default_ports: str = "22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443,27017"
+    scanner_default_ports: str = (
+        "22,23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443,27017"
+    )
     scanner_max_concurrency: int = 100
     scanner_udp_enabled: bool = False  # UDP nécessite admin
 

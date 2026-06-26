@@ -1,5 +1,4 @@
-"""
-Agent SDK — Client Python asynchrone pour l'API NavMAX.
+"""Agent SDK — Client Python asynchrone pour l'API NavMAX.
 
 Usage :
     from navmax.sdk import NavMAXClient
@@ -10,7 +9,8 @@ Usage :
         print(scan["result_summary"])
 """
 
-from typing import Any
+import contextlib
+from typing import Any, Self
 
 import httpx
 
@@ -25,8 +25,7 @@ class NavMAXError(Exception):
 
 
 class NavMAXClient:
-    """
-    Client asynchrone pour l'API REST NavMAX.
+    """Client asynchrone pour l'API REST NavMAX.
     Utilisable par des agents IA pour piloter la plateforme.
     """
 
@@ -35,7 +34,7 @@ class NavMAXClient:
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "NavMAXClient":
+    async def __aenter__(self) -> Self:
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(self.timeout),
@@ -43,7 +42,7 @@ class NavMAXClient:
         )
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -51,7 +50,10 @@ class NavMAXClient:
     @property
     def client(self) -> httpx.AsyncClient:
         if self._client is None:
-            raise NavMAXError("Client non initialisé — utiliser 'async with NavMAXClient() as client:'")
+            msg = "Client non initialisé — utiliser 'async with NavMAXClient() as client:'"
+            raise NavMAXError(
+                msg,
+            )
         return self._client
 
     # ------------------------------------------------------------------
@@ -75,13 +77,16 @@ class NavMAXClient:
         notes: str | None = None,
     ) -> dict:
         """Crée une nouvelle cible."""
-        r = await self.client.post("/api/v1/targets/", json={
-            "name": name,
-            "address": address,
-            "kind": kind,
-            "tags": tags,
-            "notes": notes,
-        })
+        r = await self.client.post(
+            "/api/v1/targets/",
+            json={
+                "name": name,
+                "address": address,
+                "kind": kind,
+                "tags": tags,
+                "notes": notes,
+            },
+        )
         self._check(r)
         return r.json()
 
@@ -130,8 +135,7 @@ class NavMAXClient:
         poll_interval: float = 1.0,
         max_wait: float = 120.0,
     ) -> dict:
-        """
-        Lance un scan et attend sa complétion.
+        """Lance un scan et attend sa complétion.
 
         Args:
             target_id: ID de la cible
@@ -142,12 +146,16 @@ class NavMAXClient:
 
         Returns:
             Le scan complété avec result_summary
+
         """
-        r = await self.client.post("/api/v1/scans/", json={
-            "target_id": target_id,
-            "scan_type": scan_type,
-            "ports": ports,
-        })
+        r = await self.client.post(
+            "/api/v1/scans/",
+            json={
+                "target_id": target_id,
+                "scan_type": scan_type,
+                "ports": ports,
+            },
+        )
         self._check(r)
         scan = r.json()
         scan_id = scan["id"]
@@ -202,8 +210,7 @@ class NavMAXClient:
     def _check(response: httpx.Response) -> None:
         if response.status_code >= 400:
             detail = "Unknown error"
-            try:
+            with contextlib.suppress(Exception):
                 detail = response.json().get("detail", response.text)
-            except Exception:
-                pass
-            raise NavMAXError(f"[{response.status_code}] {detail}")
+            msg = f"[{response.status_code}] {detail}"
+            raise NavMAXError(msg)

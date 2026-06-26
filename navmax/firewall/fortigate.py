@@ -1,5 +1,4 @@
-"""
-FortiGate Connector — API REST native pour firewalls Fortinet.
+"""FortiGate Connector — API REST native pour firewalls Fortinet.
 
 Fonctionnalités :
 - Authentification par API key ou username/password
@@ -18,15 +17,19 @@ Usage:
     print(config.summary())
 """
 
-import asyncio
-from typing import Optional, Any
 import httpx
 import structlog
 
 from .base import (
-    FirewallConnector, FirewallVendor,
-    FirewallRule, FirewallInterface, FirewallAddress, FirewallUser,
-    CVECheck, RuleAction, Protocol,
+    CVECheck,
+    FirewallAddress,
+    FirewallConnector,
+    FirewallInterface,
+    FirewallRule,
+    FirewallUser,
+    FirewallVendor,
+    Protocol,
+    RuleAction,
 )
 
 logger = structlog.get_logger(__name__)
@@ -71,8 +74,7 @@ FORTIGATE_CVES: list[dict] = [
             "l'exécution de code à distance non authentifiée."
         ),
         "remediation": (
-            "Mettre à jour vers 7.4.3+, 7.2.7+, 7.0.14+ "
-            "OU désactiver SSL-VPN si non utilisé"
+            "Mettre à jour vers 7.4.3+, 7.2.7+, 7.0.14+ OU désactiver SSL-VPN si non utilisé"
         ),
     },
     {
@@ -85,9 +87,7 @@ FORTIGATE_CVES: list[dict] = [
             "Dépassement de tampon dans le pré-authentification SSL-VPN "
             "permettant l'exécution de code à distance."
         ),
-        "remediation": (
-            "Mettre à jour vers 7.2.5+, 7.0.12+, 6.4.13+, 6.2.15+, 6.0.17+"
-        ),
+        "remediation": ("Mettre à jour vers 7.2.5+, 7.0.12+, 6.4.13+, 6.2.15+, 6.0.17+"),
     },
     {
         "cve": "CVE-2023-33308",
@@ -120,8 +120,7 @@ FORTIGATE_CVES: list[dict] = [
         "cvss": 6.1,
         "affected": "7.4.0-7.4.2, 7.2.0-7.2.6, 7.0.0-7.0.13",
         "description": (
-            "Cross-Site Scripting dans le portail SSL-VPN permettant "
-            "le vol de session."
+            "Cross-Site Scripting dans le portail SSL-VPN permettant le vol de session."
         ),
         "remediation": "Mettre à jour vers 7.4.3+, 7.2.7+, 7.0.14+",
     },
@@ -129,13 +128,27 @@ FORTIGATE_CVES: list[dict] = [
 
 # Ports à haut risque (RDP, SSH, etc. exposés)
 HIGH_RISK_PORTS = {
-    "22", "23", "3389", "5900", "5901", "21",
-    "135", "139", "445", "1433", "1521", "3306",
-    "5432", "6379", "27017", "11211",
+    "22",
+    "23",
+    "3389",
+    "5900",
+    "5901",
+    "21",
+    "135",
+    "139",
+    "445",
+    "1433",
+    "1521",
+    "3306",
+    "5432",
+    "6379",
+    "27017",
+    "11211",
 }
 
 
 # ── Connecteur FortiGate ───────────────────────────────────────
+
 
 class FortiGateConnector(FirewallConnector):
     """Connecteur API REST FortiGate (FortiOS).
@@ -163,6 +176,7 @@ class FortiGateConnector(FirewallConnector):
 
         Returns:
             True si connecté avec succès
+
         """
         try:
             self._client = httpx.AsyncClient(
@@ -177,10 +191,8 @@ class FortiGateConnector(FirewallConnector):
             if resp.status_code == 401:
                 logger.error("fortigate_auth_failed", host=self.host)
                 return False
-            elif resp.status_code != 200:
-                logger.warning("fortigate_status",
-                               host=self.host,
-                               status=resp.status_code)
+            if resp.status_code != 200:
+                logger.warning("fortigate_status", host=self.host, status=resp.status_code)
                 # Certaines versions répondent 403 sur /status...
                 # On essaie une autre route
                 resp2 = await self._client.get("/api/v2/monitor/system/status")
@@ -188,14 +200,15 @@ class FortiGateConnector(FirewallConnector):
                     return False
 
             self._connected = True
-            logger.info("fortigate_connected",
-                        host=self.host,
-                        using="api_key" if self.api_key else "password")
+            logger.info(
+                "fortigate_connected",
+                host=self.host,
+                using="api_key" if self.api_key else "password",
+            )
             return True
 
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
-            logger.error("fortigate_connect_failed",
-                         host=self.host, error=str(e))
+            logger.exception("fortigate_connect_failed", host=self.host, error=str(e))
             return False
 
     async def close(self) -> None:
@@ -209,20 +222,22 @@ class FortiGateConnector(FirewallConnector):
         """Construit les headers HTTP d'authentification."""
         if self.api_key:
             return {"Authorization": f"Bearer {self.api_key}"}
-        elif self.username and self.password:
+        if self.username and self.password:
             import base64
+
             credentials = base64.b64encode(
-                f"{self.username}:{self.password}".encode()
+                f"{self.username}:{self.password}".encode(),
             ).decode()
             return {"Authorization": f"Basic {credentials}"}
         return {}
 
     # ── API Calls ──────────────────────────────────────────────
 
-    async def _api_get(self, path: str, params: dict = None) -> dict:
+    async def _api_get(self, path: str, params: dict | None = None) -> dict:
         """GET sur l'API REST FortiOS."""
         if not hasattr(self, "_client"):
-            raise RuntimeError("Not connected. Call connect() first.")
+            msg = "Not connected. Call connect() first."
+            raise RuntimeError(msg)
 
         resp = await self._client.get(path, params=params)
         resp.raise_for_status()
@@ -266,41 +281,46 @@ class FortiGateConnector(FirewallConnector):
             results = data.get("results", [])
 
             for i, pol in enumerate(results):
-                rules.append(FirewallRule(
-                    id=str(pol.get("policyid", i)),
-                    name=pol.get("name", f"policy-{pol.get('policyid', i)}"),
-                    action=RuleAction.ALLOW if pol.get("action") == "accept"
-                           else RuleAction.DENY,
-                    source_zones=[
-                        z.get("name", "") if isinstance(z, dict) else str(z)
-                        for z in pol.get("srcintf", [])
-                    ],
-                    source_addresses=[
-                        a.get("name", "") if isinstance(a, dict) else str(a)
-                        for a in pol.get("srcaddr", [])
-                    ],
-                    source_ports=[],
-                    destination_zones=[
-                        z.get("name", "") if isinstance(z, dict) else str(z)
-                        for z in pol.get("dstintf", [])
-                    ],
-                    destination_addresses=[
-                        a.get("name", "") if isinstance(a, dict) else str(a)
-                        for a in pol.get("dstaddr", [])
-                    ],
-                    destination_ports=[
-                        s.get("port", "") if isinstance(s, dict) else str(s)
-                        for s in pol.get("service", [])
-                    ],
-                    protocol=Protocol.ANY,
-                    application=str(pol.get("application", [])[0] if pol.get("application") else ""),
-                    enabled=pol.get("status") == "enable",
-                    position=i,
-                    description=pol.get("comments", ""),
-                    raw=pol,
-                ))
+                rules.append(
+                    FirewallRule(
+                        id=str(pol.get("policyid", i)),
+                        name=pol.get("name", f"policy-{pol.get('policyid', i)}"),
+                        action=RuleAction.ALLOW
+                        if pol.get("action") == "accept"
+                        else RuleAction.DENY,
+                        source_zones=[
+                            z.get("name", "") if isinstance(z, dict) else str(z)
+                            for z in pol.get("srcintf", [])
+                        ],
+                        source_addresses=[
+                            a.get("name", "") if isinstance(a, dict) else str(a)
+                            for a in pol.get("srcaddr", [])
+                        ],
+                        source_ports=[],
+                        destination_zones=[
+                            z.get("name", "") if isinstance(z, dict) else str(z)
+                            for z in pol.get("dstintf", [])
+                        ],
+                        destination_addresses=[
+                            a.get("name", "") if isinstance(a, dict) else str(a)
+                            for a in pol.get("dstaddr", [])
+                        ],
+                        destination_ports=[
+                            s.get("port", "") if isinstance(s, dict) else str(s)
+                            for s in pol.get("service", [])
+                        ],
+                        protocol=Protocol.ANY,
+                        application=str(
+                            pol.get("application", [])[0] if pol.get("application") else "",
+                        ),
+                        enabled=pol.get("status") == "enable",
+                        position=i,
+                        description=pol.get("comments", ""),
+                        raw=pol,
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.error("fortigate_get_rules", error=str(e))
+            logger.exception("fortigate_get_rules", error=str(e))
 
         return rules
 
@@ -312,18 +332,21 @@ class FortiGateConnector(FirewallConnector):
             results = data.get("results", [])
 
             for iface in results:
-                interfaces.append(FirewallInterface(
-                    name=iface.get("name", ""),
-                    ip_address=str(iface.get("ip", "").split("/")[0]
-                                   if iface.get("ip") else ""),
-                    netmask="",
-                    zone=str(iface.get("interface", "")),
-                    enabled=iface.get("status") != "down",
-                    type=iface.get("type", "physical"),
-                    vlan_id=int(iface.get("vlanid", 0)),
-                ))
+                interfaces.append(
+                    FirewallInterface(
+                        name=iface.get("name", ""),
+                        ip_address=str(
+                            iface.get("ip", "").split("/")[0] if iface.get("ip") else "",
+                        ),
+                        netmask="",
+                        zone=str(iface.get("interface", "")),
+                        enabled=iface.get("status") != "down",
+                        type=iface.get("type", "physical"),
+                        vlan_id=int(iface.get("vlanid", 0)),
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.error("fortigate_get_interfaces", error=str(e))
+            logger.exception("fortigate_get_interfaces", error=str(e))
 
         return interfaces
 
@@ -346,13 +369,15 @@ class FortiGateConnector(FirewallConnector):
                 else:
                     value = addr.get("subnet", "")
 
-                addresses.append(FirewallAddress(
-                    name=addr.get("name", ""),
-                    value=value,
-                    type=addr_type,
-                ))
+                addresses.append(
+                    FirewallAddress(
+                        name=addr.get("name", ""),
+                        value=value,
+                        type=addr_type,
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.error("fortigate_get_addresses", error=str(e))
+            logger.exception("fortigate_get_addresses", error=str(e))
 
         return addresses
 
@@ -364,17 +389,19 @@ class FortiGateConnector(FirewallConnector):
             results = data.get("results", [])
 
             for admin in results:
-                users.append(FirewallUser(
-                    name=admin.get("name", ""),
-                    type=admin.get("accprofile", "local"),
-                    profile=admin.get("accprofile", ""),
-                    trusted_hosts=[
-                        f"{h.get('ip', '')}/{h.get('mask', '')}"
-                        for h in admin.get("trusthost", [])
-                    ],
-                ))
+                users.append(
+                    FirewallUser(
+                        name=admin.get("name", ""),
+                        type=admin.get("accprofile", "local"),
+                        profile=admin.get("accprofile", ""),
+                        trusted_hosts=[
+                            f"{h.get('ip', '')}/{h.get('mask', '')}"
+                            for h in admin.get("trusthost", [])
+                        ],
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.error("fortigate_get_users", error=str(e))
+            logger.exception("fortigate_get_users", error=str(e))
 
         return users
 
@@ -388,31 +415,33 @@ class FortiGateConnector(FirewallConnector):
 
         Returns:
             Liste de CVECheck
+
         """
         checks: list[CVECheck] = []
         version_clean = version.lower().replace("v", "").replace(" ", "")
 
         for cve_data in FORTIGATE_CVES:
             vulnerable = self._version_affected(
-                version_clean, cve_data["affected"]
+                version_clean,
+                cve_data["affected"],
             )
 
-            checks.append(CVECheck(
-                cve_id=cve_data["cve"],
-                title=cve_data["title"],
-                severity=cve_data["severity"],
-                vulnerable=vulnerable,
-                version_affected=cve_data["affected"],
-                current_version=version,
-                description=cve_data["description"],
-                remediation=cve_data["remediation"],
-                cvss_score=cve_data["cvss"],
-            ))
+            checks.append(
+                CVECheck(
+                    cve_id=cve_data["cve"],
+                    title=cve_data["title"],
+                    severity=cve_data["severity"],
+                    vulnerable=vulnerable,
+                    version_affected=cve_data["affected"],
+                    current_version=version,
+                    description=cve_data["description"],
+                    remediation=cve_data["remediation"],
+                    cvss_score=cve_data["cvss"],
+                ),
+            )
 
         vuln_count = sum(1 for c in checks if c.vulnerable)
-        logger.info("fortigate_cve_check",
-                    version=version,
-                    vulnerable=vuln_count)
+        logger.info("fortigate_cve_check", version=version, vulnerable=vuln_count)
 
         return checks
 
@@ -425,6 +454,7 @@ class FortiGateConnector(FirewallConnector):
 
         Returns:
             True si la version est vulnérable
+
         """
         if not current:
             return True  # Version inconnue → considérée vulnérable
@@ -439,13 +469,14 @@ class FortiGateConnector(FirewallConnector):
                     threshold = part.replace("<", "").strip()
                     threshold_parts = [int(x) for x in threshold.split(".")]
                     return self._version_lt(current_parts, threshold_parts)
-                elif "-" in part:
+                if "-" in part:
                     # "7.2.0-7.2.6"
                     low, high = part.split("-", 1)
                     low_parts = [int(x) for x in low.strip().split(".")]
                     high_parts = [int(x) for x in high.strip().split(".")]
-                    if (self._version_gte(current_parts, low_parts)
-                            and self._version_lte(current_parts, high_parts)):
+                    if self._version_gte(current_parts, low_parts) and self._version_lte(
+                        current_parts, high_parts,
+                    ):
                         return True
         except (ValueError, IndexError):
             return False
@@ -454,7 +485,7 @@ class FortiGateConnector(FirewallConnector):
 
     @staticmethod
     def _version_lt(a: list[int], b: list[int]) -> bool:
-        """a < b."""
+        """A < b."""
         for i in range(max(len(a), len(b))):
             va = a[i] if i < len(a) else 0
             vb = b[i] if i < len(b) else 0
@@ -464,7 +495,7 @@ class FortiGateConnector(FirewallConnector):
 
     @staticmethod
     def _version_lte(a: list[int], b: list[int]) -> bool:
-        """a <= b."""
+        """A <= b."""
         for i in range(max(len(a), len(b))):
             va = a[i] if i < len(a) else 0
             vb = b[i] if i < len(b) else 0
@@ -474,7 +505,7 @@ class FortiGateConnector(FirewallConnector):
 
     @staticmethod
     def _version_gte(a: list[int], b: list[int]) -> bool:
-        """a >= b."""
+        """A >= b."""
         for i in range(max(len(a), len(b))):
             va = a[i] if i < len(a) else 0
             vb = b[i] if i < len(b) else 0

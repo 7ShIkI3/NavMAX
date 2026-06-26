@@ -1,10 +1,9 @@
-"""
-Scanner TCP Connect — ouvre une connexion TCP complète (sans privilèges admin).
+"""Scanner TCP Connect — ouvre une connexion TCP complète (sans privilèges admin).
 Détection de services par banner grabbing.
 """
 
 import asyncio
-import socket
+import contextlib
 import time
 from typing import NamedTuple
 
@@ -17,7 +16,7 @@ logger = get_logger(__name__)
 class PortResult(NamedTuple):
     port: int
     protocol: str  # tcp | udp
-    state: str     # open | closed | filtered | timeout
+    state: str  # open | closed | filtered | timeout
     service: str | None = None
     banner: str | None = None
     version: str | None = None
@@ -38,7 +37,7 @@ async def _scan_single_port(
                 asyncio.open_connection(ip, port),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return PortResult(port=port, protocol="tcp", state="filtered", latency_ms=None)
         except (ConnectionRefusedError, OSError):
             # ECONNREFUSED → port fermé (rare car le firewall bloque souvent)
@@ -58,14 +57,12 @@ async def _scan_single_port(
                 if banner_bytes:
                     banner = banner_bytes.decode("utf-8", errors="replace").strip()
                     service_name, version = _parse_banner(banner)
-            except (asyncio.TimeoutError, ConnectionError, OSError):
+            except (TimeoutError, ConnectionError, OSError):
                 pass  # Pas de bannière, normal
         finally:
             writer.close()
-            try:
+            with contextlib.suppress(OSError):
                 await writer.wait_closed()
-            except OSError:
-                pass
 
         return PortResult(
             port=port,
@@ -84,8 +81,7 @@ async def tcp_connect_scan(
     timeout: float | None = None,
     max_concurrency: int | None = None,
 ) -> list[PortResult]:
-    """
-    Scan TCP Connect complet sur une IP et une liste de ports.
+    """Scan TCP Connect complet sur une IP et une liste de ports.
 
     Args:
         ip: Adresse IP de la cible
@@ -95,6 +91,7 @@ async def tcp_connect_scan(
 
     Returns:
         Liste des résultats triés par port
+
     """
     timeout = timeout or config.scanner_default_timeout
     max_concurrency = max_concurrency or config.scanner_max_concurrency
@@ -139,8 +136,7 @@ SERVICE_SIGNATURES: dict[str, list[str]] = {
 
 
 def _parse_banner(banner: str) -> tuple[str | None, str | None]:
-    """
-    Analyse une bannière pour identifier le service et sa version.
+    """Analyse une bannière pour identifier le service et sa version.
     Retourne (service_name, version).
     """
     upper = banner.upper()
@@ -158,8 +154,8 @@ def _extract_version(banner: str) -> str | None:
 
     # Patterns communs : OpenSSH_8.9p1, Apache/2.4.57, nginx/1.24.0
     patterns = [
-        r'(\d+\.\d+(?:\.\d+)?(?:[a-z]\d*)?)',  # X.Y ou X.Y.Z
-        r'(?:version|v\.?)\s*(\d+\.\d+(?:\.\d+)?)',
+        r"(\d+\.\d+(?:\.\d+)?(?:[a-z]\d*)?)",  # X.Y ou X.Y.Z
+        r"(?:version|v\.?)\s*(\d+\.\d+(?:\.\d+)?)",
     ]
     for pat in patterns:
         m = re.search(pat, banner, re.IGNORECASE)

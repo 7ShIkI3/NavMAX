@@ -1,20 +1,22 @@
 """Protocol abstrait pour tous les backends LLM."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Optional
-from enum import Enum
+from enum import StrEnum
 
 
-class ModelTier(str, Enum):
+class ModelTier(StrEnum):
     """Niveau de capacité du modèle."""
-    LIGHT = "light"    # 1-3B — classification, extraction, validation, routage
+
+    LIGHT = "light"  # 1-3B — classification, extraction, validation, routage
     MEDIUM = "medium"  # 7-8B — planification, analyse, résumé, traduction
-    HEAVY = "heavy"    # 70B+ — génération de code, raisonnement complexe, debug
+    HEAVY = "heavy"  # 70B+ — génération de code, raisonnement complexe, debug
 
 
-class ProviderType(str, Enum):
+class ProviderType(StrEnum):
     """Type de provider LLM."""
+
     OLLAMA = "ollama"
     LLAMACPP = "llamacpp"
     LMSTUDIO = "lmstudio"
@@ -26,6 +28,7 @@ class ProviderType(str, Enum):
 @dataclass
 class ModelInfo:
     """Métadonnées d'un modèle."""
+
     name: str
     provider: ProviderType
     tier: ModelTier
@@ -37,18 +40,20 @@ class ModelInfo:
 @dataclass
 class GenerateParams:
     """Paramètres d'une requête de génération."""
+
     prompt: str
-    system: Optional[str] = None
+    system: str | None = None
     max_tokens: int = 2048
     temperature: float = 0.7
     stop_sequences: list[str] = field(default_factory=list)
     json_mode: bool = False
-    model: Optional[str] = None
+    model: str | None = None
 
 
 @dataclass
 class GenerateResult:
     """Résultat d'une génération."""
+
     text: str
     model: str
     provider: ProviderType

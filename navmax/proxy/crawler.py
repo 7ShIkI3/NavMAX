@@ -13,7 +13,6 @@ import re
 import urllib.parse
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
 
 import httpx
 
@@ -25,6 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class CrawlResult:
     """Résultat d'un crawl."""
+
     url: str
     status_code: int
     content_type: str = ""
@@ -42,6 +42,7 @@ class CrawlResult:
 @dataclass
 class CrawlReport:
     """Rapport de crawling complet."""
+
     base_url: str
     crawled_urls: int
     discovered_endpoints: list[CrawlResult]
@@ -56,24 +57,71 @@ class CrawlReport:
 # Common dir busting wordlist
 # ---------------------------------------------------------------------------
 COMMON_PATHS = [
-    "admin", "login", "wp-admin", "backup", "config", "test",
-    "api", "api/v1", "graphql", "swagger", "docs", "phpmyadmin",
-    ".git", ".env", ".svn", ".hg", "robots.txt", "sitemap.xml",
-    "crossdomain.xml", "phpinfo.php", "info.php", "server-status",
-    "status", "health", "metrics", "debug", "console", "actuator",
-    "wp-content", "wp-includes", "administrator", "web.config",
-    "docker-compose.yml", "composer.json", "package.json",
-    "src", "dist", "build", "node_modules",
-    "uploads", "images", "assets", "static", "public",
-    "tmp", "temp", "log", "logs", "error.log", "access.log",
-    "old", "new", "v1", "v2", "dev", "staging", "beta",
-    "api-docs", "openapi.json", "spec.json",
+    "admin",
+    "login",
+    "wp-admin",
+    "backup",
+    "config",
+    "test",
+    "api",
+    "api/v1",
+    "graphql",
+    "swagger",
+    "docs",
+    "phpmyadmin",
+    ".git",
+    ".env",
+    ".svn",
+    ".hg",
+    "robots.txt",
+    "sitemap.xml",
+    "crossdomain.xml",
+    "phpinfo.php",
+    "info.php",
+    "server-status",
+    "status",
+    "health",
+    "metrics",
+    "debug",
+    "console",
+    "actuator",
+    "wp-content",
+    "wp-includes",
+    "administrator",
+    "web.config",
+    "docker-compose.yml",
+    "composer.json",
+    "package.json",
+    "src",
+    "dist",
+    "build",
+    "node_modules",
+    "uploads",
+    "images",
+    "assets",
+    "static",
+    "public",
+    "tmp",
+    "temp",
+    "log",
+    "logs",
+    "error.log",
+    "access.log",
+    "old",
+    "new",
+    "v1",
+    "v2",
+    "dev",
+    "staging",
+    "beta",
+    "api-docs",
+    "openapi.json",
+    "spec.json",
 ]
 
 
 class Crawler:
-    """
-    Crawler web pour la découverte d'endpoints.
+    """Crawler web pour la découverte d'endpoints.
 
     Usage:
         crawler = Crawler(max_depth=3, max_urls=100)
@@ -116,14 +164,14 @@ class Crawler:
         """Extrait les liens d'une page HTML."""
         links = set()
         # href dans <a>
-        for m in re.finditer(r'href=["\']([^"\']+)["\']', html, re.I):
+        for m in re.finditer(r'href=["\']([^"\']+)["\']', html, re.IGNORECASE):
             href = m.group(1)
             if not href.startswith(("javascript:", "mailto:", "tel:", "#")):
                 full = urllib.parse.urljoin(base_url, href)
                 links.add(full)
 
         # src dans <script>, <img>
-        for m in re.finditer(r'src=["\']([^"\']+)["\']', html, re.I):
+        for m in re.finditer(r'src=["\']([^"\']+)["\']', html, re.IGNORECASE):
             src = m.group(1)
             if not src.startswith("data:"):
                 full = urllib.parse.urljoin(base_url, src)
@@ -134,34 +182,38 @@ class Crawler:
     def _extract_forms(self, html: str) -> list[dict]:
         """Extrait les formulaires et leurs paramètres."""
         forms = []
-        for m in re.finditer(r'<form[^>]*>', html, re.I):
+        for m in re.finditer(r"<form[^>]*>", html, re.IGNORECASE):
             form_tag = m.group(0)
             action = ""
             method = "GET"
-            action_m = re.search(r'action=["\']([^"\']+)["\']', form_tag, re.I)
+            action_m = re.search(r'action=["\']([^"\']+)["\']', form_tag, re.IGNORECASE)
             if action_m:
                 action = action_m.group(1)
-            method_m = re.search(r'method=["\']([^"\']+)["\']', form_tag, re.I)
+            method_m = re.search(r'method=["\']([^"\']+)["\']', form_tag, re.IGNORECASE)
             if method_m:
                 method = method_m.group(1).upper()
 
             # Extraire les inputs
             inputs = []
-            for im in re.finditer(r'<input[^>]*>', html, re.I):
+            for im in re.finditer(r"<input[^>]*>", html, re.IGNORECASE):
                 input_tag = im.group(0)
-                name_m = re.search(r'name=["\']([^"\']+)["\']', input_tag, re.I)
-                type_m = re.search(r'type=["\']([^"\']+)["\']', input_tag, re.I)
+                name_m = re.search(r'name=["\']([^"\']+)["\']', input_tag, re.IGNORECASE)
+                type_m = re.search(r'type=["\']([^"\']+)["\']', input_tag, re.IGNORECASE)
                 if name_m:
-                    inputs.append({
-                        "name": name_m.group(1),
-                        "type": type_m.group(1) if type_m else "text",
-                    })
+                    inputs.append(
+                        {
+                            "name": name_m.group(1),
+                            "type": type_m.group(1) if type_m else "text",
+                        },
+                    )
 
-            forms.append({
-                "action": action,
-                "method": method,
-                "inputs": inputs,
-            })
+            forms.append(
+                {
+                    "action": action,
+                    "method": method,
+                    "inputs": inputs,
+                },
+            )
 
         return forms
 
@@ -170,21 +222,21 @@ class Crawler:
         techs = []
 
         tech_patterns: dict[str, list[str]] = {
-            "jQuery": [r'jquery[.\-\s]*(\d+\.\d+\.\d+)'],
-            "React": [r'react[.\-\s]*(\d+\.\d+)', r'reactjs'],
-            "Vue.js": [r'vue[.\-\s]*(\d+\.\d+)', r'v-bind'],
-            "Angular": [r'ng-app', r'angular[.\-\s]*(\d+\.\d+)'],
-            "Bootstrap": [r'bootstrap[.\-\s]*(\d+\.\d+)'],
-            "WordPress": [r'wp-content', r'wordpress'],
-            "Django": [r'__django', r'csrftoken'],
-            "Laravel": [r'laravel_session'],
-            "Express": [r'x-powered-by.*express', r'connect.sid'],
-            "PHP": [r'\.php', r'PHPSESSID'],
-            "ASP.NET": [r'__VIEWSTATE', r'ASP.NET_SessionId'],
-            "Nginx": [r'nginx'],
-            "Apache": [r'apache'],
-            "Cloudflare": [r'cloudflare'],
-            "AWS": [r'aws-', r'x-amz-'],
+            "jQuery": [r"jquery[.\-\s]*(\d+\.\d+\.\d+)"],
+            "React": [r"react[.\-\s]*(\d+\.\d+)", r"reactjs"],
+            "Vue.js": [r"vue[.\-\s]*(\d+\.\d+)", r"v-bind"],
+            "Angular": [r"ng-app", r"angular[.\-\s]*(\d+\.\d+)"],
+            "Bootstrap": [r"bootstrap[.\-\s]*(\d+\.\d+)"],
+            "WordPress": [r"wp-content", r"wordpress"],
+            "Django": [r"__django", r"csrftoken"],
+            "Laravel": [r"laravel_session"],
+            "Express": [r"x-powered-by.*express", r"connect.sid"],
+            "PHP": [r"\.php", r"PHPSESSID"],
+            "ASP.NET": [r"__VIEWSTATE", r"ASP.NET_SessionId"],
+            "Nginx": [r"nginx"],
+            "Apache": [r"apache"],
+            "Cloudflare": [r"cloudflare"],
+            "AWS": [r"aws-", r"x-amz-"],
         }
 
         server_header = headers.get("server", "")
@@ -192,7 +244,11 @@ class Crawler:
 
         for tech, patterns in tech_patterns.items():
             for pat in patterns:
-                if re.search(pat, html, re.I) or re.search(pat, server_header, re.I) or re.search(pat, powered_by, re.I):
+                if (
+                    re.search(pat, html, re.IGNORECASE)
+                    or re.search(pat, server_header, re.IGNORECASE)
+                    or re.search(pat, powered_by, re.IGNORECASE)
+                ):
                     techs.append(tech)
                     break
 
@@ -212,11 +268,9 @@ class Crawler:
                 html = resp.text
                 links = self._extract_links(html, url)
                 forms = self._extract_forms(html)
-                title_m = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+                title_m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.IGNORECASE)
                 title = title_m.group(1).strip() if title_m else ""
-                params = list(set(
-                    p for p in re.findall(r'[?&]([^=&\s]+)=', url) if p
-                ))
+                params = list({p for p in re.findall(r"[?&]([^=&\s]+)=", url) if p})
                 techs = self._detect_technologies(dict(resp.headers), html)
 
                 return CrawlResult(
@@ -241,6 +295,7 @@ class Crawler:
     async def crawl(self, base_url: str) -> CrawlReport:
         """Lance le crawling sur une URL de départ."""
         import time
+
         start = time.time()
 
         base_url = base_url.rstrip("/")

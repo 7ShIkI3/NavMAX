@@ -1,5 +1,4 @@
-"""
-Firewall Connector Base — protocole abstrait pour connecteurs firewall.
+"""Firewall Connector Base — protocole abstrait pour connecteurs firewall.
 
 Définit l'interface commune que tous les connecteurs (FortiGate, StormShield,
 Palo Alto, etc.) doivent implémenter.
@@ -13,13 +12,15 @@ Usage:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional, Any
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 # ── Types communs ──────────────────────────────────────────────
+
 
 class RuleAction(StrEnum):
     ALLOW = "allow"
@@ -54,6 +55,7 @@ class RuleSeverity(StrEnum):
 @dataclass
 class FirewallRule:
     """Règle de pare-feu normalisée (indépendante du vendor)."""
+
     id: str = ""
     name: str = ""
     action: RuleAction = RuleAction.DENY
@@ -75,39 +77,43 @@ class FirewallRule:
 @dataclass
 class FirewallInterface:
     """Interface réseau du firewall."""
+
     name: str = ""
     ip_address: str = ""
     netmask: str = ""
     zone: str = ""
     enabled: bool = True
-    type: str = "physical"       # physical, vlan, loopback, tunnel
+    type: str = "physical"  # physical, vlan, loopback, tunnel
     vlan_id: int = 0
 
 
 @dataclass
 class FirewallAddress:
     """Objet adresse (host, subnet, FQDN, range)."""
+
     name: str = ""
-    value: str = ""              # IP, subnet, FQDN
-    type: str = "ip"             # ip, subnet, fqdn, range
+    value: str = ""  # IP, subnet, FQDN
+    type: str = "ip"  # ip, subnet, fqdn, range
     zone: str = ""
 
 
 @dataclass
 class FirewallUser:
     """Utilisateur/administrateur du firewall."""
+
     name: str = ""
-    type: str = "local"          # local, ldap, radius
-    profile: str = ""            # super_admin, readonly...
+    type: str = "local"  # local, ldap, radius
+    profile: str = ""  # super_admin, readonly...
     trusted_hosts: list[str] = field(default_factory=list)
 
 
 @dataclass
 class CVECheck:
     """Résultat de vérification CVE sur un firewall."""
+
     cve_id: str
     title: str
-    severity: str                # critical, high, medium
+    severity: str  # critical, high, medium
     vulnerable: bool = False
     version_affected: str = ""
     current_version: str = ""
@@ -119,6 +125,7 @@ class CVECheck:
 @dataclass
 class FirewallConfig:
     """Configuration complète extraite d'un firewall."""
+
     vendor: FirewallVendor
     hostname: str = ""
     model: str = ""
@@ -137,8 +144,7 @@ class FirewallConfig:
 
     @property
     def allow_rules(self) -> list[FirewallRule]:
-        return [r for r in self.rules
-                if r.action == RuleAction.ALLOW and r.enabled]
+        return [r for r in self.rules if r.action == RuleAction.ALLOW and r.enabled]
 
     @property
     def risky_rules(self) -> list[FirewallRule]:
@@ -146,11 +152,17 @@ class FirewallConfig:
         risky = []
         for r in self.allow_rules:
             # Any/Any rules
-            if (not r.source_addresses or "any" in [a.lower() for a in r.source_addresses]) \
-               and (not r.destination_addresses or "any" in [a.lower() for a in r.destination_addresses]):
-                risky.append(r)
-            # Règles exposant des ports sensibles
-            elif "22" in r.destination_ports or "3389" in r.destination_ports:
+            if (
+                (
+                    (not r.source_addresses or "any" in [a.lower() for a in r.source_addresses])
+                    and (
+                        not r.destination_addresses
+                        or "any" in [a.lower() for a in r.destination_addresses]
+                    )
+                )
+                or "22" in r.destination_ports
+                or "3389" in r.destination_ports
+            ):
                 risky.append(r)
         return risky
 
@@ -178,6 +190,7 @@ class FirewallConfig:
 
 # ── Protocol ───────────────────────────────────────────────────
 
+
 class FirewallConnector(ABC):
     """Interface abstraite pour tout connecteur firewall.
 
@@ -187,9 +200,15 @@ class FirewallConnector(ABC):
     - Vérification des CVEs connues
     """
 
-    def __init__(self, host: str, api_key: str = "",
-                 username: str = "", password: str = "",
-                 verify_ssl: bool = False, timeout: float = 30.0):
+    def __init__(
+        self,
+        host: str,
+        api_key: str = "",
+        username: str = "",
+        password: str = "",
+        verify_ssl: bool = False,
+        timeout: float = 30.0,
+    ) -> None:
         self.host = host
         self.api_key = api_key
         self.username = username
@@ -244,6 +263,7 @@ class FirewallConnector(ABC):
 
         Returns:
             FirewallConfig normalisé
+
         """
         info = await self.get_system_info()
         rules = await self.get_rules()
@@ -273,6 +293,7 @@ class FirewallConnector(ABC):
 
         Returns:
             Liste de CVECheck
+
         """
         # Implémentation par défaut — à surcharger par vendor
         return []

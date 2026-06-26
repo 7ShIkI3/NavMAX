@@ -1,10 +1,8 @@
-"""
-BloodHound Export — export du graphe d'attaque au format BloodHound JSON.
-"""
+"""BloodHound Export — export du graphe d'attaque au format BloodHound JSON."""
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -22,17 +20,34 @@ class ExportResult:
 
 class BloodHoundExporter:
     NODE_TYPE_MAP = {
-        "User": "User", "Group": "Group", "Computer": "Computer",
-        "Domain": "Domain", "OU": "OU", "GPO": "GPO",
+        "User": "User",
+        "Group": "Group",
+        "Computer": "Computer",
+        "Domain": "Domain",
+        "OU": "OU",
+        "GPO": "GPO",
     }
 
     EDGE_KIND_MAP = {
-        "MemberOf": 1, "AdminTo": 2, "HasSession": 3, "TrustedBy": 4,
-        "GenericAll": 5, "WriteDacl": 6, "WriteOwner": 7,
-        "ForceChangePassword": 8, "AddMember": 9, "ReadLAPSPassword": 10,
-        "CanRDP": 11, "CanPSRemote": 12, "SQLAdmin": 13, "ExecuteDCOM": 14,
-        "AllowedToDelegate": 15, "HasSPN": 16, "ASREPRoastable": 17,
-        "TrustedForDelegation": 18, "ConstrainedDelegation": 19,
+        "MemberOf": 1,
+        "AdminTo": 2,
+        "HasSession": 3,
+        "TrustedBy": 4,
+        "GenericAll": 5,
+        "WriteDacl": 6,
+        "WriteOwner": 7,
+        "ForceChangePassword": 8,
+        "AddMember": 9,
+        "ReadLAPSPassword": 10,
+        "CanRDP": 11,
+        "CanPSRemote": 12,
+        "SQLAdmin": 13,
+        "ExecuteDCOM": 14,
+        "AllowedToDelegate": 15,
+        "HasSPN": 16,
+        "ASREPRoastable": 17,
+        "TrustedForDelegation": 18,
+        "ConstrainedDelegation": 19,
     }
 
     def export(self, trust_graph) -> dict:
@@ -43,8 +58,17 @@ class BloodHoundExporter:
         if graph is None or graph.number_of_nodes() == 0:
             return {
                 "data": [{"Nodes": {}, "Edges": []}],
-                "meta": {"version": 5, "counts": {"nodes": 0, "edges": 0,
-                         "users": 0, "groups": 0, "computers": 0, "domains": 0}},
+                "meta": {
+                    "version": 5,
+                    "counts": {
+                        "nodes": 0,
+                        "edges": 0,
+                        "users": 0,
+                        "groups": 0,
+                        "computers": 0,
+                        "domains": 0,
+                    },
+                },
             }
 
         for node_id in graph.nodes():
@@ -68,19 +92,24 @@ class BloodHoundExporter:
         for u, v, data in graph.edges(data=True):
             edge_type = str(data.get("type", "MemberOf"))
             kind = self.EDGE_KIND_MAP.get(edge_type, 1)
-            edges.append({
-                "Source": u, "Target": v, "Kind": kind,
-                "Label": edge_type,
-                "Properties": {"isenforced": False,
-                               "isacl": kind in (5, 6, 7, 8, 9, 10)},
-            })
+            edges.append(
+                {
+                    "Source": u,
+                    "Target": v,
+                    "Kind": kind,
+                    "Label": edge_type,
+                    "Properties": {"isenforced": False, "isacl": kind in (5, 6, 7, 8, 9, 10)},
+                },
+            )
 
         return {
             "data": [{"Nodes": nodes, "Edges": edges}],
             "meta": {
-                "version": 5, "type": "NavMAX BloodHound Export",
+                "version": 5,
+                "type": "NavMAX BloodHound Export",
                 "counts": {
-                    "nodes": len(nodes), "edges": len(edges),
+                    "nodes": len(nodes),
+                    "edges": len(edges),
                     "users": sum(1 for n in nodes.values() if n["Label"] == "User"),
                     "groups": sum(1 for n in nodes.values() if n["Label"] == "Group"),
                     "computers": sum(1 for n in nodes.values() if n["Label"] == "Computer"),
@@ -94,6 +123,7 @@ class BloodHoundExporter:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
             import os
+
             file_size = os.path.getsize(filepath)
             meta = data.get("meta", {}).get("counts", {})
             return ExportResult(

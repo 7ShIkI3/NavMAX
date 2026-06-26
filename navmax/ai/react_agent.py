@@ -1,5 +1,4 @@
-"""
-ReAct Agent — boucle agentique Observe → Think → Act → Observe.
+"""ReAct Agent — boucle agentique Observe → Think → Act → Observe.
 
 Contrairement au MissionPlanner (NL → JSON statique), le ReActAgent
 exécute une vraie boucle d'agent autonome avec tool-calling structuré.
@@ -19,9 +18,10 @@ Usage:
 import asyncio
 import json
 import re
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional, AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 
 import jsonschema
 import structlog
@@ -36,8 +36,6 @@ logger = structlog.get_logger(__name__)
 
 class ToolRequiresConfirmation(Exception):
     """Levée quand un tool dangerous nécessite une confirmation humaine."""
-
-    pass
 
 
 # ── Types ────────────────────────────────────────────────────────
@@ -76,7 +74,7 @@ class Step:
     tool_params: dict | None
     result: Any | None
     error: str | None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -142,7 +140,10 @@ def _make_default_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "target": {"type": "string", "description": "IP, hostname, or CIDR range"},
-                    "ports": {"type": "string", "description": "Ports: '1-1000', '22,80,443', 'all'"},
+                    "ports": {
+                        "type": "string",
+                        "description": "Ports: '1-1000', '22,80,443', 'all'",
+                    },
                     "profile": {
                         "type": "string",
                         "enum": ["quick", "default", "deep", "stealth"],
@@ -167,7 +168,10 @@ def _make_default_tools() -> list[Tool]:
                     },
                     "severity": {
                         "type": "array",
-                        "items": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
+                        "items": {
+                            "type": "string",
+                            "enum": ["critical", "high", "medium", "low", "info"],
+                        },
                         "description": "Severity filter",
                     },
                 },
@@ -194,7 +198,10 @@ def _make_default_tools() -> list[Tool]:
             parameters={
                 "type": "object",
                 "properties": {
-                    "service": {"type": "string", "description": "Service name (ssh, redis, http, ...)"},
+                    "service": {
+                        "type": "string",
+                        "description": "Service name (ssh, redis, http, ...)",
+                    },
                     "version": {"type": "string", "description": "Service version"},
                     "host": {"type": "string", "description": "Target host"},
                     "port": {"type": "integer", "description": "Target port"},
@@ -229,7 +236,11 @@ def _make_default_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "mission_id": {"type": "string", "description": "Mission ID to report on"},
-                    "format": {"type": "string", "enum": ["html", "markdown", "sarif"], "description": "Output format"},
+                    "format": {
+                        "type": "string",
+                        "enum": ["html", "markdown", "sarif"],
+                        "description": "Output format",
+                    },
                 },
                 "required": ["mission_id"],
             },
@@ -261,7 +272,7 @@ class ReActAgent:
     ) -> None:
         self.ai_engine = ai_engine
         self.tools: dict[str, Tool] = {}
-        for tool in (tools or _make_default_tools()):
+        for tool in tools or _make_default_tools():
             self.tools[tool.name] = tool
         self.max_steps = max_steps
         self.model_tier = model_tier
@@ -276,6 +287,7 @@ class ReActAgent:
 
         Returns:
             MissionResult avec toutes les étapes et le résultat.
+
         """
         start_time = asyncio.get_event_loop().time()
         steps: list[Step] = []
@@ -303,7 +315,7 @@ class ReActAgent:
                 )
                 step = self._parse_step(step_num, response)
             except (RuntimeError, ValueError, json.JSONDecodeError, KeyError) as e:
-                logger.error("react_parse_error", step=step_num, error=str(e))
+                logger.exception("react_parse_error", step=step_num, error=str(e))
                 step = Step(
                     step_number=step_num,
                     thought=f"Erreur de parsing: {e}",
@@ -319,8 +331,14 @@ class ReActAgent:
                 steps.append(step)
                 elapsed = asyncio.get_event_loop().time() - start_time
 
-                success = step.result.get("success", False) if isinstance(step.result, dict) else False
-                summary_text = step.result.get("summary", "") if isinstance(step.result, dict) else str(step.result)
+                success = (
+                    step.result.get("success", False) if isinstance(step.result, dict) else False
+                )
+                summary_text = (
+                    step.result.get("summary", "")
+                    if isinstance(step.result, dict)
+                    else str(step.result)
+                )
 
                 return MissionResult(
                     objective=objective,
@@ -342,9 +360,12 @@ class ReActAgent:
 
                     # 2. Gate pour tools dangereux : lever une exception
                     if tool.dangerous and tool.requires_confirmation:
-                        raise ToolRequiresConfirmation(
+                        msg = (
                             f"Tool '{tool.name}' blocked — requires human confirmation. "
                             f"Params: {json.dumps(step.tool_params)}"
+                        )
+                        raise ToolRequiresConfirmation(
+                            msg,
                         )
 
                     result = await self._execute_tool(tool, step.tool_params or {})
@@ -354,8 +375,14 @@ class ReActAgent:
                         findings.extend(result["findings"])
                 except ToolRequiresConfirmation:
                     raise
-                except (RuntimeError, ValueError, TypeError, OSError, jsonschema.ValidationError) as e:
-                    logger.error("react_tool_error", tool=step.tool_name, error=str(e))
+                except (
+                    RuntimeError,
+                    ValueError,
+                    TypeError,
+                    OSError,
+                    jsonschema.ValidationError,
+                ) as e:
+                    logger.exception("react_tool_error", tool=step.tool_name, error=str(e))
                     step.error = str(e)
                     step.result = {"error": str(e)}
             elif step.tool_name and step.tool_name != "finish":
@@ -389,8 +416,9 @@ class ReActAgent:
 
         Yields:
             StepUpdate à chaque changement d'état.
+
         """
-        start_time = asyncio.get_event_loop().time()
+        asyncio.get_event_loop().time()
         steps: list[Step] = []
         tools_desc = self._format_tools()
         history = ""
@@ -451,9 +479,12 @@ class ReActAgent:
 
                     # 2. Gate pour tools dangereux
                     if tool.dangerous and tool.requires_confirmation:
-                        raise ToolRequiresConfirmation(
+                        msg = (
                             f"Tool '{tool.name}' blocked — requires human confirmation. "
                             f"Params: {json.dumps(step.tool_params)}"
+                        )
+                        raise ToolRequiresConfirmation(
+                            msg,
                         )
 
                     result = await self._execute_tool(tool, step.tool_params or {})
@@ -465,7 +496,13 @@ class ReActAgent:
                         tool_name=step.tool_name,
                         result=result,
                     )
-                except (RuntimeError, ValueError, TypeError, OSError, jsonschema.ValidationError) as e:
+                except (
+                    RuntimeError,
+                    ValueError,
+                    TypeError,
+                    OSError,
+                    jsonschema.ValidationError,
+                ) as e:
                     step.error = str(e)
                     yield StepUpdate(
                         step_number=step_num,
@@ -489,10 +526,12 @@ class ReActAgent:
 
     def _is_provider_available(self, provider_name: str) -> bool:
         import time
+
         return time.monotonic() >= self._provider_skip_until.get(provider_name, 0.0)
 
     def _record_provider_failure(self, provider_name: str) -> None:
         import time
+
         count = self._provider_failures.get(provider_name, 0) + 1
         self._provider_failures[provider_name] = count
         if count >= 5:
@@ -510,7 +549,7 @@ class ReActAgent:
             danger = " ⚠️ DANGEREUX" if tool.dangerous else ""
             lines.append(
                 f"- **{name}**{danger}: {tool.description}\n"
-                f"  Parameters: {json.dumps(tool.parameters, indent=2)}"
+                f"  Parameters: {json.dumps(tool.parameters, indent=2)}",
             )
         return "\n".join(lines)
 
@@ -544,10 +583,11 @@ class ReActAgent:
                 first_brace = text.find("{")
                 last_brace = text.rfind("}")
                 if first_brace >= 0 and last_brace > first_brace:
-                    text = text[first_brace:last_brace + 1]
+                    text = text[first_brace : last_brace + 1]
                     data = json.loads(text)
                 else:
-                    raise ValueError(f"Impossible de parser le JSON: {response[:200]}")
+                    msg = f"Impossible de parser le JSON: {response[:200]}"
+                    raise ValueError(msg)
 
         thought = data.get("thought", "")
         action = data.get("action", {})
@@ -591,32 +631,52 @@ class ReActAgent:
 
         Raises:
             jsonschema.ValidationError: Si les paramètres sont invalides.
+
         """
         if not isinstance(params, dict):
+            msg = f"Params for tool '{tool.name}' must be a dict, got {type(params).__name__}"
             raise jsonschema.ValidationError(
-                f"Params for tool '{tool.name}' must be a dict, got {type(params).__name__}"
+                msg,
             )
         jsonschema.validate(instance=params, schema=tool.parameters)
 
     _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
-        (re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", re.IGNORECASE),
-         "[INJECTION BLOCKED: ignore instructions]"),
-        (re.compile(r"forget\s+(all\s+)?(previous|prior)\s+(instructions|context|history)", re.IGNORECASE),
-         "[INJECTION BLOCKED: forget instructions]"),
-        (re.compile(r"you\s+are\s+now\s+", re.IGNORECASE),
-         "[INJECTION BLOCKED: role change]"),
-        (re.compile(r"disregard\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
-         "[INJECTION BLOCKED: disregard]"),
-        (re.compile(r"(new\s+)?system\s+prompt\s*:", re.IGNORECASE),
-         "[INJECTION BLOCKED: system prompt override]"),
-        (re.compile(r"override\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
-         "[INJECTION BLOCKED: override]"),
-        (re.compile(r"you\s+must\s+(not|never|always)", re.IGNORECASE),
-         "[INJECTION BLOCKED: instruction override]"),
-        (re.compile(r"\[\s*(SYSTEM|INJECT|OVERRIDE)\s*\]", re.IGNORECASE),
-         "[INJECTION BLOCKED: system tag]"),
-        (re.compile(r"<\|?(im_start|im_end|sys|system|user|assistant)\|?>", re.IGNORECASE),
-         "[INJECTION BLOCKED: chat token]"),
+        (
+            re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", re.IGNORECASE),
+            "[INJECTION BLOCKED: ignore instructions]",
+        ),
+        (
+            re.compile(
+                r"forget\s+(all\s+)?(previous|prior)\s+(instructions|context|history)",
+                re.IGNORECASE,
+            ),
+            "[INJECTION BLOCKED: forget instructions]",
+        ),
+        (re.compile(r"you\s+are\s+now\s+", re.IGNORECASE), "[INJECTION BLOCKED: role change]"),
+        (
+            re.compile(r"disregard\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
+            "[INJECTION BLOCKED: disregard]",
+        ),
+        (
+            re.compile(r"(new\s+)?system\s+prompt\s*:", re.IGNORECASE),
+            "[INJECTION BLOCKED: system prompt override]",
+        ),
+        (
+            re.compile(r"override\s+(all\s+)?(previous|prior)?", re.IGNORECASE),
+            "[INJECTION BLOCKED: override]",
+        ),
+        (
+            re.compile(r"you\s+must\s+(not|never|always)", re.IGNORECASE),
+            "[INJECTION BLOCKED: instruction override]",
+        ),
+        (
+            re.compile(r"\[\s*(SYSTEM|INJECT|OVERRIDE)\s*\]", re.IGNORECASE),
+            "[INJECTION BLOCKED: system tag]",
+        ),
+        (
+            re.compile(r"<\|?(im_start|im_end|sys|system|user|assistant)\|?>", re.IGNORECASE),
+            "[INJECTION BLOCKED: chat token]",
+        ),
     ]
 
     def _sanitize_for_history(self, text: str) -> str:
@@ -630,6 +690,7 @@ class ReActAgent:
 
         Returns:
             Texte nettoyé et tronqué.
+
         """
         if not isinstance(text, str):
             return str(text)
@@ -684,8 +745,10 @@ def wire_tools(
         nmap_scanner: Instance de NmapScanner (navmax.scanner.nmap_scanner).
         nuclei_scanner: Instance de NucleiScanner (navmax.scanner.nuclei_scanner).
         osint_orchestrator: Instance de OSINT orchestrator.
+
     """
     if nmap_scanner:
+
         async def _scan_ports(**kw) -> dict:
             result = await nmap_scanner.scan(
                 target=kw["target"],
@@ -710,6 +773,7 @@ def wire_tools(
             agent.tools["scan_ports"].func = _scan_ports
 
     if nuclei_scanner:
+
         async def _scan_vulns(**kw) -> dict:
             findings = await nuclei_scanner.scan(
                 target=kw["target"],
@@ -735,9 +799,9 @@ def wire_tools(
             agent.tools["scan_vulnerabilities"].dangerous = True
 
     if osint_orchestrator:
+
         async def _osint_investigate(**kw) -> dict:
-            result = await osint_orchestrator.investigate(domain=kw["domain"])
-            return result
+            return await osint_orchestrator.investigate(domain=kw["domain"])
 
         if "osint_investigate" in agent.tools:
             agent.tools["osint_investigate"].func = _osint_investigate

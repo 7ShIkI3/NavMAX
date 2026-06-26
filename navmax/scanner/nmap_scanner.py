@@ -1,5 +1,4 @@
-"""
-NmapScanner — wrapper asynchrone autour de python-nmap avec fallback scapy.
+"""NmapScanner — wrapper asynchrone autour de python-nmap avec fallback scapy.
 
 Détection OS, version detection, NSE scripts, avec fallback élégant
 vers le scanner TCP natif (scapy) si nmap n'est pas installé.
@@ -9,11 +8,10 @@ Aucun passage d'arguments bruts autorisé.
 """
 
 import asyncio
+import contextlib
 import re
 import shutil
-import structlog
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Awaitable
 
 from navmax.core.logging import get_logger
 
@@ -33,7 +31,8 @@ NMAP_PROFILES: dict[str, str] = {
 def _validate_host(host: str) -> None:
     """Valide que host est une IP ou un hostname basique."""
     if not host or not isinstance(host, str):
-        raise ValueError(f"host must be a non-empty string, got {type(host).__name__}")
+        msg = f"host must be a non-empty string, got {type(host).__name__}"
+        raise ValueError(msg)
     # Vérification basique : IP (IPv4/v6) ou hostname (DNS)
     host = host.strip()
     # IPv4
@@ -42,35 +41,38 @@ def _validate_host(host: str) -> None:
     # Hostname (lettres, chiffres, points, tirets)
     hostname_re = r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$"
     if not (re.match(ipv4_re, host) or ":" in host or re.match(hostname_re, host)):
-        raise ValueError(f"Invalid host format: '{host}'")
+        msg = f"Invalid host format: '{host}'"
+        raise ValueError(msg)
 
 
 @dataclass
 class NmapHostResult:
     """Résultat d'un scan nmap pour un hôte."""
+
     host: str
     status: str = "down"  # "up" or "down"
     ports: dict[int, dict] = field(default_factory=dict)
     os_matches: list[dict] = field(default_factory=list)
     os_cpe: str = ""
-    uptime: Optional[str] = None
-    mac_address: Optional[str] = None
-    error: Optional[str] = None
+    uptime: str | None = None
+    mac_address: str | None = None
+    error: str | None = None
 
 
 @dataclass
 class PortScanResult:
     """Résultat enrichi pour un port scanné."""
+
     port: int
     protocol: str = "tcp"
     state: str = "closed"
-    service: Optional[str] = None
-    product: Optional[str] = None
-    version: Optional[str] = None
-    extrainfo: Optional[str] = None
-    cpe: Optional[str] = None
+    service: str | None = None
+    product: str | None = None
+    version: str | None = None
+    extrainfo: str | None = None
+    cpe: str | None = None
     script_results: dict = field(default_factory=dict)
-    os_detected: Optional[str] = None
+    os_detected: str | None = None
     os_accuracy: int = 0
     vulnerabilities: list[dict] = field(default_factory=list)
 
@@ -88,8 +90,8 @@ class NmapScanner:
 
     PROFILES = NMAP_PROFILES
 
-    def __init__(self):
-        self._nmap_available: Optional[bool] = None
+    def __init__(self) -> None:
+        self._nmap_available: bool | None = None
         self._nmap = None  # import nmap (lazy)
 
     @property
@@ -103,10 +105,10 @@ class NmapScanner:
     async def scan(
         self,
         host: str,
-        ports: Optional[list[int]] = None,
+        ports: list[int] | None = None,
         profile: str = "default",
         timeout: int = 120,
-        scripts: Optional[list[str]] = None,
+        scripts: list[str] | None = None,
         unsafe_scripts: bool = False,
     ) -> NmapHostResult:
         """Lance un scan nmap complet sur un hôte.
@@ -127,14 +129,15 @@ class NmapScanner:
 
         Raises:
             ValueError: Si le profil est inconnu ou si l'hôte est invalide
+
         """
         # Validation
         _validate_host(host)
         if profile not in self.PROFILES:
             valid = ", ".join(sorted(self.PROFILES.keys()))
+            msg = f"Unknown nmap profile '{profile}'. Valid profiles: {valid}"
             raise ValueError(
-                f"Unknown nmap profile '{profile}'. "
-                f"Valid profiles: {valid}"
+                msg,
             )
 
         result = NmapHostResult(host=host)
@@ -192,7 +195,7 @@ class NmapScanner:
             result.status = host_data.state()
 
             # OS Detection
-            if "osmatch" in host_data and host_data["osmatch"]:
+            if host_data.get("osmatch"):
                 for osm in host_data["osmatch"]:
                     match = {
                         "name": osm.get("name", ""),
@@ -204,7 +207,9 @@ class NmapScanner:
 
                 # Meilleur match
                 best = host_data["osmatch"][0]
-                result.os_cpe = best.get("osclass", [{}])[0].get("cpe", "") if best.get("osclass") else ""
+                result.os_cpe = (
+                    best.get("osclass", [{}])[0].get("cpe", "") if best.get("osclass") else ""
+                )
 
             # Uptime
             if "uptime" in host_data:
@@ -230,12 +235,11 @@ class NmapScanner:
                     result.ports[port] = entry.__dict__
 
             # MAC address
-            if "addresses" in host_data:
-                if "mac" in host_data["addresses"]:
-                    result.mac_address = host_data["addresses"]["mac"]
+            if "addresses" in host_data and "mac" in host_data["addresses"]:
+                result.mac_address = host_data["addresses"]["mac"]
 
         except (OSError, RuntimeError, ValueError) as e:
-            logger.error("nmap_scan_error", host=host, error=str(e))
+            logger.exception("nmap_scan_error", host=host, error=str(e))
             result.error = str(e)
 
         return result
@@ -247,7 +251,7 @@ class NmapScanner:
     async def scan_services(
         self,
         host: str,
-        ports: Optional[list[int]] = None,
+        ports: list[int] | None = None,
         timeout: int = 120,
     ) -> NmapHostResult:
         """Scan spécifique pour la détection de services/versions (profil default)."""
@@ -256,7 +260,7 @@ class NmapScanner:
     async def scan_vuln(
         self,
         host: str,
-        ports: Optional[list[int]] = None,
+        ports: list[int] | None = None,
         timeout: int = 300,
     ) -> NmapHostResult:
         """Scan avec scripts NSE de vulnérabilité (profil vuln).
@@ -265,7 +269,8 @@ class NmapScanner:
         de vulnérabilité explicite.
         """
         return await self.scan(
-            host, ports=ports,
+            host,
+            ports=ports,
             profile="vuln",
             timeout=timeout,
             unsafe_scripts=True,
@@ -275,12 +280,13 @@ class NmapScanner:
         self,
         host: str,
         scripts: list[str],
-        ports: Optional[list[int]] = None,
+        ports: list[int] | None = None,
         timeout: int = 180,
     ) -> NmapHostResult:
         """Scan avec scripts NSE personnalisés (profil default + scripts)."""
         return await self.scan(
-            host, ports=ports,
+            host,
+            ports=ports,
             profile="default",
             scripts=scripts,
             timeout=timeout,
@@ -291,7 +297,7 @@ class NmapScanner:
     async def _fallback_scan(
         self,
         host: str,
-        ports: Optional[list[int]],
+        ports: list[int] | None,
         timeout: int,
     ) -> NmapHostResult:
         """Fallback quand nmap n'est pas disponible.
@@ -302,14 +308,31 @@ class NmapScanner:
         result = NmapHostResult(host=host, status="up")
 
         if not ports:
-            ports = [21, 22, 23, 25, 53, 80, 443, 445, 3306, 3389,
-                     5432, 6379, 8080, 8443, 9200, 27017]
+            ports = [
+                21,
+                22,
+                23,
+                25,
+                53,
+                80,
+                443,
+                445,
+                3306,
+                3389,
+                5432,
+                6379,
+                8080,
+                8443,
+                9200,
+                27017,
+            ]
 
         async def check_port(port: int):
             try:
                 r, w = await asyncio.wait_for(
-                    asyncio.open_connection(host, port), timeout=min(timeout, 5))
-            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+                    asyncio.open_connection(host, port), timeout=min(timeout, 5),
+                )
+            except (TimeoutError, ConnectionRefusedError, OSError):
                 return port, None
 
             banner = b""
@@ -317,16 +340,12 @@ class NmapScanner:
                 # Banner grab
                 w.write(b"\r\n")
                 await w.drain()
-                try:
+                with contextlib.suppress(TimeoutError):
                     banner = await asyncio.wait_for(r.read(1024), timeout=2)
-                except asyncio.TimeoutError:
-                    pass
             finally:
                 w.close()
-                try:
+                with contextlib.suppress(OSError):
                     await w.wait_closed()
-                except OSError:
-                    pass
 
             return port, {
                 "port": port,
@@ -366,21 +385,33 @@ class NmapScanner:
             return "smb"
         # Fallback port-based
         port_map = {
-            21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp",
-            53: "dns", 80: "http", 443: "https", 445: "smb",
-            3306: "mysql", 3389: "rdp", 5432: "postgresql",
-            6379: "redis", 8080: "http", 8443: "https",
-            9200: "elasticsearch", 27017: "mongodb",
+            21: "ftp",
+            22: "ssh",
+            23: "telnet",
+            25: "smtp",
+            53: "dns",
+            80: "http",
+            443: "https",
+            445: "smb",
+            3306: "mysql",
+            3389: "rdp",
+            5432: "postgresql",
+            6379: "redis",
+            8080: "http",
+            8443: "https",
+            9200: "elasticsearch",
+            27017: "mongodb",
         }
         return port_map.get(port, "unknown")
 
 
 # ── Helper pour enrichir ContextualScanResult ────────────────
 
+
 async def enrich_with_nmap(
     host: str,
     ports: list[int],
-    nmap_scanner: Optional[NmapScanner] = None,
+    nmap_scanner: NmapScanner | None = None,
 ) -> dict:
     """Enrichit un résultat de scan avec les données nmap.
 
@@ -391,6 +422,7 @@ async def enrich_with_nmap(
 
     Returns:
         Dict avec OS, versions détaillées, scripts NSE
+
     """
     scanner = nmap_scanner or NmapScanner()
     result = await scanner.scan(host, ports=ports)

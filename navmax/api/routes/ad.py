@@ -1,5 +1,4 @@
-"""
-API Routes — Active Directory & LDAP.
+"""API Routes — Active Directory & LDAP.
 
 Endpoints REST pour l'énumération, le scanning, et l'analyse AD.
 
@@ -10,12 +9,9 @@ POST /api/v1/ad/spray          — Password spraying (⚠️ sensible)
 GET  /api/v1/ad/graph/export   — Export BloodHound JSON
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from navmax.db.engine import get_session
 from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/ad", tags=["Active Directory"])
@@ -24,26 +20,27 @@ logger = get_logger(__name__)
 
 # ── Schemas ────────────────────────────────────────────────────
 
+
 class ADEnumerateRequest(BaseModel):
     server: str
     domain: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
     use_ssl: bool = True
 
 
 class ADScanRequest(BaseModel):
     server: str
     domain: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
 
 class ADAnalyzeRequest(BaseModel):
     server: str
     domain: str
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
 
 class ADSprayRequest(BaseModel):
@@ -51,12 +48,13 @@ class ADSprayRequest(BaseModel):
     domain: str
     username: str
     password: str
-    target_users: Optional[list[str]] = None
-    password_list: Optional[list[str]] = None
+    target_users: list[str] | None = None
+    password_list: list[str] | None = None
     safe_mode: bool = True
 
 
 # ── Routes ─────────────────────────────────────────────────────
+
 
 @router.post("/enumerate")
 async def ad_enumerate(req: ADEnumerateRequest):
@@ -64,7 +62,7 @@ async def ad_enumerate(req: ADEnumerateRequest):
 
     Retourne le résumé de la DomainMap : comptage users, groups, etc.
     """
-    from navmax.ad.connector import ADConfig, ADAuthMethod, ADConnector
+    from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.enumerator import ADEnumerator
 
     config = ADConfig(
@@ -106,8 +104,8 @@ async def ad_enumerate(req: ADEnumerateRequest):
     except PermissionError as exc:
         logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
-        logger.error("ad_énumération_erreur", server=req.server, erreur=str(exc))
+    except Exception as exc:
+        logger.exception("ad_énumération_erreur", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
@@ -116,7 +114,7 @@ async def ad_enumerate(req: ADEnumerateRequest):
 @router.post("/scan")
 async def ad_scan(req: ADScanRequest):
     """Scan de vulnérabilités Active Directory."""
-    from navmax.ad.connector import ADConfig, ADAuthMethod, ADConnector
+    from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.enumerator import ADEnumerator
     from navmax.ad.vuln_scanner import ADVulnScanner
 
@@ -166,8 +164,8 @@ async def ad_scan(req: ADScanRequest):
     except PermissionError as exc:
         logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
-        logger.error("ad_scan_erreur", server=req.server, erreur=str(exc))
+    except Exception as exc:
+        logger.exception("ad_scan_erreur", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
@@ -176,10 +174,10 @@ async def ad_scan(req: ADScanRequest):
 @router.post("/analyze")
 async def ad_analyze(req: ADAnalyzeRequest):
     """Analyse des chemins d'attaque + graphe BloodHound."""
-    from navmax.ad.connector import ADConfig, ADAuthMethod, ADConnector
+    from navmax.ad.attack_paths import AttackPathAnalyzer
+    from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.enumerator import ADEnumerator
     from navmax.ad.trust_graph import ADTrustGraph
-    from navmax.ad.attack_paths import AttackPathAnalyzer
 
     config = ADConfig(
         server=req.server,
@@ -227,8 +225,7 @@ async def ad_analyze(req: ADAnalyzeRequest):
                 for p in analysis.critical_paths
             ],
             "top_risks": [
-                {"finding": r.finding, "severity": r.severity}
-                for r in analysis.top_risks
+                {"finding": r.finding, "severity": r.severity} for r in analysis.top_risks
             ],
             "executive_summary": analysis.executive_summary,
         }
@@ -238,8 +235,8 @@ async def ad_analyze(req: ADAnalyzeRequest):
     except PermissionError as exc:
         logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
-        logger.error("ad_analyse_erreur", server=req.server, erreur=str(exc))
+    except Exception as exc:
+        logger.exception("ad_analyse_erreur", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()
@@ -248,7 +245,7 @@ async def ad_analyze(req: ADAnalyzeRequest):
 @router.post("/spray")
 async def ad_spray(req: ADSprayRequest):
     """Password spraying (⚠️ endpoint sensible)."""
-    from navmax.ad.connector import ADConfig, ADAuthMethod, ADConnector
+    from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.password_spray import PasswordSprayer, SprayConfig, SprayMode
 
     config = ADConfig(
@@ -284,7 +281,7 @@ async def ad_spray(req: ADSprayRequest):
 
         # Spray ciblé si target_users spécifié
         session = await sprayer.spray_user_list(
-            [{"username": u} for u in (req.target_users or [])]
+            [{"username": u} for u in (req.target_users or [])],
         )
 
         logger.info(
@@ -299,8 +296,7 @@ async def ad_spray(req: ADSprayRequest):
             "total_attempts": session.total_attempts,
             "successes": len(session.successes),
             "successful_logins": [
-                {"username": r.username, "password": r.password}
-                for r in session.successes
+                {"username": r.username, "password": r.password} for r in session.successes
             ],
             "duration": session.duration_seconds,
         }
@@ -310,8 +306,8 @@ async def ad_spray(req: ADSprayRequest):
     except PermissionError as exc:
         logger.warning("ad_auth_échouée", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=401, detail=f"Authentification AD échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs LDAP/AD imprévisibles
-        logger.error("ad_spray_erreur", server=req.server, erreur=str(exc))
+    except Exception as exc:
+        logger.exception("ad_spray_erreur", server=req.server, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await connector.close()

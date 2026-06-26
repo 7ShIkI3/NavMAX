@@ -1,5 +1,4 @@
-"""
-Gestion des certificats TLS pour le proxy MITM.
+"""Gestion des certificats TLS pour le proxy MITM.
 
 Génère une CA racine + des certificats serveur signés à la volée
 pour chaque hostname intercepté.
@@ -8,11 +7,12 @@ pour chaque hostname intercepté.
 import datetime
 import os
 from pathlib import Path
+
 from cryptography import x509
-from cryptography.x509.oid import NameOID
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 
 from navmax.core.config import config
 from navmax.core.logging import get_logger
@@ -33,8 +33,7 @@ def _ca_dir() -> Path:
 
 
 def generate_ca() -> tuple[str, str]:
-    """
-    Génère une nouvelle CA racine NavMAX.
+    """Génère une nouvelle CA racine NavMAX.
     Retourne (cert_pem, key_pem).
     """
     key = rsa.generate_private_key(
@@ -43,11 +42,13 @@ def generate_ca() -> tuple[str, str]:
         backend=default_backend(),
     )
 
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NavMAX Proxy CA"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "NavMAX Interception CA"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "FR"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NavMAX Proxy CA"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "NavMAX Interception CA"),
+        ],
+    )
 
     cert = (
         x509.CertificateBuilder()
@@ -55,20 +56,23 @@ def generate_ca() -> tuple[str, str]:
         .issuer_name(issuer)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(x509.KeyUsage(
-            digital_signature=True,
-            key_cert_sign=True,
-            crl_sign=True,
-            content_commitment=False,
-            key_encipherment=False,
-            data_encipherment=False,
-            key_agreement=False,
-            encipher_only=False,
-            decipher_only=False,
-        ), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_cert_sign=True,
+                crl_sign=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
         .sign(key, hashes.SHA256(), backend=default_backend())
     )
@@ -91,8 +95,7 @@ def generate_ca() -> tuple[str, str]:
 
 
 def load_or_generate_ca() -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
-    """
-    Charge la CA existante ou en génère une nouvelle.
+    """Charge la CA existante ou en génère une nouvelle.
     Retourne les objets cryptography (cert, key).
     """
     ca_path = _ca_dir()
@@ -114,8 +117,7 @@ def load_or_generate_ca() -> tuple[x509.Certificate, rsa.RSAPrivateKey]:
 
 
 def generate_host_cert(hostname: str) -> tuple[str, str]:
-    """
-    Génère (ou récupère du cache) un certificat signé pour un hostname.
+    """Génère (ou récupère du cache) un certificat signé pour un hostname.
     Retourne (cert_pem, key_pem).
     """
     if hostname in _cert_cache:
@@ -129,16 +131,20 @@ def generate_host_cert(hostname: str) -> tuple[str, str]:
         backend=default_backend(),
     )
 
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NavMAX Intercepted"),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "NavMAX Intercepted"),
+        ],
+    )
 
     # SAN : hostname + wildcard
-    san = x509.SubjectAlternativeName([
-        x509.DNSName(hostname),
-        x509.DNSName(f"*.{hostname}"),
-    ])
+    san = x509.SubjectAlternativeName(
+        [
+            x509.DNSName(hostname),
+            x509.DNSName(f"*.{hostname}"),
+        ],
+    )
 
     host_cert = (
         x509.CertificateBuilder()
@@ -146,8 +152,8 @@ def generate_host_cert(hostname: str) -> tuple[str, str]:
         .issuer_name(ca_cert.subject)
         .public_key(host_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
-        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365))
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
         .add_extension(san, critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .sign(ca_key, hashes.SHA256(), backend=default_backend())

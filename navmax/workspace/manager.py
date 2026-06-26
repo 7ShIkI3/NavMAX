@@ -1,5 +1,4 @@
-"""
-Gestionnaire de workspaces — projets isolés pour les investigations.
+"""Gestionnaire de workspaces — projets isolés pour les investigations.
 
 Un workspace regroupe :
 - Des cibles (targets)
@@ -9,13 +8,13 @@ Un workspace regroupe :
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from navmax.db.models import Workspace, Target
 from navmax.core.logging import get_logger
+from navmax.db.models import Target, Workspace
 
 logger = get_logger(__name__)
 
@@ -41,18 +40,20 @@ class WorkspaceManager:
     async def get(self, workspace_id: str) -> Workspace | None:
         """Récupère un workspace par ID."""
         result = await self._session.execute(
-            select(Workspace).where(Workspace.id == workspace_id)
+            select(Workspace).where(Workspace.id == workspace_id),
         )
         return result.scalar_one_or_none()
 
     async def list_all(self) -> list[Workspace]:
         """Liste tous les workspaces."""
         result = await self._session.execute(
-            select(Workspace).order_by(Workspace.updated_at.desc())
+            select(Workspace).order_by(Workspace.updated_at.desc()),
         )
         return list(result.scalars().all())
 
-    async def update(self, workspace_id: str, name: str | None = None, description: str | None = None) -> Workspace | None:
+    async def update(
+        self, workspace_id: str, name: str | None = None, description: str | None = None,
+    ) -> Workspace | None:
         """Met à jour un workspace."""
         ws = await self.get(workspace_id)
         if not ws:
@@ -61,7 +62,7 @@ class WorkspaceManager:
             ws.name = name
         if description is not None:
             ws.description = description
-        ws.updated_at = datetime.now(timezone.utc)
+        ws.updated_at = datetime.now(UTC)
         await self._session.flush()
         return ws
 
@@ -83,7 +84,7 @@ class WorkspaceManager:
 
         # Compter les cibles via requête (évite lazy loading + MissingGreenlet)
         target_result = await self._session.execute(
-            select(func.count(Target.id)).where(Target.workspace_id == workspace_id)
+            select(func.count(Target.id)).where(Target.workspace_id == workspace_id),
         )
         target_count = target_result.scalar() or 0
 
@@ -102,7 +103,7 @@ class WorkspaceManager:
         if not ws:
             return False
         result = await self._session.execute(
-            select(Target).where(Target.id == target_id)
+            select(Target).where(Target.id == target_id),
         )
         target = result.scalar_one_or_none()
         if not target:
@@ -117,7 +118,7 @@ class WorkspaceManager:
             select(Target).where(
                 Target.id == target_id,
                 Target.workspace_id == workspace_id,
-            )
+            ),
         )
         target = result.scalar_one_or_none()
         if not target:
@@ -129,6 +130,6 @@ class WorkspaceManager:
     async def list_targets(self, workspace_id: str) -> list[Target]:
         """Liste les cibles d'un workspace."""
         result = await self._session.execute(
-            select(Target).where(Target.workspace_id == workspace_id)
+            select(Target).where(Target.workspace_id == workspace_id),
         )
         return list(result.scalars().all())

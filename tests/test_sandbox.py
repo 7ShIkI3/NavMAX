@@ -1,17 +1,19 @@
 """Tests du module sandbox Docker pour exploits."""
+
 import pytest
+
 from navmax.exploit.sandbox import (
     ExploitSandbox,
-    SandboxResult,
     SandboxConfig,
     SandboxMode,
+    SandboxResult,
 )
 
 
 class TestSandboxConfig:
     """Tests de la configuration sandbox."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         config = SandboxConfig()
         assert config.image == "alpine:latest"
         assert config.memory_limit == "128m"
@@ -22,7 +24,7 @@ class TestSandboxConfig:
         assert config.no_new_privileges is True
         assert config.cap_drop == ["ALL"]
 
-    def test_custom_config(self):
+    def test_custom_config(self) -> None:
         config = SandboxConfig(
             image="python:3.11-alpine",
             network_mode=SandboxMode.BRIDGE,
@@ -38,7 +40,7 @@ class TestSandboxConfig:
 class TestSandboxResult:
     """Tests du modèle de résultat."""
 
-    def test_success_result(self):
+    def test_success_result(self) -> None:
         result = SandboxResult(
             success=True,
             exit_code=0,
@@ -51,7 +53,7 @@ class TestSandboxResult:
         assert result.stdout == "Hello World\n"
         assert result.error is None
 
-    def test_error_result(self):
+    def test_error_result(self) -> None:
         result = SandboxResult(
             success=False,
             exit_code=1,
@@ -67,7 +69,7 @@ class TestSandboxResult:
 class TestExploitSandbox:
     """Tests du sandbox (mock Docker indisponible)."""
 
-    async def test_docker_unavailable(self):
+    async def test_docker_unavailable(self) -> None:
         """En l'absence de Docker, run() doit retourner une erreur propre."""
         sandbox = ExploitSandbox()
         # Force la vérification à False
@@ -77,7 +79,7 @@ class TestExploitSandbox:
         assert result.success is False
         assert "Docker" in (result.error or "")
 
-    async def test_docker_version_unavailable(self):
+    async def test_docker_version_unavailable(self) -> None:
         """check_docker_version doit retourner indisponible."""
         sandbox = ExploitSandbox()
         sandbox._docker_available = False

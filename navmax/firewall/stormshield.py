@@ -1,5 +1,4 @@
-"""
-StormShield Connector — API SNS pour firewalls StormShield Network Security.
+"""StormShield Connector — API SNS pour firewalls StormShield Network Security.
 
 Utilise l'API REST CONF (application/json) de StormShield SNS.
 Documentation: https://documentation.stormshield.eu/
@@ -20,15 +19,19 @@ Usage:
     config = await sns.get_full_config()
 """
 
-import asyncio
-from typing import Optional, Any
 import httpx
 import structlog
 
 from .base import (
-    FirewallConnector, FirewallVendor,
-    FirewallRule, FirewallInterface, FirewallAddress, FirewallUser,
-    CVECheck, RuleAction, Protocol,
+    CVECheck,
+    FirewallAddress,
+    FirewallConnector,
+    FirewallInterface,
+    FirewallRule,
+    FirewallUser,
+    FirewallVendor,
+    Protocol,
+    RuleAction,
 )
 
 logger = structlog.get_logger(__name__)
@@ -68,8 +71,7 @@ STORMSHIELD_CVES: list[dict] = [
         "cvss": 8.1,
         "affected": "< 4.3.10, < 4.4.6",
         "description": (
-            "Injection de commande dans la configuration IPSec VPN "
-            "via des paramètres non assainis."
+            "Injection de commande dans la configuration IPSec VPN via des paramètres non assainis."
         ),
         "remediation": "Mettre à jour vers 4.3.10+ ou 4.4.6+",
     },
@@ -80,8 +82,7 @@ STORMSHIELD_CVES: list[dict] = [
         "cvss": 6.1,
         "affected": "< 4.3.8, < 4.4.4",
         "description": (
-            "XSS dans l'interface d'administration web permettant "
-            "le vol de session administrateur."
+            "XSS dans l'interface d'administration web permettant le vol de session administrateur."
         ),
         "remediation": "Mettre à jour vers 4.3.8+ ou 4.4.4+",
     },
@@ -91,17 +92,14 @@ STORMSHIELD_CVES: list[dict] = [
         "severity": "medium",
         "cvss": 5.3,
         "affected": "< 4.3.5, < 4.4.0",
-        "description": (
-            "Divulgation d'information via SNMP avec communauté par défaut."
-        ),
-        "remediation": (
-            "Mettre à jour vers 4.3.5+ et changer la communauté SNMP"
-        ),
+        "description": ("Divulgation d'information via SNMP avec communauté par défaut."),
+        "remediation": ("Mettre à jour vers 4.3.5+ et changer la communauté SNMP"),
     },
 ]
 
 
 # ── Connecteur StormShield ─────────────────────────────────────
+
 
 class StormShieldConnector(FirewallConnector):
     """Connecteur API REST StormShield SNS.
@@ -125,6 +123,7 @@ class StormShieldConnector(FirewallConnector):
 
         Returns:
             True si connecté avec succès
+
         """
         try:
             self._client = httpx.AsyncClient(
@@ -140,21 +139,18 @@ class StormShieldConnector(FirewallConnector):
                 # 401/403 = auth OK mais droits insuffisants pour /version
                 if resp.status_code == 200:
                     version_info = resp.json()
-                    logger.info("stormshield_version",
-                                version=version_info.get("version", "unknown"))
+                    logger.info(
+                        "stormshield_version", version=version_info.get("version", "unknown"),
+                    )
 
                 self._connected = True
                 logger.info("stormshield_connected", host=self.host)
                 return True
-            else:
-                logger.error("stormshield_connect_failed",
-                             host=self.host,
-                             status=resp.status_code)
-                return False
+            logger.error("stormshield_connect_failed", host=self.host, status=resp.status_code)
+            return False
 
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
-            logger.error("stormshield_connect_failed",
-                         host=self.host, error=str(e))
+            logger.exception("stormshield_connect_failed", host=self.host, error=str(e))
             return False
 
     async def close(self) -> None:
@@ -171,8 +167,9 @@ class StormShieldConnector(FirewallConnector):
             headers["X-API-Key"] = self.api_key
         elif self.username and self.password:
             import base64
+
             credentials = base64.b64encode(
-                f"{self.username}:{self.password}".encode()
+                f"{self.username}:{self.password}".encode(),
             ).decode()
             headers["Authorization"] = f"Basic {credentials}"
         return headers
@@ -182,7 +179,8 @@ class StormShieldConnector(FirewallConnector):
     async def _api_get(self, path: str) -> dict:
         """GET sur l'API CONF SNS."""
         if not hasattr(self, "_client"):
-            raise RuntimeError("Not connected. Call connect() first.")
+            msg = "Not connected. Call connect() first."
+            raise RuntimeError(msg)
 
         resp = await self._client.get(f"/conf/{path}")
         resp.raise_for_status()
@@ -191,7 +189,8 @@ class StormShieldConnector(FirewallConnector):
     async def _api_get_raw(self, path: str) -> str:
         """GET sur l'API SNS retournant du texte brut."""
         if not hasattr(self, "_client"):
-            raise RuntimeError("Not connected. Call connect() first.")
+            msg = "Not connected. Call connect() first."
+            raise RuntimeError(msg)
 
         resp = await self._client.get(path)
         resp.raise_for_status()
@@ -241,32 +240,31 @@ class StormShieldConnector(FirewallConnector):
                 if raw_action in ("pass", "accept", "allow"):
                     action = RuleAction.ALLOW
 
-                rules.append(FirewallRule(
-                    id=str(raw_rule.get("id", i)),
-                    name=raw_rule.get("comment", f"rule-{i}"),
-                    action=action,
-                    source_zones=[raw_rule.get("src_zone", "any")],
-                    source_addresses=[
-                        a if isinstance(a, str) else a.get("name", str(a))
-                        for a in raw_rule.get("src_addr", [])
-                    ],
-                    destination_zones=[raw_rule.get("dst_zone", "any")],
-                    destination_addresses=[
-                        a if isinstance(a, str) else a.get("name", str(a))
-                        for a in raw_rule.get("dst_addr", [])
-                    ],
-                    destination_ports=[
-                        str(s) for s in raw_rule.get("dst_port", [])
-                    ],
-                    protocol=Protocol.ANY,
-                    enabled=raw_rule.get("enabled", True),
-                    position=i,
-                    description=raw_rule.get("comment", ""),
-                    raw=raw_rule,
-                ))
+                rules.append(
+                    FirewallRule(
+                        id=str(raw_rule.get("id", i)),
+                        name=raw_rule.get("comment", f"rule-{i}"),
+                        action=action,
+                        source_zones=[raw_rule.get("src_zone", "any")],
+                        source_addresses=[
+                            a if isinstance(a, str) else a.get("name", str(a))
+                            for a in raw_rule.get("src_addr", [])
+                        ],
+                        destination_zones=[raw_rule.get("dst_zone", "any")],
+                        destination_addresses=[
+                            a if isinstance(a, str) else a.get("name", str(a))
+                            for a in raw_rule.get("dst_addr", [])
+                        ],
+                        destination_ports=[str(s) for s in raw_rule.get("dst_port", [])],
+                        protocol=Protocol.ANY,
+                        enabled=raw_rule.get("enabled", True),
+                        position=i,
+                        description=raw_rule.get("comment", ""),
+                        raw=raw_rule,
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.error("stormshield_get_rules",
-                         host=self.host, error=str(e))
+            logger.exception("stormshield_get_rules", host=self.host, error=str(e))
 
         return rules
 
@@ -282,18 +280,19 @@ class StormShieldConnector(FirewallConnector):
                 iface_list = [iface_list]
 
             for raw_iface in iface_list:
-                interfaces.append(FirewallInterface(
-                    name=raw_iface.get("name", ""),
-                    ip_address=raw_iface.get("ip", ""),
-                    netmask=raw_iface.get("mask", ""),
-                    zone=raw_iface.get("zone", ""),
-                    enabled=raw_iface.get("enabled", True),
-                    type=raw_iface.get("type", "physical"),
-                    vlan_id=int(raw_iface.get("vlan_id", 0)),
-                ))
+                interfaces.append(
+                    FirewallInterface(
+                        name=raw_iface.get("name", ""),
+                        ip_address=raw_iface.get("ip", ""),
+                        netmask=raw_iface.get("mask", ""),
+                        zone=raw_iface.get("zone", ""),
+                        enabled=raw_iface.get("enabled", True),
+                        type=raw_iface.get("type", "physical"),
+                        vlan_id=int(raw_iface.get("vlan_id", 0)),
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.warning("stormshield_get_interfaces",
-                           host=self.host, error=str(e))
+            logger.warning("stormshield_get_interfaces", host=self.host, error=str(e))
 
         return interfaces
 
@@ -315,14 +314,15 @@ class StormShieldConnector(FirewallConnector):
                     obj_type = "fqdn"
                     value = raw_obj.get("fqdn", "")
 
-                addresses.append(FirewallAddress(
-                    name=raw_obj.get("name", ""),
-                    value=value,
-                    type=obj_type,
-                ))
+                addresses.append(
+                    FirewallAddress(
+                        name=raw_obj.get("name", ""),
+                        value=value,
+                        type=obj_type,
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.warning("stormshield_get_addresses",
-                           host=self.host, error=str(e))
+            logger.warning("stormshield_get_addresses", host=self.host, error=str(e))
 
         return addresses
 
@@ -338,14 +338,15 @@ class StormShieldConnector(FirewallConnector):
                 admin_list = [admin_list]
 
             for raw_admin in admin_list:
-                users.append(FirewallUser(
-                    name=raw_admin.get("name", ""),
-                    type=raw_admin.get("type", "local"),
-                    profile=raw_admin.get("profile", ""),
-                ))
+                users.append(
+                    FirewallUser(
+                        name=raw_admin.get("name", ""),
+                        type=raw_admin.get("type", "local"),
+                        profile=raw_admin.get("profile", ""),
+                    ),
+                )
         except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError, KeyError) as e:
-            logger.warning("stormshield_get_users",
-                           host=self.host, error=str(e))
+            logger.warning("stormshield_get_users", host=self.host, error=str(e))
 
         return users
 
@@ -359,31 +360,33 @@ class StormShieldConnector(FirewallConnector):
 
         Returns:
             Liste de CVECheck
+
         """
         checks: list[CVECheck] = []
         version_clean = version.lower().replace("v", "").replace(" ", "")
 
         for cve_data in STORMSHIELD_CVES:
             vulnerable = self._version_affected(
-                version_clean, cve_data["affected"]
+                version_clean,
+                cve_data["affected"],
             )
 
-            checks.append(CVECheck(
-                cve_id=cve_data["cve"],
-                title=cve_data["title"],
-                severity=cve_data["severity"],
-                vulnerable=vulnerable,
-                version_affected=cve_data["affected"],
-                current_version=version,
-                description=cve_data["description"],
-                remediation=cve_data["remediation"],
-                cvss_score=cve_data["cvss"],
-            ))
+            checks.append(
+                CVECheck(
+                    cve_id=cve_data["cve"],
+                    title=cve_data["title"],
+                    severity=cve_data["severity"],
+                    vulnerable=vulnerable,
+                    version_affected=cve_data["affected"],
+                    current_version=version,
+                    description=cve_data["description"],
+                    remediation=cve_data["remediation"],
+                    cvss_score=cve_data["cvss"],
+                ),
+            )
 
         vuln_count = sum(1 for c in checks if c.vulnerable)
-        logger.info("stormshield_cve_check",
-                    version=version,
-                    vulnerable=vuln_count)
+        logger.info("stormshield_cve_check", version=version, vulnerable=vuln_count)
 
         return checks
 
@@ -406,7 +409,7 @@ class StormShieldConnector(FirewallConnector):
                         if cv != tv:
                             return cv < tv
                     return False
-                elif "-" in part:
+                if "-" in part:
                     low, high = part.split("-", 1)
                     low_parts = [int(x) for x in low.strip().split(".")]
                     high_parts = [int(x) for x in high.strip().split(".")]

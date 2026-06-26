@@ -1,23 +1,19 @@
-"""
-Transformations — règles à la Maltego.
+"""Transformations — règles à la Maltego.
 
 Une transformation prend une entité en entrée et produit de nouvelles entités
 et relations. C'est le cœur de l'expansion automatique du graphe OSINT.
 """
 
-import asyncio
-from typing import Any
-
-from .entities import Entity, Relation, EntityType, RelationType
-from .engine import GraphEngine
 from navmax.core.logging import get_logger
+
+from .engine import GraphEngine
+from .entities import Entity, EntityType, RelationType
 
 logger = get_logger(__name__)
 
 
 class Transform:
-    """
-    Transformation OSINT — une règle qui étend le graphe.
+    """Transformation OSINT — une règle qui étend le graphe.
 
     Chaque transform a :
     - input_type : type d'entité d'entrée
@@ -48,10 +44,12 @@ class DomainToDns(Transform):
     """Domaine → enregistrements DNS."""
 
     def __init__(self) -> None:
-        super().__init__("Domain → DNS", EntityType.DOMAIN, "Résout les enregistrements DNS d'un domaine")
+        super().__init__(
+            "Domain → DNS", EntityType.DOMAIN, "Résout les enregistrements DNS d'un domaine",
+        )
 
     async def run(self, entity: Entity, graph: GraphEngine) -> list[Entity]:
-        from ..collectors.dns import DnsCollector
+        from navmax.osint.collectors.dns import DnsCollector
 
         domain = entity.value
         records = await DnsCollector.lookup(domain)
@@ -80,7 +78,7 @@ class DomainToDns(Transform):
                 graph.add_relation(entity, mx_entity, RelationType.MX_RECORD)
                 new_entities.append(mx_entity)
 
-            elif rec.type == "A" or rec.type == "AAAA":
+            elif rec.type in {"A", "AAAA"}:
                 ip_entity = Entity(
                     type=EntityType.IP,
                     value=rec.value,
@@ -119,10 +117,12 @@ class DomainToWhois(Transform):
     """Domaine → WHOIS."""
 
     def __init__(self) -> None:
-        super().__init__("Domain → WHOIS", EntityType.DOMAIN, "Récupère les infos WHOIS d'un domaine")
+        super().__init__(
+            "Domain → WHOIS", EntityType.DOMAIN, "Récupère les infos WHOIS d'un domaine",
+        )
 
     async def run(self, entity: Entity, graph: GraphEngine) -> list[Entity]:
-        from ..collectors.whois import WhoisCollector
+        from navmax.osint.collectors.whois import WhoisCollector
 
         domain = entity.value
         info = await WhoisCollector.lookup(domain)
@@ -202,7 +202,7 @@ class IpToSSL(Transform):
         super().__init__("IP → SSL", EntityType.IP, "Récupère le certificat SSL d'une IP")
 
     async def run(self, entity: Entity, graph: GraphEngine) -> list[Entity]:
-        from ..collectors.ssl import SslCollector
+        from navmax.osint.collectors.ssl import SslCollector
 
         ip = entity.value
         info = await SslCollector.get_cert(ip)
@@ -244,7 +244,8 @@ class IpToSSL(Transform):
         for san in info.san:
             # Déterminer si c'est un domaine ou une IP
             import re
-            if re.match(r'^\d+\.\d+\.\d+\.\d+$', san):
+
+            if re.match(r"^\d+\.\d+\.\d+\.\d+$", san):
                 san_type = EntityType.IP
             else:
                 san_type = EntityType.DOMAIN
@@ -266,10 +267,12 @@ class DomainToWeb(Transform):
     """Domaine → Analyse web (technos, emails, liens)."""
 
     def __init__(self) -> None:
-        super().__init__("Domain → Web", EntityType.DOMAIN, "Analyse la page web : technos, emails, liens")
+        super().__init__(
+            "Domain → Web", EntityType.DOMAIN, "Analyse la page web : technos, emails, liens",
+        )
 
     async def run(self, entity: Entity, graph: GraphEngine) -> list[Entity]:
-        from ..collectors.web import WebCollector
+        from navmax.osint.collectors.web import WebCollector
 
         domain = entity.value
         collector = WebCollector()
@@ -306,6 +309,7 @@ class DomainToWeb(Transform):
         # Liens externes → domaines
         seen_domains: set[str] = set()
         from urllib.parse import urlparse
+
         for link in info.links_external[:20]:
             try:
                 parsed = urlparse(link)
@@ -346,7 +350,7 @@ class IpToReverseDns(Transform):
         super().__init__("IP → Reverse DNS", EntityType.IP, "Reverse DNS lookup")
 
     async def run(self, entity: Entity, graph: GraphEngine) -> list[Entity]:
-        from ..collectors.dns import DnsCollector
+        from navmax.osint.collectors.dns import DnsCollector
 
         ip = entity.value
         records = await DnsCollector.reverse_lookup(ip)

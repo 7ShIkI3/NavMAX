@@ -1,4 +1,5 @@
 """Task queue Celery pour NavMAX — scans longue durée en background."""
+
 from celery import Celery
 
 celery_app = Celery(

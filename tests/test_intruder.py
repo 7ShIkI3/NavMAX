@@ -1,5 +1,4 @@
-"""
-Tests pour navmax/proxy/intruder.py — Intruder style Burp.
+"""Tests pour navmax/proxy/intruder.py — Intruder style Burp.
 
 Teste :
 - Les dataclasses (IntruderResult, IntruderReport)
@@ -13,26 +12,24 @@ Teste :
 """
 
 import json
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from navmax.proxy.intruder import (
-    Intruder,
-    IntruderResult,
-    IntruderReport,
-    IntruderFilters,
     PREDEFINED_PAYLOADS,
-    _parse_position,
+    Intruder,
+    IntruderFilters,
+    IntruderReport,
+    IntruderResult,
     _apply_payload,
-    _set_nested_key,
-    _replace_form_field,
     _parse_cookies,
+    _parse_position,
+    _replace_form_field,
+    _set_nested_key,
     quick_attack,
 )
-
 
 # ===========================================================================
 # Tests des payloads prédéfinis
@@ -51,7 +48,7 @@ class TestPredefinedPayloads:
     def test_dates(self) -> None:
         assert "dates" in PREDEFINED_PAYLOADS
         assert len(PREDEFINED_PAYLOADS["dates"]) > 10
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         assert today in PREDEFINED_PAYLOADS["dates"]
 
     def test_passwords(self) -> None:
@@ -166,13 +163,21 @@ class TestIntruderReport:
             total_requests=3,
         )
         result1 = IntruderResult(
-            request_modifie={}, status_code=200, response_length=100,
-            response_time_ms=10.0, match=True, payload_position="param:id",
+            request_modifie={},
+            status_code=200,
+            response_length=100,
+            response_time_ms=10.0,
+            match=True,
+            payload_position="param:id",
             payload_value="test",
         )
         result2 = IntruderResult(
-            request_modifie={}, status_code=200, response_length=100,
-            response_time_ms=10.0, match=False, payload_position="param:id",
+            request_modifie={},
+            status_code=200,
+            response_length=100,
+            response_time_ms=10.0,
+            match=False,
+            payload_position="param:id",
             payload_value="other",
         )
         report.results = [result1, result2]
@@ -182,17 +187,27 @@ class TestIntruderReport:
     def test_errors_property(self) -> None:
         report = IntruderReport(
             target_url="https://example.com",
-            target_method="GET", mode="sniper",
-            positions=["param:id"], total_requests=2,
+            target_method="GET",
+            mode="sniper",
+            positions=["param:id"],
+            total_requests=2,
         )
         ok = IntruderResult(
-            request_modifie={}, status_code=200, response_length=100,
-            response_time_ms=10.0, payload_position="param:id", payload_value="ok",
+            request_modifie={},
+            status_code=200,
+            response_length=100,
+            response_time_ms=10.0,
+            payload_position="param:id",
+            payload_value="ok",
         )
         err = IntruderResult(
-            request_modifie={}, status_code=0, response_length=0,
-            response_time_ms=5000.0, error="Connection refused",
-            payload_position="param:id", payload_value="bad",
+            request_modifie={},
+            status_code=0,
+            response_length=0,
+            response_time_ms=5000.0,
+            error="Connection refused",
+            payload_position="param:id",
+            payload_value="bad",
         )
         report.results = [ok, err]
         assert len(report.errors) == 1
@@ -200,18 +215,45 @@ class TestIntruderReport:
 
     def test_status_counts(self) -> None:
         report = IntruderReport(
-            target_url="https://example.com", target_method="GET",
-            mode="sniper", positions=["param:id"], total_requests=4,
+            target_url="https://example.com",
+            target_method="GET",
+            mode="sniper",
+            positions=["param:id"],
+            total_requests=4,
         )
         results = [
-            IntruderResult(request_modifie={}, status_code=200, response_length=100,
-                           response_time_ms=10.0, payload_position="p", payload_value="a"),
-            IntruderResult(request_modifie={}, status_code=200, response_length=100,
-                           response_time_ms=10.0, payload_position="p", payload_value="b"),
-            IntruderResult(request_modifie={}, status_code=500, response_length=100,
-                           response_time_ms=10.0, payload_position="p", payload_value="c"),
-            IntruderResult(request_modifie={}, status_code=403, response_length=100,
-                           response_time_ms=10.0, payload_position="p", payload_value="d"),
+            IntruderResult(
+                request_modifie={},
+                status_code=200,
+                response_length=100,
+                response_time_ms=10.0,
+                payload_position="p",
+                payload_value="a",
+            ),
+            IntruderResult(
+                request_modifie={},
+                status_code=200,
+                response_length=100,
+                response_time_ms=10.0,
+                payload_position="p",
+                payload_value="b",
+            ),
+            IntruderResult(
+                request_modifie={},
+                status_code=500,
+                response_length=100,
+                response_time_ms=10.0,
+                payload_position="p",
+                payload_value="c",
+            ),
+            IntruderResult(
+                request_modifie={},
+                status_code=403,
+                response_length=100,
+                response_time_ms=10.0,
+                payload_position="p",
+                payload_value="d",
+            ),
         ]
         report.results = results
         counts = report.status_counts
@@ -229,20 +271,32 @@ class TestIntruderFilters:
     def test_no_filters(self) -> None:
         filters = IntruderFilters()
         result = IntruderResult(
-            request_modifie={}, status_code=200, response_length=500,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=200,
+            response_length=500,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         assert filters.matches(result) is True
 
     def test_filter_status_match(self) -> None:
         filters = IntruderFilters(filter_status=[200, 404])
         result_200 = IntruderResult(
-            request_modifie={}, status_code=200, response_length=100,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=200,
+            response_length=100,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         result_500 = IntruderResult(
-            request_modifie={}, status_code=500, response_length=100,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=500,
+            response_length=100,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         assert filters.matches(result_200) is True
         assert filters.matches(result_500) is False
@@ -250,16 +304,28 @@ class TestIntruderFilters:
     def test_filter_length_match(self) -> None:
         filters = IntruderFilters(filter_length=(100, 500))
         result_small = IntruderResult(
-            request_modifie={}, status_code=200, response_length=50,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=200,
+            response_length=50,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         result_ok = IntruderResult(
-            request_modifie={}, status_code=200, response_length=300,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=200,
+            response_length=300,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         result_large = IntruderResult(
-            request_modifie={}, status_code=200, response_length=1000,
-            response_time_ms=10.0, payload_position="p", payload_value="v",
+            request_modifie={},
+            status_code=200,
+            response_length=1000,
+            response_time_ms=10.0,
+            payload_position="p",
+            payload_value="v",
         )
         assert filters.matches(result_small) is False
         assert filters.matches(result_ok) is True
@@ -404,7 +470,7 @@ class TestApplyPayload:
 
     def test_payload_preserves_original(self) -> None:
         """Vérifie que la requête originale n'est pas mutée."""
-        original_copy = {
+        {
             "method": self.BASE_REQUEST["method"],
             "url": self.BASE_REQUEST["url"],
             "headers": dict(self.BASE_REQUEST["headers"]),
@@ -445,7 +511,7 @@ class TestHelpers:
 
     def test_replace_form_field(self) -> None:
         result = _replace_form_field("a=1&b=2", "a", "INJECTED")
-        assert result == "a=INJECTED&b=2" or result == "b=2&a=INJECTED"
+        assert result in {"a=INJECTED&b=2", "b=2&a=INJECTED"}
 
     def test_replace_form_field_new(self) -> None:
         result = _replace_form_field("a=1&b=2", "c", "NEW")
@@ -631,9 +697,12 @@ class TestIntruderAttackMocked:
         with patch.object(intruder, "_get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_get_client.return_value = mock_client
-            mock_client.request = AsyncMock(side_effect=[
-                mock_response_match, mock_response_no_match,
-            ])
+            mock_client.request = AsyncMock(
+                side_effect=[
+                    mock_response_match,
+                    mock_response_no_match,
+                ],
+            )
 
             report = await intruder.attack(
                 request=request,
@@ -719,7 +788,7 @@ class TestIntruderAttackMocked:
             mock_client = AsyncMock()
             mock_get_client.return_value = mock_client
             mock_client.request = AsyncMock(
-                side_effect=_httpx.RequestError("Connection refused")
+                side_effect=_httpx.RequestError("Connection refused"),
             )
 
             report = await intruder.attack(
@@ -818,14 +887,16 @@ class TestIntruderIntegration:
 
     def test_import_from_package(self) -> None:
         """Intruder est accessible depuis navmax.proxy."""
-        from navmax.proxy import Intruder, IntruderResult, IntruderReport
+        from navmax.proxy import Intruder, IntruderReport, IntruderResult
+
         assert Intruder is not None
         assert IntruderResult is not None
         assert IntruderReport is not None
 
     def test_intruder_is_new_class(self) -> None:
         """Intruder est distinct de Fuzzer (classe différente)."""
-        from navmax.proxy import Intruder, Fuzzer
+        from navmax.proxy import Fuzzer, Intruder
+
         assert Intruder is not Fuzzer
 
     def test_interface_methods(self) -> None:
@@ -863,20 +934,12 @@ class TestNoRegression:
     def test_existing_imports_still_work(self) -> None:
         """Les modules existants de navmax.proxy sont toujours importables."""
         from navmax.proxy import (
-            ProxyServer,
-            Interceptor,
-            InterceptedFlow,
-            FlowAction,
-            FlowStatus,
-            Repeater,
-            RepeaterRequest,
-            RepeaterResponse,
-            WebScanner,
-            Vulnerability,
             Fuzzer,
-            FuzzResult,
-            FuzzReport,
+            Interceptor,
+            ProxyServer,
+            Repeater,
         )
+
         assert ProxyServer is not None
         assert Interceptor is not None
         assert Repeater is not None
@@ -884,6 +947,7 @@ class TestNoRegression:
 
     def test_mitm_still_importable(self) -> None:
         """mitm.py est toujours importable."""
-        from navmax.proxy.mitm import NavMITMProxy, CapturedFlow
+        from navmax.proxy.mitm import CapturedFlow, NavMITMProxy
+
         assert NavMITMProxy is not None
         assert CapturedFlow is not None

@@ -1,5 +1,4 @@
-"""
-CVSS 3.1 Scorer — calcul programmatique des scores CVSS pour les findings NavMAX.
+"""CVSS 3.1 Scorer — calcul programmatique des scores CVSS pour les findings NavMAX.
 
 Utilise la lib `cvss` pour produire des scores CVSS 3.1 standards.
 Compatible avec les findings Nuclei, VulnDatabase, et AD VulnScanner.
@@ -11,7 +10,7 @@ Usage:
 """
 
 from dataclasses import dataclass
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -39,12 +38,11 @@ class CVSSScore:
         """Couleur HTML pour badge CVSS."""
         if self.base_score >= 9.0:
             return "#dc3545"  # Rouge — Critique
-        elif self.base_score >= 7.0:
+        if self.base_score >= 7.0:
             return "#fd7e14"  # Orange — Élevé
-        elif self.base_score >= 4.0:
+        if self.base_score >= 4.0:
             return "#ffc107"  # Jaune — Moyen
-        else:
-            return "#6c757d"  # Gris — Faible
+        return "#6c757d"  # Gris — Faible
 
     @property
     def nvd_url(self) -> str:
@@ -72,6 +70,7 @@ class CVSSScorer:
         """Vérifie si la lib cvss est disponible."""
         try:
             from cvss import CVSS3  # noqa: F401
+
             self._lib_available = True
             return True
         except ImportError:
@@ -84,10 +83,10 @@ class CVSSScorer:
         ac: str = "L",  # Attack Complexity: L, H
         pr: str = "N",  # Privileges Required: N, L, H
         ui: str = "N",  # User Interaction: N, R
-        s: str = "U",   # Scope: U, C
-        c: str = "H",   # Confidentiality: H, L, N
-        i: str = "H",   # Integrity: H, L, N
-        a: str = "H",   # Availability: H, L, N
+        s: str = "U",  # Scope: U, C
+        c: str = "H",  # Confidentiality: H, L, N
+        i: str = "H",  # Integrity: H, L, N
+        a: str = "H",  # Availability: H, L, N
     ) -> CVSSScore:
         """Calcule un score CVSS 3.1 à partir des métriques de base.
 
@@ -103,17 +102,23 @@ class CVSSScorer:
 
         Returns:
             CVSSScore avec vector_string et base_score.
+
         """
         vector = f"CVSS:3.1/AV:{av}/AC:{ac}/PR:{pr}/UI:{ui}/S:{s}/C:{c}/I:{i}/A:{a}"
 
         if self._lib_available:
             try:
                 from cvss import CVSS3
+
                 c = CVSS3(vector)
                 scores = c.scores()
                 base = float(scores[0]) if scores else self._heuristic_score(vector)
                 base = self._clamp_score(base)
-                severity = c.severities()[0].capitalize() if c.severities() else self._severity_from_score(base)
+                severity = (
+                    c.severities()[0].capitalize()
+                    if c.severities()
+                    else self._severity_from_score(base)
+                )
                 return CVSSScore(
                     vector_string=vector,
                     base_score=base,
@@ -147,6 +152,7 @@ class CVSSScorer:
 
         Returns:
             CVSSScore estimé.
+
         """
         # Mapping severity → CVSS
         severity_map = {
@@ -188,6 +194,7 @@ class CVSSScorer:
 
         Raises:
             ValueError: Si le score est hors plage après arrondi (indicateur de bug).
+
         """
         clamped = round(max(0.0, min(10.0, score)), 1)
         if score != clamped:
@@ -213,14 +220,13 @@ class CVSSScorer:
     def _severity_from_score(score: float) -> str:
         if score >= 9.0:
             return "Critical"
-        elif score >= 7.0:
+        if score >= 7.0:
             return "High"
-        elif score >= 4.0:
+        if score >= 4.0:
             return "Medium"
-        elif score >= 0.1:
+        if score >= 0.1:
             return "Low"
-        else:
-            return "None"
+        return "None"
 
 
 # ── MITRE ATT&CK Mapping ─────────────────────────────────────────
@@ -228,24 +234,27 @@ class CVSSScorer:
 
 # Mapping CVE → technique MITRE ATT&CK IDs (extrait, sera enrichi)
 MITRE_ATTACK_MAP: dict[str, list[str]] = {
-    "CVE-2021-44228": ["T1190", "T1059"],   # Log4Shell — Exploit Public-Facing App, Command & Scripting
-    "CVE-2017-0144": ["T1210", "T1190"],    # EternalBlue — Exploitation of Remote Services
-    "CVE-2020-1472": ["T1210"],             # Zerologon
-    "CVE-2019-0708": ["T1210"],             # BlueKeep
-    "CVE-2021-26855": ["T1190", "T1505"],   # ProxyLogon — Server Software Component
-    "CVE-2021-34527": ["T1190"],            # PrintNightmare
-    "CVE-2021-41773": ["T1190"],            # Apache path traversal
-    "CVE-2022-22965": ["T1190", "T1059"],   # Spring4Shell
-    "CVE-2023-23397": ["T1566"],            # Outlook priv esc — Phishing
-    "CVE-2022-30190": ["T1203", "T1204"],   # Follina — Exploitation for Client Execution
+    "CVE-2021-44228": [
+        "T1190",
+        "T1059",
+    ],  # Log4Shell — Exploit Public-Facing App, Command & Scripting
+    "CVE-2017-0144": ["T1210", "T1190"],  # EternalBlue — Exploitation of Remote Services
+    "CVE-2020-1472": ["T1210"],  # Zerologon
+    "CVE-2019-0708": ["T1210"],  # BlueKeep
+    "CVE-2021-26855": ["T1190", "T1505"],  # ProxyLogon — Server Software Component
+    "CVE-2021-34527": ["T1190"],  # PrintNightmare
+    "CVE-2021-41773": ["T1190"],  # Apache path traversal
+    "CVE-2022-22965": ["T1190", "T1059"],  # Spring4Shell
+    "CVE-2023-23397": ["T1566"],  # Outlook priv esc — Phishing
+    "CVE-2022-30190": ["T1203", "T1204"],  # Follina — Exploitation for Client Execution
     "CVE-2021-26084": ["T1190", "T1059.003"],  # Confluence OGNL injection
-    "CVE-2021-21972": ["T1190"],            # vCenter RCE
-    "CVE-2022-1388": ["T1190"],             # F5 BIG-IP iControl REST
-    "CVE-2020-5902": ["T1190"],             # F5 BIG-IP TMUI RCE
-    "CVE-2020-1938": ["T1190"],             # Ghostcat — Apache Tomcat AJP
-    "CVE-2020-0796": ["T1210"],             # SMBGhost
-    "CVE-2019-19781": ["T1190"],            # Citrix ADC Path Traversal
-    "CVE-2021-21985": ["T1190"],            # vSphere Client RCE
+    "CVE-2021-21972": ["T1190"],  # vCenter RCE
+    "CVE-2022-1388": ["T1190"],  # F5 BIG-IP iControl REST
+    "CVE-2020-5902": ["T1190"],  # F5 BIG-IP TMUI RCE
+    "CVE-2020-1938": ["T1190"],  # Ghostcat — Apache Tomcat AJP
+    "CVE-2020-0796": ["T1210"],  # SMBGhost
+    "CVE-2019-19781": ["T1190"],  # Citrix ADC Path Traversal
+    "CVE-2021-21985": ["T1190"],  # vSphere Client RCE
 }
 
 
@@ -257,6 +266,7 @@ def get_mitre_techniques(cve_ids: list[str]) -> list[str]:
 
     Returns:
         Liste de technique IDs (TXXXX).
+
     """
     techniques: set[str] = set()
     for cve in cve_ids:

@@ -13,13 +13,22 @@ Usage:
 
 import asyncio
 import json
+import os
 import re
 import shutil
-import structlog
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
+
+import structlog
 
 logger = structlog.get_logger(__name__)
+
+# ── Chemins des templates ──────────────────────────────────────────
+
+# Répertoire par défaut où nuclei stocke les templates (Linux/macOS)
+_DEFAULT_TEMPLATES_DIR = Path.home() / ".local" / "nuclei-templates"
+# Sur Windows, nuclei utilise %USERPROFILE%\.local\nuclei-templates
+_DEFAULT_TEMPLATES_DIR_WIN = Path.home() / ".local" / "nuclei-templates"
 
 
 # ── Validation ─────────────────────────────────────────────────
@@ -27,27 +36,29 @@ logger = structlog.get_logger(__name__)
 # Target regex: URL (http/https), hostname, IPv4, with optional port and path
 # Blocks newlines, spaces, pipes, backticks, $(), ;, && and other shell-dangerous chars
 _TARGET_REGEX = re.compile(
-    r"^(?:https?://)?"                                    # optional protocol
+    r"^(?:https?://)?"  # optional protocol
     r"(?:"
     r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9]+)"  # domain
     r"|"
     r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:/\d{1,2})?"  # IPv4 with optional CIDR
     r")"
-    r"(?::\d{1,5})?"                                      # optional port
-    r"(?:/[a-zA-Z0-9._~:/?#@!$&'()*+,;=-]*)?$",         # optional path (safe chars only)
+    r"(?::\d{1,5})?"  # optional port
+    r"(?:/[a-zA-Z0-9._~:/?#@!$&'()*+,;=-]*)?$",  # optional path (safe chars only)
 )
 
 # Template path whitelist: only known template directories
-_ALLOWED_TEMPLATE_PREFIXES = frozenset({
-    "cves/",
-    "exposed-panels/",
-    "vulnerabilities/",
-    "misconfiguration/",
-    "technologies/",
-    "default-logins/",
-    "exposures/",
-    "fuzzing/",
-})
+_ALLOWED_TEMPLATE_PREFIXES = frozenset(
+    {
+        "cves/",
+        "exposed-panels/",
+        "vulnerabilities/",
+        "misconfiguration/",
+        "technologies/",
+        "default-logins/",
+        "exposures/",
+        "fuzzing/",
+    },
+)
 
 # Template ID: alphanumeric + hyphens (standard nuclei template ID format)
 _TEMPLATE_ID_REGEX = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$")
@@ -68,7 +79,7 @@ class NucleiNotFoundError(RuntimeError):
             "  # Ou via Homebrew\n"
             "  brew install nuclei\n\n"
             "  # Téléchargement direct\n"
-            "  https://github.com/projectdiscovery/nuclei/releases"
+            "  https://github.com/projectdiscovery/nuclei/releases",
         )
 
 
@@ -78,7 +89,7 @@ class NucleiTimeoutError(TimeoutError):
     def __init__(self, target: str, timeout: int) -> None:
         super().__init__(
             f"Scan nuclei vers {target} a dépassé le timeout de {timeout}s. "
-            "Essayez d'augmenter le timeout ou de réduire le nombre de templates."
+            "Essayez d'augmenter le timeout ou de réduire le nombre de templates.",
         )
 
 
@@ -100,7 +111,7 @@ class NucleiFinding:
     host: str
     matched_at: str
     description: str = ""
-    cvss_score: Optional[float] = None
+    cvss_score: float | None = None
     cve_ids: list[str] = field(default_factory=list)
     reference_urls: list[str] = field(default_factory=list)
     extracted_results: list[str] = field(default_factory=list)
@@ -118,11 +129,12 @@ class NucleiScanner:
 
     Attributes:
         binary_path: Chemin vers le binaire nuclei (détecté via shutil si None).
+
     """
 
-    def __init__(self, binary_path: Optional[str] = None) -> None:
-        self._binary: Optional[str] = binary_path
-        self._available: Optional[bool] = None
+    def __init__(self, binary_path: str | None = None) -> None:
+        self._binary: str | None = binary_path
+        self._available: bool | None = None
 
     # ── Vérification d'installation ────────────────────────────
 
@@ -131,6 +143,7 @@ class NucleiScanner:
 
         Returns:
             True si le binaire nuclei est trouvé dans le PATH.
+
         """
         if self._available is not None:
             return self._available
@@ -147,14 +160,49 @@ class NucleiScanner:
 
         return self._available
 
+    async def check_templates(self) -> bool:
+        """Vérifie si les templates nuclei sont disponibles localement.
+
+        Nuclei télécharge ses templates dans ``~/.local/nuclei-templates/``
+        par défaut. Cette méthode vérifie que ce répertoire existe et
+        contient au moins quelques templates.
+
+        Returns:
+            True si les templates sont présents, False sinon.
+
+        """
+        # Vérifier les répertoires de templates connus
+        candidates = [
+            _DEFAULT_TEMPLATES_DIR,
+            _DEFAULT_TEMPLATES_DIR_WIN,
+            # Nuclei respecte aussi la variable NUCLEI_TEMPLATES_PATH
+            Path(os.environ.get("NUCLEI_TEMPLATES_PATH", "")),
+        ]
+
+        for d in candidates:
+            if d and d.exists() and d.is_dir():
+                # Vérifier qu'il y a au moins quelques fichiers .yaml
+                count = len(list(d.rglob("*.yaml")))
+                if count > 0:
+                    logger.info(
+                        "nuclei_templates_found",
+                        path=str(d),
+                        count=count,
+                    )
+                    return True
+
+        logger.warning("nuclei_templates_not_found")
+        return False
+
     async def _require_installed(self) -> str:
         """Vérifie que nuclei est installé et retourne son chemin.
 
         Raises:
             NucleiNotFoundError: Si nuclei n'est pas trouvé.
+
         """
         if not await self.check_installed():
-            raise NucleiNotFoundError()
+            raise NucleiNotFoundError
         return self._binary  # type: ignore[return-value]
 
     @staticmethod
@@ -169,6 +217,7 @@ class NucleiScanner:
 
         Returns:
             True if the target format is valid and safe.
+
         """
         if not target or not isinstance(target, str):
             return False
@@ -190,16 +239,15 @@ class NucleiScanner:
 
         Returns:
             True if the template is safe and valid.
+
         """
         if not template or not isinstance(template, str):
             return False
         if any(template.startswith(prefix) for prefix in _ALLOWED_TEMPLATE_PREFIXES):
             return True
-        if _TEMPLATE_ID_REGEX.match(template):
-            return True
-        return False
+        return bool(_TEMPLATE_ID_REGEX.match(template))
 
-    # ── Installation des templates ────────────────────────────
+    # ── Installation / Mise à jour des templates ────────────────
 
     @staticmethod
     async def install_templates() -> None:
@@ -208,9 +256,23 @@ class NucleiScanner:
         Exécute ``nuclei -update-templates`` pour synchroniser la dernière
         version des templates communautaires (10 000+ templates).
         """
+        await NucleiScanner._run_update_templates()
+
+    @staticmethod
+    async def update_templates() -> None:
+        """Alias de ``install_templates``.
+
+        Met à jour les templates nuclei en exécutant
+        ``nuclei -update-templates``.
+        """
+        await NucleiScanner._run_update_templates()
+
+    @staticmethod
+    async def _run_update_templates() -> None:
+        """Implémentation commune de la mise à jour des templates."""
         binary = shutil.which("nuclei")
         if not binary:
-            raise NucleiNotFoundError()
+            raise NucleiNotFoundError
 
         logger.info("nuclei_updating_templates")
         proc = await asyncio.create_subprocess_exec(
@@ -238,8 +300,8 @@ class NucleiScanner:
     async def scan(
         self,
         target: str,
-        templates: Optional[list[str]] = None,
-        severity: Optional[list[str]] = None,
+        templates: list[str] | None = None,
+        severity: list[str] | None = None,
         timeout: int = 300,
     ) -> list[NucleiFinding]:
         """Lance un scan nuclei sur la cible donnée.
@@ -261,13 +323,15 @@ class NucleiScanner:
         Raises:
             NucleiNotFoundError: Si nuclei n'est pas installé.
             NucleiTimeoutError: Si le scan dépasse le timeout.
+
         """
         binary = await self._require_installed()
 
         # ── Validation de la cible ──
         if not self._validate_target(target):
             logger.error("nuclei_invalid_target", target=target)
-            raise ValueError(f"Invalid target format: {target!r}")
+            msg = f"Invalid target format: {target!r}"
+            raise ValueError(msg)
 
         # Construction de la commande
         args = [binary, "-json", "-silent", "--disable-interactsh"]
@@ -291,7 +355,7 @@ class NucleiScanner:
             if filtered:
                 # Prendre la plus élevée (critical > high > medium > low > info)
                 order = ["info", "low", "medium", "high", "critical"]
-                highest = max(filtered, key=lambda s: order.index(s))
+                highest = max(filtered, key=order.index)
                 args.extend(["-s", highest])
 
         # Target
@@ -352,8 +416,8 @@ class NucleiScanner:
                     asyncio.gather(stdout_task, stderr_task),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError:
-                logger.error("nuclei_scan_timeout", target=target, timeout=timeout)
+            except TimeoutError:
+                logger.exception("nuclei_scan_timeout", target=target, timeout=timeout)
                 raise NucleiTimeoutError(target, timeout)
             finally:
                 if proc.returncode is None:
@@ -363,10 +427,12 @@ class NucleiScanner:
         except NucleiTimeoutError:
             raise
         except OSError as e:
-            logger.error("nuclei_subprocess_error", target=target, error=str(e))
+            logger.exception("nuclei_subprocess_error", target=target, error=str(e))
             raise
 
-        stderr_text = stderr_task.result() if (stderr_task is not None and stderr_task.done()) else ""
+        stderr_text = (
+            stderr_task.result() if (stderr_task is not None and stderr_task.done()) else ""
+        )
         if proc is not None and proc.returncode != 0 and proc.returncode is not None:
             logger.warning(
                 "nuclei_scan_nonzero_exit",
@@ -392,7 +458,7 @@ class NucleiScanner:
 
     # ── Parsing JSON ───────────────────────────────────────────
 
-    def _parse_json_line(self, line: str) -> Optional[NucleiFinding]:
+    def _parse_json_line(self, line: str) -> NucleiFinding | None:
         """Parse une ligne JSON provenant de nuclei.
 
         Args:
@@ -401,6 +467,7 @@ class NucleiScanner:
         Returns:
             Un NucleiFinding si la ligne est correcte, None si elle ne
             correspond pas au format attendu.
+
         """
         if not line or not line.strip():
             return None

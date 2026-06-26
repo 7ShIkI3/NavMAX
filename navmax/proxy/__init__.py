@@ -1,5 +1,4 @@
-"""
-Module Proxy — interception web (Burp Suite-like).
+"""Module Proxy — interception web (Burp Suite-like).
 
 Fonctionnalités :
 - Proxy HTTP/HTTPS MITM avec certificats auto-générés
@@ -9,38 +8,38 @@ Fonctionnalités :
 - Fuzzer : injection paramétrique
 """
 
-from .proxy_server import ProxyServer
-from .interceptor import Interceptor, InterceptedFlow, FlowAction, FlowStatus
-from .repeater import Repeater, RepeaterRequest, RepeaterResponse
-from .scanner import WebScanner, Vulnerability
-from .fuzzer import Fuzzer, FuzzResult, FuzzReport
+from .fuzzer import Fuzzer, FuzzReport, FuzzResult
+from .interceptor import FlowAction, FlowStatus, InterceptedFlow, Interceptor
 from .intruder import (
-    Intruder,
-    IntruderResult,
-    IntruderReport,
-    IntruderFilters,
     PREDEFINED_PAYLOADS,
+    Intruder,
+    IntruderFilters,
+    IntruderReport,
+    IntruderResult,
     quick_attack,
 )
+from .proxy_server import ProxyServer
+from .repeater import Repeater, RepeaterRequest, RepeaterResponse
+from .scanner import Vulnerability, WebScanner
 
 __all__ = [
-    "ProxyServer",
-    "Interceptor",
-    "InterceptedFlow",
+    "PREDEFINED_PAYLOADS",
     "FlowAction",
     "FlowStatus",
+    "FuzzReport",
+    "FuzzResult",
+    "Fuzzer",
+    "InterceptedFlow",
+    "Interceptor",
+    "Intruder",
+    "IntruderFilters",
+    "IntruderReport",
+    "IntruderResult",
+    "ProxyServer",
     "Repeater",
     "RepeaterRequest",
     "RepeaterResponse",
-    "WebScanner",
     "Vulnerability",
-    "Fuzzer",
-    "FuzzResult",
-    "FuzzReport",
-    "Intruder",
-    "IntruderResult",
-    "IntruderReport",
-    "IntruderFilters",
-    "PREDEFINED_PAYLOADS",
+    "WebScanner",
     "quick_attack",
 ]

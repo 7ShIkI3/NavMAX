@@ -18,13 +18,13 @@ def async_retry(
     exceptions: tuple[type[Exception], ...] = (Exception,),
     on_retry: Callable[[int, Exception], None] | None = None,
 ) -> Callable[[Any], Any]:
-    """
-    Décorateur pour les coroutines async avec retry + backoff exponentiel.
+    """Décorateur pour les coroutines async avec retry + backoff exponentiel.
 
     Usage :
         @async_retry(max_attempts=3, exceptions=(httpx.TimeoutException,))
         async def fetch(url: str) -> bytes: ...
     """
+
     def decorator(fn: Any) -> Any:
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -49,5 +49,7 @@ def async_retry(
                         on_retry(attempt, exc)
                     await asyncio.sleep(delay)
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator

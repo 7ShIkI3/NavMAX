@@ -2,16 +2,16 @@
 
 import asyncio
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 from navmax.scanner.nuclei_scanner import (
-    NucleiScanner,
     NucleiFinding,
     NucleiNotFoundError,
+    NucleiScanner,
     NucleiTimeoutError,
 )
-
 
 # ── Sample nuclei JSON lines ────────────────────────────────────
 
@@ -87,7 +87,8 @@ LOW_FINDING_JSON = {
 
 def _make_async_bytes_iter(lines: list[bytes]) -> AsyncMock:
     """Build an AsyncMock for ``proc.stdout.readline`` that yields *lines*
-    then returns ``b''`` to signal EOF."""
+    then returns ``b''`` to signal EOF.
+    """
     readline = AsyncMock()
     readline.side_effect = [*lines, b""]
     return readline
@@ -105,7 +106,9 @@ def _make_mock_process(
     proc.stderr = MagicMock()
     proc.stderr.read = AsyncMock(return_value=stderr_bytes)
     proc.wait = AsyncMock()
-    proc.communicate = AsyncMock(return_value=(b"" if not stdout_lines else b"\n".join(stdout_lines), stderr_bytes))
+    proc.communicate = AsyncMock(
+        return_value=(b"" if not stdout_lines else b"\n".join(stdout_lines), stderr_bytes),
+    )
     proc.returncode = returncode
     return proc
 
@@ -116,7 +119,7 @@ def _make_mock_process(
 class TestNucleiFindingDefaults:
     """Tests des valeurs par défaut de NucleiFinding."""
 
-    def test_minimal_construction(self):
+    def test_minimal_construction(self) -> None:
         """NucleiFinding avec uniquement les champs obligatoires."""
         f = NucleiFinding(
             template_id="test-template",
@@ -136,7 +139,7 @@ class TestNucleiFindingDefaults:
         assert f.reference_urls == []
         assert f.extracted_results == []
 
-    def test_all_fields_filled(self):
+    def test_all_fields_filled(self) -> None:
         """NucleiFinding avec tous les champs renseignés."""
         f = NucleiFinding(
             template_id="CVE-2023-22515",
@@ -153,7 +156,7 @@ class TestNucleiFindingDefaults:
         assert f.cvss_score == 9.8
         assert f.cve_ids == ["CVE-2023-22515"]
         assert f.reference_urls == [
-            "https://nvd.nist.gov/vuln/detail/CVE-2023-22515"
+            "https://nvd.nist.gov/vuln/detail/CVE-2023-22515",
         ]
         assert f.extracted_results == ["curl: some curl command"]
 
@@ -164,7 +167,7 @@ class TestNucleiFindingDefaults:
 class TestParseJsonLine:
     """Tests unitaires de NucleiScanner._parse_json_line."""
 
-    def test_parse_simple_finding(self):
+    def test_parse_simple_finding(self) -> None:
         """Parse une ligne JSON simple."""
         scanner = NucleiScanner()
         line = json.dumps(SIMPLE_FINDING_JSON)
@@ -183,7 +186,7 @@ class TestParseJsonLine:
         assert "Apache-Coyote/1.1" in f.extracted_results
         assert "curl:" in f.extracted_results[2]
 
-    def test_parse_cve_finding(self):
+    def test_parse_cve_finding(self) -> None:
         """Parse une ligne JSON avec des informations CVE complètes."""
         scanner = NucleiScanner()
         line = json.dumps(CVE_FINDING_JSON)
@@ -202,8 +205,8 @@ class TestParseJsonLine:
         assert "matcher: confluence-setup-page" in f.extracted_results
         assert any("curl:" in r for r in f.extracted_results)
 
-    def test_parse_line_with_cvss_string(self):
-        """CVSS score sous forme de chaîne (ex: \"5.0\") est converti en float."""
+    def test_parse_line_with_cvss_string(self) -> None:
+        r"""CVSS score sous forme de chaîne (ex: \"5.0\") est converti en float."""
         scanner = NucleiScanner()
         line = json.dumps(MEDIUM_FINDING_JSON)
         f = scanner._parse_json_line(line)
@@ -211,7 +214,7 @@ class TestParseJsonLine:
         assert f.cvss_score == 5.0
         assert isinstance(f.cvss_score, float)
 
-    def test_parse_line_single_reference_string(self):
+    def test_parse_line_single_reference_string(self) -> None:
         """Reference sous forme de chaîne unique est convertie en liste."""
         scanner = NucleiScanner()
         line = json.dumps(LOW_FINDING_JSON)
@@ -220,19 +223,19 @@ class TestParseJsonLine:
         assert len(f.reference_urls) == 1
         assert "developer.mozilla.org" in f.reference_urls[0]
 
-    def test_parse_invalid_json(self):
+    def test_parse_invalid_json(self) -> None:
         """Une ligne JSON invalide retourne None (l'exception est loggée)."""
         scanner = NucleiScanner()
         f = scanner._parse_json_line("{not valid json}")
         assert f is None
 
-    def test_parse_empty_line(self):
+    def test_parse_empty_line(self) -> None:
         """Une ligne vide retourne None."""
         scanner = NucleiScanner()
         f = scanner._parse_json_line("")
         assert f is None
 
-    def test_parse_minimal_fields(self):
+    def test_parse_minimal_fields(self) -> None:
         """Ligne JSON avec seulement les champs minimaux."""
         scanner = NucleiScanner()
         data = {"template-id": "minimal", "info": {"name": "Minimal"}}
@@ -245,7 +248,7 @@ class TestParseJsonLine:
         assert f.host == ""  # no host key
         assert f.matched_at == ""
 
-    def test_parse_uses_templateID_fallback(self):
+    def test_parse_uses_templateID_fallback(self) -> None:
         """Utilise 'templateID' si 'template-id' est absent."""
         scanner = NucleiScanner()
         data = {
@@ -259,7 +262,7 @@ class TestParseJsonLine:
         assert f is not None
         assert f.template_id == "fallback-id"
 
-    def test_parse_uses_matched_at_field_name(self):
+    def test_parse_uses_matched_at_field_name(self) -> None:
         """Utilise 'matched_at' (underscore) si 'matched-at' est absent."""
         scanner = NucleiScanner()
         data = {
@@ -273,7 +276,7 @@ class TestParseJsonLine:
         assert f is not None
         assert f.matched_at == "http://target/path"
 
-    def test_parse_single_cve_id_string(self):
+    def test_parse_single_cve_id_string(self) -> None:
         """cve-id peut être une chaîne unique au lieu d'une liste."""
         scanner = NucleiScanner()
         data = {
@@ -291,7 +294,7 @@ class TestParseJsonLine:
         assert f is not None
         assert f.cve_ids == ["CVE-2024-0001"]
 
-    def test_parse_without_extracted_results(self):
+    def test_parse_without_extracted_results(self) -> None:
         """Ligne sans extracted-results ni curl-command."""
         scanner = NucleiScanner()
         data = {
@@ -313,7 +316,7 @@ class TestCheckInstalled:
     """Tests de NucleiScanner.check_installed."""
 
     @pytest.mark.asyncio
-    async def test_detected(self):
+    async def test_detected(self) -> None:
         """check_installed retourne True quand nuclei est dans le PATH."""
         scanner = NucleiScanner()
         with patch("shutil.which", return_value="/usr/local/bin/nuclei") as mock_which:
@@ -324,17 +327,17 @@ class TestCheckInstalled:
             mock_which.assert_called_once_with("nuclei")
 
     @pytest.mark.asyncio
-    async def test_not_detected(self):
+    async def test_not_detected(self) -> None:
         """check_installed retourne False quand nuclei est introuvable."""
         scanner = NucleiScanner()
-        with patch("shutil.which", return_value=None) as mock_which:
+        with patch("shutil.which", return_value=None):
             result = await scanner.check_installed()
             assert result is False
             assert scanner._binary is None
             assert scanner._available is False
 
     @pytest.mark.asyncio
-    async def test_caches_result(self):
+    async def test_caches_result(self) -> None:
         """check_installed met en cache le résultat et ne rappelle pas shutil."""
         scanner = NucleiScanner()
         scanner._available = True
@@ -360,8 +363,8 @@ class TestScan:
         return s
 
     @pytest.mark.asyncio
-    async def test_scan_found_findings(self, scanner):
-        """scan retourne une liste de findings pour une sortie JSON normale."""
+    async def test_scan_found_findings(self, scanner) -> None:
+        """Scan retourne une liste de findings pour une sortie JSON normale."""
         lines = [
             json.dumps(SIMPLE_FINDING_JSON).encode(),
             json.dumps(CVE_FINDING_JSON).encode(),
@@ -377,8 +380,8 @@ class TestScan:
         assert findings[1].severity == "critical"
 
     @pytest.mark.asyncio
-    async def test_scan_empty_results(self, scanner):
-        """scan retourne une liste vide quand nuclei ne trouve rien."""
+    async def test_scan_empty_results(self, scanner) -> None:
+        """Scan retourne une liste vide quand nuclei ne trouve rien."""
         mock_proc = _make_mock_process(stdout_lines=[])
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
@@ -387,8 +390,8 @@ class TestScan:
         assert findings == []
 
     @pytest.mark.asyncio
-    async def test_scan_not_installed(self):
-        """scan lève NucleiNotFoundError quand nuclei n'est pas installé."""
+    async def test_scan_not_installed(self) -> None:
+        """Scan lève NucleiNotFoundError quand nuclei n'est pas installé."""
         scanner = NucleiScanner()
         scanner._available = False
         scanner._binary = None
@@ -398,8 +401,8 @@ class TestScan:
             assert "nuclei" in str(excinfo.value).lower()
 
     @pytest.mark.asyncio
-    async def test_scan_timeout(self, scanner):
-        """scan lève NucleiTimeoutError quand le timeout est dépassé."""
+    async def test_scan_timeout(self, scanner) -> None:
+        """Scan lève NucleiTimeoutError quand le timeout est dépassé."""
         mock_proc = _make_mock_process(
             stdout_lines=[b"stuck line\n"],
             stderr_bytes=b"",
@@ -409,19 +412,19 @@ class TestScan:
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             with patch("asyncio.wait_for") as mock_wait_for:
-                mock_wait_for.side_effect = asyncio.TimeoutError()
+                mock_wait_for.side_effect = TimeoutError()
                 with pytest.raises(NucleiTimeoutError) as excinfo:
                     await scanner.scan("https://10.0.0.1", timeout=1)
                 assert "10.0.0.1" in str(excinfo.value)
                 assert "1" in str(excinfo.value)
 
     @pytest.mark.asyncio
-    async def test_severity_filter(self, scanner):
-        """scan filtre les résultats par sévérité côté client."""
+    async def test_severity_filter(self, scanner) -> None:
+        """Scan filtre les résultats par sévérité côté client."""
         lines = [
-            json.dumps(SIMPLE_FINDING_JSON).encode(),   # severity: info
-            json.dumps(CVE_FINDING_JSON).encode(),      # severity: critical
-            json.dumps(MEDIUM_FINDING_JSON).encode(),   # severity: medium
+            json.dumps(SIMPLE_FINDING_JSON).encode(),  # severity: info
+            json.dumps(CVE_FINDING_JSON).encode(),  # severity: critical
+            json.dumps(MEDIUM_FINDING_JSON).encode(),  # severity: medium
         ]
         mock_proc = _make_mock_process(stdout_lines=lines)
 
@@ -436,12 +439,12 @@ class TestScan:
         assert findings[0].severity == "critical"
 
     @pytest.mark.asyncio
-    async def test_severity_filter_multiple_values(self, scanner):
-        """scan avec plusieurs sévérités valides."""
+    async def test_severity_filter_multiple_values(self, scanner) -> None:
+        """Scan avec plusieurs sévérités valides."""
         lines = [
-            json.dumps(SIMPLE_FINDING_JSON).encode(),   # info
-            json.dumps(CVE_FINDING_JSON).encode(),      # critical
-            json.dumps(MEDIUM_FINDING_JSON).encode(),   # medium
+            json.dumps(SIMPLE_FINDING_JSON).encode(),  # info
+            json.dumps(CVE_FINDING_JSON).encode(),  # critical
+            json.dumps(MEDIUM_FINDING_JSON).encode(),  # medium
         ]
         mock_proc = _make_mock_process(stdout_lines=lines)
 
@@ -456,8 +459,8 @@ class TestScan:
         assert severities == {"critical", "medium"}
 
     @pytest.mark.asyncio
-    async def test_scan_passes_correct_args(self, scanner):
-        """scan construit les bons arguments pour le sous-processus."""
+    async def test_scan_passes_correct_args(self, scanner) -> None:
+        """Scan construit les bons arguments pour le sous-processus."""
         mock_proc = _make_mock_process(stdout_lines=[])
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
@@ -481,8 +484,8 @@ class TestScan:
         assert "https://10.0.0.1" in args
 
     @pytest.mark.asyncio
-    async def test_scan_passes_highest_severity(self, scanner):
-        """scan passe la sévérité la plus élevée à nuclei."""
+    async def test_scan_passes_highest_severity(self, scanner) -> None:
+        """Scan passe la sévérité la plus élevée à nuclei."""
         mock_proc = _make_mock_process(stdout_lines=[])
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
@@ -496,8 +499,8 @@ class TestScan:
         assert args[crit_idx + 1] == "critical"
 
     @pytest.mark.asyncio
-    async def test_scan_default_template(self, scanner):
-        """scan utilise 'cves/' comme template par défaut."""
+    async def test_scan_default_template(self, scanner) -> None:
+        """Scan utilise 'cves/' comme template par défaut."""
         mock_proc = _make_mock_process(stdout_lines=[])
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
@@ -508,8 +511,8 @@ class TestScan:
         assert args[t_idx + 1] == "cves/"
 
     @pytest.mark.asyncio
-    async def test_scan_nonzero_returncode(self, scanner):
-        """scan gère les sorties non-nulles sans planter."""
+    async def test_scan_nonzero_returncode(self, scanner) -> None:
+        """Scan gère les sorties non-nulles sans planter."""
         lines = [json.dumps(SIMPLE_FINDING_JSON).encode()]
         mock_proc = _make_mock_process(stdout_lines=lines, returncode=1)
 
@@ -519,8 +522,8 @@ class TestScan:
         assert len(findings) == 1
 
     @pytest.mark.asyncio
-    async def test_scan_skips_bad_json_lines(self, scanner):
-        """scan ignore les lignes JSON invalides et continue."""
+    async def test_scan_skips_bad_json_lines(self, scanner) -> None:
+        """Scan ignore les lignes JSON invalides et continue."""
         lines = [
             b"{invalid}\n",
             json.dumps(SIMPLE_FINDING_JSON).encode(),
@@ -542,7 +545,7 @@ class TestInstallTemplates:
     """Tests de NucleiScanner.install_templates."""
 
     @pytest.mark.asyncio
-    async def test_install_templates_success(self):
+    async def test_install_templates_success(self) -> None:
         """install_templates appelle nuclei -update-templates avec succès."""
         mock_proc = _make_mock_process(
             stdout_lines=[b"Templates updated successfully\n"],
@@ -561,14 +564,13 @@ class TestInstallTemplates:
         )
 
     @pytest.mark.asyncio
-    async def test_install_templates_not_installed(self):
+    async def test_install_templates_not_installed(self) -> None:
         """install_templates lève NucleiNotFoundError si nuclei est absent."""
-        with patch("shutil.which", return_value=None):
-            with pytest.raises(NucleiNotFoundError):
-                await NucleiScanner.install_templates()
+        with patch("shutil.which", return_value=None), pytest.raises(NucleiNotFoundError):
+            await NucleiScanner.install_templates()
 
     @pytest.mark.asyncio
-    async def test_install_templates_failure_logged(self):
+    async def test_install_templates_failure_logged(self) -> None:
         """install_templates ne lève pas d'exception en cas d'échec (log seulement)."""
         mock_proc = _make_mock_process(
             stdout_lines=[b""],
@@ -580,3 +582,90 @@ class TestInstallTemplates:
             with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
                 # Should not raise
                 await NucleiScanner.install_templates()
+
+
+# ── update_templates tests ────────────────────────────────────
+
+
+class TestUpdateTemplates:
+    """Tests de NucleiScanner.update_templates (alias)."""
+
+    @pytest.mark.asyncio
+    async def test_update_templates_success(self) -> None:
+        """update_templates appelle nuclei -update-templates avec succès."""
+        mock_proc = _make_mock_process(
+            stdout_lines=[b"Templates updated successfully\n"],
+            returncode=0,
+        )
+
+        with patch("shutil.which", return_value="/usr/local/bin/nuclei"):
+            with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+                await NucleiScanner.update_templates()
+
+        mock_exec.assert_called_once_with(
+            "/usr/local/bin/nuclei",
+            "-update-templates",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_templates_not_installed(self) -> None:
+        """update_templates lève NucleiNotFoundError si nuclei est absent."""
+        with patch("shutil.which", return_value=None), pytest.raises(NucleiNotFoundError):
+            await NucleiScanner.update_templates()
+
+
+# ── check_templates tests ─────────────────────────────────────
+
+
+class TestCheckTemplates:
+    """Tests de NucleiScanner.check_templates."""
+
+    @pytest.mark.asyncio
+    async def test_templates_found(self, tmp_path) -> None:
+        """check_templates retourne True quand les templates existent."""
+        # Créer un répertoire de templates factice avec des fichiers .yaml
+        templates_dir = tmp_path / ".local" / "nuclei-templates"
+        templates_dir.mkdir(parents=True)
+        (templates_dir / "cves").mkdir()
+        (templates_dir / "cves" / "test-cve.yaml").write_text("id: test\n")
+
+        scanner = NucleiScanner()
+        with patch("navmax.scanner.nuclei_scanner._DEFAULT_TEMPLATES_DIR", templates_dir):
+            result = await scanner.check_templates()
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_templates_not_found(self, tmp_path) -> None:
+        """check_templates retourne False quand le répertoire n'existe pas."""
+        inexistant = tmp_path / "nonexistent" / "nuclei-templates"
+
+        scanner = NucleiScanner()
+        with patch("navmax.scanner.nuclei_scanner._DEFAULT_TEMPLATES_DIR", inexistant):
+            result = await scanner.check_templates()
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_templates_empty_directory(self, tmp_path) -> None:
+        """check_templates retourne False quand le répertoire est vide."""
+        empty_dir = tmp_path / "empty" / "nuclei-templates"
+        empty_dir.mkdir(parents=True)
+
+        scanner = NucleiScanner()
+        with patch("navmax.scanner.nuclei_scanner._DEFAULT_TEMPLATES_DIR", empty_dir):
+            result = await scanner.check_templates()
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_templates_no_yaml_files(self, tmp_path) -> None:
+        """check_templates retourne False quand il n'y a pas de fichiers .yaml."""
+        no_yaml_dir = tmp_path / "noyaml" / "nuclei-templates"
+        no_yaml_dir.mkdir(parents=True)
+        (no_yaml_dir / "cves").mkdir()
+        (no_yaml_dir / "cves" / "readme.txt").write_text("not a template")
+
+        scanner = NucleiScanner()
+        with patch("navmax.scanner.nuclei_scanner._DEFAULT_TEMPLATES_DIR", no_yaml_dir):
+            result = await scanner.check_templates()
+            assert result is False

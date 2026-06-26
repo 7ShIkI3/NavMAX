@@ -1,9 +1,9 @@
-"""
-Logging structuré avec structlog — sortie JSON ou console.
-"""
+"""Logging structuré avec structlog — sortie JSON ou console."""
 
 import logging
+
 import structlog
+
 from .config import config
 
 
@@ -22,7 +22,9 @@ def setup_logging() -> None:
     ]
 
     if config.log_format == "json":
-        renderer = structlog.processors.JSONRenderer()
+        renderer: structlog.processors.JSONRenderer | structlog.dev.ConsoleRenderer = (
+            structlog.processors.JSONRenderer()
+        )
     else:
         renderer = structlog.dev.ConsoleRenderer(colors=True)
 
@@ -34,7 +36,7 @@ def setup_logging() -> None:
     )
 
     structlog.configure(
-        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        processors=[*shared_processors, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
@@ -62,3 +64,6 @@ def setup_logging() -> None:
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Retourne un logger structuré pour le module donné."""
     return structlog.get_logger(name or __name__)
+    # Le logger peut être un BoundLoggerLazyProxy si structlog
+    # n'a pas encore été configuré — c'est normal, il se résoudra
+    # au premier appel d'enregistrement.

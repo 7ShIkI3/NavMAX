@@ -1,23 +1,18 @@
-"""
-Tests pour CVSS Scorer et SARIF Exporter.
-"""
+"""Tests pour CVSS Scorer et SARIF Exporter."""
 
 import json
 
-import pytest
-
 from navmax.reporting.cvss_scorer import (
-    CVSSScorer,
     CVSSScore,
+    CVSSScorer,
     get_mitre_techniques,
     get_mitre_url,
 )
 from navmax.reporting.sarif_exporter import (
+    SARIF_VERSION,
     SARIFExporter,
     SARIFResult,
-    SARIF_VERSION,
 )
-
 
 # ── CVSS Scorer ─────────────────────────────────────────────────
 
@@ -25,7 +20,7 @@ from navmax.reporting.sarif_exporter import (
 class TestCVSSScore:
     """Tests dataclass CVSSScore."""
 
-    def test_creation(self):
+    def test_creation(self) -> None:
         score = CVSSScore(
             vector_string="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
             base_score=9.8,
@@ -34,19 +29,19 @@ class TestCVSSScore:
         assert score.base_score == 9.8
         assert score.severity == "Critical"
 
-    def test_badge_color_critical(self):
+    def test_badge_color_critical(self) -> None:
         score = CVSSScore("", 9.8, "Critical")
         assert score.badge_color == "#dc3545"
 
-    def test_badge_color_high(self):
+    def test_badge_color_high(self) -> None:
         score = CVSSScore("", 8.0, "High")
         assert score.badge_color == "#fd7e14"
 
-    def test_badge_color_medium(self):
+    def test_badge_color_medium(self) -> None:
         score = CVSSScore("", 5.0, "Medium")
         assert score.badge_color == "#ffc107"
 
-    def test_badge_color_low(self):
+    def test_badge_color_low(self) -> None:
         score = CVSSScore("", 2.0, "Low")
         assert score.badge_color == "#6c757d"
 
@@ -54,11 +49,11 @@ class TestCVSSScore:
 class TestCVSSScorer:
     """Tests du calculateur CVSS."""
 
-    def test_init(self):
+    def test_init(self) -> None:
         scorer = CVSSScorer()
         assert scorer is not None
 
-    def test_calculate_fallback(self):
+    def test_calculate_fallback(self) -> None:
         """Le calcul en mode fallback (cvss lib absente)."""
         scorer = CVSSScorer()
         score = scorer.calculate(av="N", ac="L", pr="N", ui="N", s="U", c="H", i="H", a="H")
@@ -66,51 +61,51 @@ class TestCVSSScorer:
         assert score.base_score > 7.0
         assert "AV:N" in score.vector_string
 
-    def test_calculate_low_impact(self):
+    def test_calculate_low_impact(self) -> None:
         scorer = CVSSScorer()
         score = scorer.calculate(av="N", ac="H", pr="H", ui="R", s="U", c="N", i="N", a="N")
         assert score.base_score < 3.0
         assert score.severity in ("None", "Low")
 
-    def test_auto_score_critical(self):
+    def test_auto_score_critical(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="critical")
         assert score.base_score >= 9.0
         assert score.severity == "Critical"
 
-    def test_auto_score_high(self):
+    def test_auto_score_high(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="high")
         assert score.base_score >= 7.0
 
-    def test_auto_score_medium(self):
+    def test_auto_score_medium(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="medium")
         assert 4.0 <= score.base_score < 7.0
 
-    def test_auto_score_low(self):
+    def test_auto_score_low(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="low")
         assert score.base_score < 4.0
 
-    def test_auto_score_info(self):
+    def test_auto_score_info(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="info")
         assert score.base_score == 0.0
 
-    def test_auto_score_unknown(self):
+    def test_auto_score_unknown(self) -> None:
         scorer = CVSSScorer()
         score = scorer.auto_score(severity="unknown_xyz")
         assert score.severity == "Medium"  # Fallback
 
-    def test_severity_from_score(self):
+    def test_severity_from_score(self) -> None:
         assert CVSSScorer._severity_from_score(9.8) == "Critical"
         assert CVSSScorer._severity_from_score(8.0) == "High"
         assert CVSSScorer._severity_from_score(5.0) == "Medium"
         assert CVSSScorer._severity_from_score(2.0) == "Low"
         assert CVSSScorer._severity_from_score(0.0) == "None"
 
-    def test_heuristic_score(self):
+    def test_heuristic_score(self) -> None:
         score = CVSSScorer._heuristic_score("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
         assert score > 5.0  # Beaucoup de H
 
@@ -121,26 +116,26 @@ class TestCVSSScorer:
 class TestMITRE:
     """Tests mapping MITRE ATT&CK."""
 
-    def test_get_mitre_log4shell(self):
+    def test_get_mitre_log4shell(self) -> None:
         techniques = get_mitre_techniques(["CVE-2021-44228"])
         assert "T1190" in techniques
         assert "T1059" in techniques
 
-    def test_get_mitre_eternalblue(self):
+    def test_get_mitre_eternalblue(self) -> None:
         techniques = get_mitre_techniques(["CVE-2017-0144"])
         assert "T1210" in techniques
 
-    def test_get_mitre_unknown(self):
+    def test_get_mitre_unknown(self) -> None:
         techniques = get_mitre_techniques(["CVE-9999-99999"])
         assert techniques == []
 
-    def test_get_mitre_multiple(self):
+    def test_get_mitre_multiple(self) -> None:
         techniques = get_mitre_techniques(["CVE-2021-44228", "CVE-2017-0144"])
         assert len(techniques) >= 3
         assert "T1190" in techniques
         assert "T1210" in techniques
 
-    def test_get_mitre_url(self):
+    def test_get_mitre_url(self) -> None:
         url = get_mitre_url("T1190")
         assert "attack.mitre.org" in url
         assert "T1190" in url
@@ -152,7 +147,7 @@ class TestMITRE:
 class TestSARIFResult:
     """Tests dataclass SARIFResult."""
 
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         result = SARIFResult(
             rule_id="CVE-2021-44228",
             level="error",
@@ -167,11 +162,11 @@ class TestSARIFResult:
 class TestSARIFExporter:
     """Tests export SARIF."""
 
-    def test_init(self):
+    def test_init(self) -> None:
         exporter = SARIFExporter()
         assert exporter.tool_name == "NavMAX"
 
-    def test_export_empty(self):
+    def test_export_empty(self) -> None:
         exporter = SARIFExporter()
         doc = exporter.export([])
         assert doc["version"] == SARIF_VERSION
@@ -179,22 +174,24 @@ class TestSARIFExporter:
         assert len(doc["runs"]) == 1
         assert len(doc["runs"][0]["results"]) == 0
 
-    def test_export_single_finding(self):
+    def test_export_single_finding(self) -> None:
         exporter = SARIFExporter()
-        findings = [{
-            "cve_id": "CVE-2021-44228",
-            "title": "Log4Shell RCE",
-            "severity": "critical",
-            "host": "app.example.com",
-            "description": "Log4j RCE via JNDI injection",
-        }]
+        findings = [
+            {
+                "cve_id": "CVE-2021-44228",
+                "title": "Log4Shell RCE",
+                "severity": "critical",
+                "host": "app.example.com",
+                "description": "Log4j RCE via JNDI injection",
+            },
+        ]
         doc = exporter.export(findings)
         results = doc["runs"][0]["results"]
         assert len(results) == 1
         assert results[0]["ruleId"] == "CVE-2021-44228"
         assert results[0]["level"] == "error"
 
-    def test_export_multiple_severities(self):
+    def test_export_multiple_severities(self) -> None:
         exporter = SARIFExporter()
         findings = [
             {"cve_id": "CRIT-001", "title": "Crit", "severity": "critical", "host": "x"},
@@ -209,22 +206,31 @@ class TestSARIFExporter:
         assert "warning" in levels
         assert "note" in levels
 
-    def test_export_with_scan_info(self):
+    def test_export_with_scan_info(self) -> None:
         exporter = SARIFExporter()
-        findings = [{"cve_id": "CVE-2021-44228", "title": "Log4j", "severity": "critical", "host": "app.example.com"}]
+        findings = [
+            {
+                "cve_id": "CVE-2021-44228",
+                "title": "Log4j",
+                "severity": "critical",
+                "host": "app.example.com",
+            },
+        ]
         scan_info = {"target": "app.example.com", "duration_s": 45.2}
         doc = exporter.export(findings, scan_info)
         assert doc["runs"][0]["originalUriBaseIds"]["TARGET"]["uri"] == "app.example.com"
 
-    def test_export_json_string(self):
+    def test_export_json_string(self) -> None:
         exporter = SARIFExporter()
-        findings = [{"cve_id": "CVE-2021-44228", "title": "Log4j", "severity": "critical", "host": "x"}]
+        findings = [
+            {"cve_id": "CVE-2021-44228", "title": "Log4j", "severity": "critical", "host": "x"},
+        ]
         json_str = exporter.export_json(findings)
         assert isinstance(json_str, str)
         parsed = json.loads(json_str)
         assert parsed["version"] == SARIF_VERSION
 
-    def test_rules_deduplication(self):
+    def test_rules_deduplication(self) -> None:
         exporter = SARIFExporter()
         findings = [
             {"cve_id": "CVE-2021-44228", "title": "Log4j", "severity": "critical", "host": "a"},
@@ -235,7 +241,7 @@ class TestSARIFExporter:
         # Dédupliqué → 1 règle pour le même CVE
         assert len(rules) == 1
 
-    def test_severity_to_sarif_level(self):
+    def test_severity_to_sarif_level(self) -> None:
         assert SARIFExporter._severity_to_sarif_level("critical") == "error"
         assert SARIFExporter._severity_to_sarif_level("high") == "error"
         assert SARIFExporter._severity_to_sarif_level("medium") == "warning"

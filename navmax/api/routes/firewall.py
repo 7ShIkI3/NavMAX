@@ -1,5 +1,4 @@
-"""
-API Routes — Firewall.
+"""API Routes — Firewall.
 
 POST /api/v1/firewall/fortigate/rules   — Extraire règles FortiGate
 POST /api/v1/firewall/stormshield/rules — Extraire règles StormShield
@@ -9,7 +8,6 @@ POST /api/v1/firewall/correlate         — Corréler AD × Firewall
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
 from navmax.core.logging import get_logger
 
@@ -19,19 +17,20 @@ logger = get_logger(__name__)
 
 # ── Schemas ────────────────────────────────────────────────────
 
+
 class FortiGateRequest(BaseModel):
     host: str
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     verify_ssl: bool = False
 
 
 class StormShieldRequest(BaseModel):
     host: str
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     verify_ssl: bool = False
 
 
@@ -58,6 +57,7 @@ class CorrelateRequest(BaseModel):
 
 
 # ── Routes ─────────────────────────────────────────────────────
+
 
 @router.post("/fortigate/rules", response_model=FWRulesResponse)
 async def fortigate_rules(req: FortiGateRequest):
@@ -119,8 +119,8 @@ async def fortigate_rules(req: FortiGateRequest):
     except ConnectionError as exc:
         logger.warning("fortigate_connexion_échouée", host=req.host, erreur=str(exc))
         raise HTTPException(status_code=502, detail=f"Connexion FortiGate échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs API FortiGate imprévisibles
-        logger.error("fortigate_erreur", host=req.host, erreur=str(exc))
+    except Exception as exc:
+        logger.exception("fortigate_erreur", host=req.host, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await fgt.close()
@@ -185,9 +185,11 @@ async def stormshield_rules(req: StormShieldRequest):
         raise
     except ConnectionError as exc:
         logger.warning("stormshield_connexion_échouée", host=req.host, erreur=str(exc))
-        raise HTTPException(status_code=502, detail=f"Connexion StormShield échouée : {exc}") from exc
-    except Exception as exc:  # noqa: BLE001 — erreurs API StormShield imprévisibles
-        logger.error("stormshield_erreur", host=req.host, erreur=str(exc))
+        raise HTTPException(
+            status_code=502, detail=f"Connexion StormShield échouée : {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("stormshield_erreur", host=req.host, erreur=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         await sns.close()
@@ -197,7 +199,10 @@ async def stormshield_rules(req: StormShieldRequest):
 async def firewall_analyze(req: AnalyzeRequest):
     """Analyse les règles firewall (shadowing, Any/Any, etc.)."""
     from navmax.firewall.base import (
-        FirewallConfig, FirewallVendor, FirewallRule, RuleAction, Protocol,
+        FirewallConfig,
+        FirewallRule,
+        FirewallVendor,
+        RuleAction,
     )
     from navmax.firewall.rule_analyzer import RuleAnalyzer
 
@@ -213,8 +218,7 @@ async def firewall_analyze(req: AnalyzeRequest):
             FirewallRule(
                 id=r.get("id", str(i)),
                 name=r.get("name", f"rule-{i}"),
-                action=RuleAction.ALLOW if r.get("action") == "allow"
-                       else RuleAction.DENY,
+                action=RuleAction.ALLOW if r.get("action") == "allow" else RuleAction.DENY,
                 source_addresses=r.get("source", []),
                 destination_addresses=r.get("destination", []),
                 destination_ports=r.get("ports", []),

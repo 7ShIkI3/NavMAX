@@ -1,5 +1,4 @@
-"""
-NavMAX — Plateforme de cybersécurité unifiée pour agents IA.
+"""NavMAX — Plateforme de cybersécurité unifiée pour agents IA.
 
 Modules :
 - scanner  : reconnaissance réseau (Nmap-like)

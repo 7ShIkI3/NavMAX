@@ -1,11 +1,14 @@
 """Routes API pour la gestion des workspaces."""
-from fastapi import APIRouter, Depends, HTTPException, Query
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from navmax.core.logging import get_logger
 from navmax.db.engine import get_session
 from navmax.workspace import WorkspaceManager
-from navmax.core.logging import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -26,7 +29,9 @@ class TargetAssign(BaseModel):
 
 
 @router.post("/")
-async def create_workspace(req: WorkspaceCreate, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_workspace(
+    req: WorkspaceCreate, session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
     """Crée un nouveau workspace."""
     mgr = WorkspaceManager(session)
     ws = await mgr.create(req.name, req.description)
@@ -35,23 +40,27 @@ async def create_workspace(req: WorkspaceCreate, session: AsyncSession = Depends
 
 
 @router.get("/")
-async def list_workspaces(session: AsyncSession = Depends(get_session)) -> dict:
+async def list_workspaces(session: Annotated[AsyncSession, Depends(get_session)]) -> dict:
     """Liste tous les workspaces."""
     mgr = WorkspaceManager(session)
     ws_list = await mgr.list_all()
     return {
         "count": len(ws_list),
         "workspaces": [
-            {"id": w.id, "name": w.name, "description": w.description,
-             "target_count": len(w.targets) if w.targets else 0,
-             "created_at": w.created_at.isoformat() if w.created_at else None}
+            {
+                "id": w.id,
+                "name": w.name,
+                "description": w.description,
+                "target_count": len(w.targets) if w.targets else 0,
+                "created_at": w.created_at.isoformat() if w.created_at else None,
+            }
             for w in ws_list
-        ]
+        ],
     }
 
 
 @router.get("/{workspace_id}")
-async def get_workspace(workspace_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def get_workspace(workspace_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict:
     """Détail d'un workspace avec ses statistiques."""
     mgr = WorkspaceManager(session)
     stats = await mgr.get_stats(workspace_id)
@@ -61,7 +70,9 @@ async def get_workspace(workspace_id: str, session: AsyncSession = Depends(get_s
 
 
 @router.patch("/{workspace_id}")
-async def update_workspace(workspace_id: str, req: WorkspaceUpdate, session: AsyncSession = Depends(get_session)) -> dict:
+async def update_workspace(
+    workspace_id: str, req: WorkspaceUpdate, session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
     """Met à jour un workspace."""
     mgr = WorkspaceManager(session)
     ws = await mgr.update(workspace_id, req.name, req.description)
@@ -72,7 +83,7 @@ async def update_workspace(workspace_id: str, req: WorkspaceUpdate, session: Asy
 
 
 @router.delete("/{workspace_id}")
-async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def delete_workspace(workspace_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict:
     """Supprime un workspace."""
     mgr = WorkspaceManager(session)
     ok = await mgr.delete(workspace_id)
@@ -83,7 +94,9 @@ async def delete_workspace(workspace_id: str, session: AsyncSession = Depends(ge
 
 
 @router.post("/{workspace_id}/targets")
-async def add_target_to_workspace(workspace_id: str, req: TargetAssign, session: AsyncSession = Depends(get_session)) -> dict:
+async def add_target_to_workspace(
+    workspace_id: str, req: TargetAssign, session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
     """Associe une cible à un workspace."""
     mgr = WorkspaceManager(session)
     ok = await mgr.add_target(workspace_id, req.target_id)
@@ -93,7 +106,9 @@ async def add_target_to_workspace(workspace_id: str, req: TargetAssign, session:
 
 
 @router.delete("/{workspace_id}/targets/{target_id}")
-async def remove_target_from_workspace(workspace_id: str, target_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def remove_target_from_workspace(
+    workspace_id: str, target_id: str, session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
     """Désassocie une cible d'un workspace."""
     mgr = WorkspaceManager(session)
     ok = await mgr.remove_target(workspace_id, target_id)
@@ -103,14 +118,15 @@ async def remove_target_from_workspace(workspace_id: str, target_id: str, sessio
 
 
 @router.get("/{workspace_id}/targets")
-async def list_workspace_targets(workspace_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def list_workspace_targets(
+    workspace_id: str, session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict:
     """Liste les cibles d'un workspace."""
     mgr = WorkspaceManager(session)
     targets = await mgr.list_targets(workspace_id)
     return {
         "count": len(targets),
         "targets": [
-            {"id": t.id, "name": t.name, "address": t.address, "kind": t.kind}
-            for t in targets
-        ]
+            {"id": t.id, "name": t.name, "address": t.address, "kind": t.kind} for t in targets
+        ],
     }

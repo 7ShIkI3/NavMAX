@@ -10,9 +10,8 @@ import json
 import shutil
 import subprocess
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from navmax.core.config import config
 from navmax.core.logging import get_logger
 from navmax.db.engine import async_session
 from navmax.db.models import Scan, Service, Target, Vulnerability
@@ -45,6 +44,7 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
 
     Returns:
         Dict récapitulatif : ports ouverts, services détectés, OS, etc.
+
     """
     scan_id = str(uuid.uuid4())
     self.update_state(
@@ -56,12 +56,14 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
         """Exécution synchrone wrappant les appels async."""
         # ── 1. Valider la cible ─────────────────────────────────
         if not target or not target.strip():
-            raise ValueError("Cible invalide : chaîne vide")
+            msg = "Cible invalide : chaîne vide"
+            raise ValueError(msg)
 
         # ── 2. Parser les ports ─────────────────────────────────
         port_list = parse_ports(ports) if ports else []
         if not port_list:
-            raise ValueError("Aucun port valide spécifié")
+            msg = "Aucun port valide spécifié"
+            raise ValueError(msg)
 
         logger.info("nmap_task_demarrage", target=target, ports=len(port_list), profile=profile)
 
@@ -79,8 +81,8 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                         name=target,
                         address=target,
                         kind="host",
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc),
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
                     )
                     db.add(db_target)
                     await db.commit()
@@ -89,7 +91,7 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                 return db_target.id, db_target.name
 
         try:
-            target_id, target_name = _run_async(_find_or_create_target())
+            target_id, _target_name = _run_async(_find_or_create_target())
         except (ConnectionError, TimeoutError) as exc:
             raise self.retry(exc=exc, countdown=30, max_retries=3)
 
@@ -103,7 +105,7 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                     ports=ports,
                     status="running",
                     progress=0.0,
-                    started_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(UTC),
                 )
                 db.add(db_scan)
                 await db.commit()
@@ -150,7 +152,7 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
         )
 
         # ── 6. Persister les résultats en DB ────────────────────
-        async def _persist_results():
+        async def _persist_results() -> None:
             async with async_session() as db:
                 db_scan = await db.get(Scan, scan_id)
                 if db_scan is None:
@@ -174,8 +176,11 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                             version=port_data.get("version", ""),
                             banner=port_data.get("banner", ""),
                             extra_data=json.dumps(
-                                {k: v for k, v in port_data.items()
-                                 if k in ("product", "extrainfo", "cpe", "script_results") and v}
+                                {
+                                    k: v
+                                    for k, v in port_data.items()
+                                    if k in ("product", "extrainfo", "cpe", "script_results") and v
+                                },
                             ),
                         )
                         db.add(svc)
@@ -199,13 +204,13 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
                 db_scan.raw_result = json.dumps(scan_result, ensure_ascii=False, default=str)
                 db_scan.progress = 100.0
                 db_scan.status = "completed"
-                db_scan.finished_at = datetime.now(timezone.utc)
+                db_scan.finished_at = datetime.now(UTC)
 
                 # Mettre à jour la cible
                 db_target = await db.get(Target, target_id)
                 if db_target:
                     db_target.alive = scan_result.get("status") == "up"
-                    db_target.updated_at = datetime.now(timezone.utc)
+                    db_target.updated_at = datetime.now(UTC)
 
                 await db.commit()
 
@@ -236,16 +241,23 @@ def run_nmap_scan(self, target: str, ports: str, profile: str = "default") -> di
             "target_id": target_id,
             "host_status": scan_result.get("status"),
             "ports_scanned": len(port_list),
-            "ports_open": len([p for p in scan_result.get("ports", {}).values()
-                               if isinstance(p, dict) and p.get("state") == "open"]),
-            "os": scan_result.get("os_matches", [{}])[0].get("name", "") if scan_result.get("os_matches") else "",
+            "ports_open": len(
+                [
+                    p
+                    for p in scan_result.get("ports", {}).values()
+                    if isinstance(p, dict) and p.get("state") == "open"
+                ],
+            ),
+            "os": scan_result.get("os_matches", [{}])[0].get("name", "")
+            if scan_result.get("os_matches")
+            else "",
             "error": scan_result.get("error"),
         }
 
     try:
         return _execute()
     except Exception as e:
-        logger.error("nmap_task_erreur", target=target, error=str(e))
+        logger.exception("nmap_task_erreur", target=target, error=str(e))
         self.update_state(
             state="FAILURE",
             meta={"status": f"Échec : {e!s}", "progress": 0},
@@ -272,6 +284,7 @@ def run_nuclei_scan(
 
     Returns:
         Dict avec la liste des vulnérabilités découvertes
+
     """
     self.update_state(
         state="PROGRESS",
@@ -294,7 +307,7 @@ def run_nuclei_scan(
                 "target": target,
                 "status": "skipped",
                 "note": "nuclei n'est pas installé sur le système. "
-                        "Installez-le via 'go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest'",
+                "Installez-le via 'go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest'",
                 "vulnerabilities": [],
             }
 
@@ -348,7 +361,7 @@ def run_nuclei_scan(
             try:
                 stdout, _ = proc.communicate(timeout=600)
             except subprocess.TimeoutExpired:
-                logger.error("nuclei_timeout", target=target)
+                logger.exception("nuclei_timeout", target=target)
                 return {
                     "scan_id": scan_id,
                     "target": target,
@@ -376,7 +389,7 @@ def run_nuclei_scan(
                     continue
 
             # ── Sauvegarder les vulnérabilités en DB ────────────
-            async def _persist_vulns():
+            async def _persist_vulns() -> None:
                 async with async_session() as db:
                     for v in vulnerabilities:
                         vuln = Vulnerability(
@@ -434,7 +447,7 @@ def run_nuclei_scan(
     try:
         return _execute()
     except Exception as e:
-        logger.error("nuclei_task_erreur", target=target, error=str(e))
+        logger.exception("nuclei_task_erreur", target=target, error=str(e))
         self.update_state(
             state="FAILURE",
             meta={"status": f"Échec : {e!s}", "progress": 0},
@@ -455,11 +468,16 @@ def run_mission(self, mission_objective: str) -> dict:
 
     Returns:
         Dict avec les résultats agrégés de toutes les phases
+
     """
     mission_id = str(uuid.uuid4())
     self.update_state(
         state="PROGRESS",
-        meta={"status": "Mission en cours de planification...", "progress": 0, "mission_id": mission_id},
+        meta={
+            "status": "Mission en cours de planification...",
+            "progress": 0,
+            "mission_id": mission_id,
+        },
     )
 
     def _execute() -> dict:
@@ -471,7 +489,11 @@ def run_mission(self, mission_objective: str) -> dict:
         # ── 1. Initialiser l'AIEngine ───────────────────────────
         self.update_state(
             state="PROGRESS",
-            meta={"status": "Initialisation du moteur IA...", "progress": 5, "mission_id": mission_id},
+            meta={
+                "status": "Initialisation du moteur IA...",
+                "progress": 5,
+                "mission_id": mission_id,
+            },
         )
 
         async def _init_engine():
@@ -487,7 +509,11 @@ def run_mission(self, mission_objective: str) -> dict:
         # ── 2. Planifier la mission ─────────────────────────────
         self.update_state(
             state="PROGRESS",
-            meta={"status": "Planification de la mission...", "progress": 15, "mission_id": mission_id},
+            meta={
+                "status": "Planification de la mission...",
+                "progress": 15,
+                "mission_id": mission_id,
+            },
         )
 
         planner = MissionPlanner(engine)
@@ -514,34 +540,44 @@ def run_mission(self, mission_objective: str) -> dict:
             )
 
             # Marquer comme running
-            phase.status = __import__("navmax.ai.mission_planner").mission_planner.PhaseStatus.RUNNING  # noqa: E501
+            phase.status = __import__(
+                "navmax.ai.mission_planner",
+            ).mission_planner.PhaseStatus.RUNNING
 
             try:
                 result = _execute_phase(phase.module_needed, phase.parameters)
-                phase.status = __import__("navmax.ai.mission_planner").mission_planner.PhaseStatus.COMPLETED  # noqa: E501
+                phase.status = __import__(
+                    "navmax.ai.mission_planner",
+                ).mission_planner.PhaseStatus.COMPLETED
                 phase.result = result
 
-                phase_results.append({
-                    "phase_id": phase.id,
-                    "description": phase.description,
-                    "module": phase.module_needed,
-                    "status": "completed",
-                    "result": result,
-                })
+                phase_results.append(
+                    {
+                        "phase_id": phase.id,
+                        "description": phase.description,
+                        "module": phase.module_needed,
+                        "status": "completed",
+                        "result": result,
+                    },
+                )
 
             except Exception as e:
-                phase.status = __import__("navmax.ai.mission_planner").mission_planner.PhaseStatus.FAILED  # noqa: E501
+                phase.status = __import__(
+                    "navmax.ai.mission_planner",
+                ).mission_planner.PhaseStatus.FAILED
                 phase.error = str(e)
 
-                phase_results.append({
-                    "phase_id": phase.id,
-                    "description": phase.description,
-                    "module": phase.module_needed,
-                    "status": "failed",
-                    "error": str(e),
-                })
+                phase_results.append(
+                    {
+                        "phase_id": phase.id,
+                        "description": phase.description,
+                        "module": phase.module_needed,
+                        "status": "failed",
+                        "error": str(e),
+                    },
+                )
 
-                logger.error("mission_phase_echouee", phase=phase.id, error=str(e))
+                logger.exception("mission_phase_echouee", phase=phase.id, error=str(e))
 
         # ── 4. Finaliser ────────────────────────────────────────
         success_count = sum(1 for r in phase_results if r["status"] == "completed")
@@ -577,7 +613,7 @@ def run_mission(self, mission_objective: str) -> dict:
     try:
         return _execute()
     except Exception as e:
-        logger.error("mission_task_erreur", objective=mission_objective, error=str(e))
+        logger.exception("mission_task_erreur", objective=mission_objective, error=str(e))
         self.update_state(
             state="FAILURE",
             meta={"status": f"Échec de la mission : {e!s}", "progress": 0},
@@ -597,6 +633,7 @@ def _execute_phase(module: str, parameters: dict) -> dict:
 
     Returns:
         Résultat de l'exécution
+
     """
     module = module.lower().strip()
 
@@ -617,7 +654,7 @@ def _execute_phase(module: str, parameters: dict) -> dict:
             "os": result.get("os", ""),
         }
 
-    elif module == "osint":
+    if module == "osint":
         target = parameters.get("target", parameters.get("domain", ""))
         return {
             "module": "osint",
@@ -626,7 +663,7 @@ def _execute_phase(module: str, parameters: dict) -> dict:
             "note": "Le module OSINT en tâche Celery n'est pas encore implémenté",
         }
 
-    elif module == "exploit":
+    if module == "exploit":
         target = parameters.get("target", parameters.get("host", ""))
         service_hint = parameters.get("service_hint", "")
         return {
@@ -637,7 +674,7 @@ def _execute_phase(module: str, parameters: dict) -> dict:
             "note": "Le module Exploit en tâche Celery n'est pas encore implémenté",
         }
 
-    elif module == "proxy":
+    if module == "proxy":
         target = parameters.get("target", parameters.get("url", ""))
         return {
             "module": "proxy",
@@ -646,16 +683,15 @@ def _execute_phase(module: str, parameters: dict) -> dict:
             "note": "Le module Proxy en tâche Celery n'est pas encore implémenté",
         }
 
-    elif module == "sandbox":
+    if module == "sandbox":
         return {
             "module": "sandbox",
             "status": "not_implemented",
             "note": "Le module Sandbox en tâche Celery n'est pas encore implémenté",
         }
 
-    else:
-        return {
-            "module": module,
-            "status": "unknown_module",
-            "error": f"Module inconnu : {module}",
-        }
+    return {
+        "module": module,
+        "status": "unknown_module",
+        "error": f"Module inconnu : {module}",
+    }

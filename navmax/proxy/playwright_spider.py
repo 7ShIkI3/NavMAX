@@ -1,5 +1,4 @@
-"""
-Playwright Spider — crawler SPA/JavaScript pour NavMAX.
+"""Playwright Spider — crawler SPA/JavaScript pour NavMAX.
 
 Contrairement au crawler standard (httpx + HTML statique), ce spider utilise
 Playwright pour exécuter le JavaScript, attendre le rendu, et découvrir
@@ -12,7 +11,6 @@ Usage:
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import structlog
@@ -33,23 +31,25 @@ class PlaywrightNotAvailableError(Exception):
 @dataclass
 class SPAEndpoint:
     """Un endpoint découvert par le spider SPA."""
+
     url: str
     method: str = "GET"
     params: list[str] = field(default_factory=list)
     source: str = ""  # "link", "fetch", "xhr", "websocket", "route"
     status_code: int = 0
     content_type: str = ""
-    screenshot: Optional[str] = None  # Chemin screenshot si pris
+    screenshot: str | None = None  # Chemin screenshot si pris
 
 
 @dataclass
 class SPACrawlResult:
     """Résultat complet d'un crawl SPA."""
+
     base_url: str
     visited_pages: int
     discovered_endpoints: list[SPAEndpoint]
     javascript_errors: list[dict]  # {url, message, line}
-    console_logs: list[dict]       # {url, level, text}
+    console_logs: list[dict]  # {url, level, text}
     api_calls_captured: int
     websocket_endpoints: list[str]
     duration_ms: float
@@ -94,13 +94,14 @@ class PlaywrightSpider:
         self._checked = True
         try:
             import playwright  # noqa: F401
+
             self._playwright_available = True
             logger.info("playwright_spider_disponible")
             return True
         except ImportError:
             logger.warning(
                 "playwright_non_installé",
-                conseil="pip install playwright && playwright install chromium"
+                conseil="pip install playwright && playwright install chromium",
             )
             return False
 
@@ -118,11 +119,15 @@ class PlaywrightSpider:
             max_depth: Profondeur maximale de crawl
             max_pages: Nombre max de pages à visiter
             capture_screenshots: Prendre des screenshots
+
         """
         if not self._check_playwright():
-            raise PlaywrightNotAvailableError(
+            msg = (
                 "Playwright n'est pas installé. "
                 "pip install playwright && playwright install chromium"
+            )
+            raise PlaywrightNotAvailableError(
+                msg,
             )
 
         import playwright.async_api as pw
@@ -150,6 +155,7 @@ class PlaywrightSpider:
             )
 
             try:
+
                 async def visit_page(url: str, depth: int) -> None:
                     if url in visited or len(visited) >= max_pages:
                         return
@@ -161,20 +167,30 @@ class PlaywrightSpider:
                         # Capture des événements réseau
                         captured_requests: list[dict] = []
 
-                        async def on_request(request: pw.Request):
+                        async def on_request(request: pw.Request) -> None:
                             if request.resource_type in ("xhr", "fetch"):
-                                captured_requests.append({
-                                    "url": request.url,
-                                    "method": request.method,
-                                    "resource_type": request.resource_type,
-                                })
+                                captured_requests.append(
+                                    {
+                                        "url": request.url,
+                                        "method": request.method,
+                                        "resource_type": request.resource_type,
+                                    },
+                                )
 
-                        async def on_response(response: pw.Response):
+                        async def on_response(response: pw.Response) -> None:
                             req_url = response.url
                             # Ignorer les ressources statiques
-                            if any(ext in req_url for ext in (
-                                ".js", ".css", ".png", ".jpg", ".woff", ".ico"
-                            )):
+                            if any(
+                                ext in req_url
+                                for ext in (
+                                    ".js",
+                                    ".css",
+                                    ".png",
+                                    ".jpg",
+                                    ".woff",
+                                    ".ico",
+                                )
+                            ):
                                 return
                             if req_url.startswith(base_url) and response.status < 400:
                                 ep = SPAEndpoint(
@@ -189,18 +205,22 @@ class PlaywrightSpider:
                         page.on("response", on_response)
 
                         # Capture console et erreurs
-                        async def on_console(msg: pw.ConsoleMessage):
-                            console_logs.append({
-                                "url": url,
-                                "level": msg.type,
-                                "text": msg.text,
-                            })
+                        async def on_console(msg: pw.ConsoleMessage) -> None:
+                            console_logs.append(
+                                {
+                                    "url": url,
+                                    "level": msg.type,
+                                    "text": msg.text,
+                                },
+                            )
 
-                        async def on_pageerror(error: pw.Error):
-                            js_errors.append({
-                                "url": url,
-                                "message": str(error),
-                            })
+                        async def on_pageerror(error: pw.Error) -> None:
+                            js_errors.append(
+                                {
+                                    "url": url,
+                                    "message": str(error),
+                                },
+                            )
 
                         page.on("console", on_console)
                         page.on("pageerror", on_pageerror)
@@ -229,10 +249,11 @@ class PlaywrightSpider:
 
                             if capture_screenshots and depth == 0:
                                 import tempfile
+
                                 fname = tempfile.mktemp(suffix=".png", prefix="navmax_spa_")
                                 await page.screenshot(path=fname, full_page=True)
                                 for ep in endpoints:
-                                    if ep.source == "xhr" or ep.source == "fetch":
+                                    if ep.source in {"xhr", "fetch"}:
                                         ep.screenshot = fname
 
                             # Découvrir les liens pour crawler plus loin
@@ -273,20 +294,21 @@ class PlaywrightSpider:
                                     ename = inp["name"]
                                     if ename:
                                         endpoint_url = (
-                                            urljoin(url, form["action"])
-                                            if form["action"] else url
+                                            urljoin(url, form["action"]) if form["action"] else url
                                         )
-                                        endpoints.append(SPAEndpoint(
-                                            url=endpoint_url,
-                                            method=form["method"],
-                                            params=[ename],
-                                            source="form",
-                                        ))
+                                        endpoints.append(
+                                            SPAEndpoint(
+                                                url=endpoint_url,
+                                                method=form["method"],
+                                                params=[ename],
+                                                source="form",
+                                            ),
+                                        )
 
                         except pw.TimeoutError:
                             logger.warning("page_timeout", url=url)
                         except Exception as e:
-                            logger.error("page_error", url=url, error=str(e))
+                            logger.exception("page_error", url=url, error=str(e))
                         finally:
                             await page.close()
 
@@ -300,9 +322,7 @@ class PlaywrightSpider:
                             batch.append((url, depth))
 
                     if batch:
-                        await asyncio.gather(*[
-                            visit_page(url, depth) for url, depth in batch
-                        ])
+                        await asyncio.gather(*[visit_page(url, depth) for url, depth in batch])
 
             finally:
                 await browser.close()
@@ -315,9 +335,7 @@ class PlaywrightSpider:
             discovered_endpoints=endpoints,
             javascript_errors=js_errors,
             console_logs=console_logs,
-            api_calls_captured=sum(
-                1 for ep in endpoints if ep.source in ("xhr", "fetch")
-            ),
+            api_calls_captured=sum(1 for ep in endpoints if ep.source in ("xhr", "fetch")),
             websocket_endpoints=list(ws_endpoints),
             duration_ms=elapsed,
         )
@@ -335,6 +353,7 @@ async def crawl_with_fallback(
 
     Returns:
         SPACrawlResult si Playwright dispo, None sinon (utiliser crawler standard)
+
     """
     spider = PlaywrightSpider()
     try:

@@ -1,12 +1,12 @@
-"""
-MissionOrchestrator — exécution autonome "One-Click" de missions.
+"""MissionOrchestrator — exécution autonome "One-Click" de missions.
 
 Reçoit un objectif en langage naturel, planifie, exécute les phases
 dans l'ordre topologique, et génère un rapport.
 """
 
+import contextlib
 from dataclasses import dataclass, field
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -15,15 +15,16 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class MissionResult:
     """Résultat d'une mission exécutée."""
+
     objective: str
-    target: Optional[str] = None
+    target: str | None = None
     phases_executed: int = 0
     phases_succeeded: int = 0
     phases_failed: int = 0
     results: dict[str, dict] = field(default_factory=dict)
-    report: Optional[str] = None
+    report: str | None = None
     duration_seconds: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def success_rate(self) -> float:
@@ -41,21 +42,32 @@ class MissionOrchestrator:
         print(f"{result.phases_succeeded}/{result.phases_executed} phases OK")
     """
 
-    def __init__(self, planner=None, scanner=None, exploit_loader=None,
-                 osint_orchestrator=None, audit=None, ai_engine=None,
-                 reporter=None):
-        self.planner = planner        # MissionPlanner
-        self.scanner = scanner         # Scanner (TCP + contextuel)
-        self.exploits = exploit_loader # ExploitLoader
-        self.osint = osint_orchestrator # OSINTOrchestrator
-        self.audit = audit             # AuditLogger
-        self.ai = ai_engine            # AIEngine
-        self.reporter = reporter       # ReportGenerator
+    def __init__(
+        self,
+        planner=None,
+        scanner=None,
+        exploit_loader=None,
+        osint_orchestrator=None,
+        audit=None,
+        ai_engine=None,
+        reporter=None,
+    ) -> None:
+        self.planner = planner  # MissionPlanner
+        self.scanner = scanner  # Scanner (TCP + contextuel)
+        self.exploits = exploit_loader  # ExploitLoader
+        self.osint = osint_orchestrator  # OSINTOrchestrator
+        self.audit = audit  # AuditLogger
+        self.ai = ai_engine  # AIEngine
+        self.reporter = reporter  # ReportGenerator
 
-    async def execute(self, objective: str, *,
-                      target: Optional[str] = None,
-                      constraints: Optional[str] = None,
-                      dry_run: bool = False) -> MissionResult:
+    async def execute(
+        self,
+        objective: str,
+        *,
+        target: str | None = None,
+        constraints: str | None = None,
+        dry_run: bool = False,
+    ) -> MissionResult:
         """Exécute une mission complète.
 
         Args:
@@ -66,8 +78,10 @@ class MissionOrchestrator:
 
         Returns:
             MissionResult avec le résumé
+
         """
         import time
+
         t_start = time.monotonic()
 
         result = MissionResult(objective=objective, target=target)
@@ -80,7 +94,9 @@ class MissionOrchestrator:
                 return result
 
             plan = await self.planner.plan(
-                objective, target=target, constraints=constraints
+                objective,
+                target=target,
+                constraints=constraints,
             )
             logger.info("mission_planned", phases=plan.phase_count)
 
@@ -91,8 +107,7 @@ class MissionOrchestrator:
 
             # Étape 2: Exécuter les phases dans l'ordre topologique
             for phase in plan.topological_order():
-                logger.info("executing_phase", phase=phase.id,
-                            module=phase.module_needed)
+                logger.info("executing_phase", phase=phase.id, module=phase.module_needed)
 
                 # Audit
                 audit_ctx = None
@@ -111,34 +126,34 @@ class MissionOrchestrator:
                     phase_result = await self._execute_phase(phase)
 
                     if audit_ctx:
-                        if isinstance(audit_ctx, object) and hasattr(audit_ctx, 'result_summary'):
+                        if isinstance(audit_ctx, object) and hasattr(audit_ctx, "result_summary"):
                             audit_ctx.result_summary = phase_result
 
                     result.results[phase.id] = phase_result or {}
                     result.phases_succeeded += 1
 
                 except Exception as e:
-                    logger.error("phase_failed", phase=phase.id, error=str(e))
+                    logger.exception("phase_failed", phase=phase.id, error=str(e))
                     result.results[phase.id] = {"error": str(e)}
                     result.phases_failed += 1
                 finally:
                     if audit_ctx:
-                        try:
+                        with contextlib.suppress(Exception):
                             await audit_ctx.__aexit__(None, None, None)
-                        except Exception:
-                            pass
 
                 result.phases_executed += 1
 
         except Exception as e:
-            logger.error("mission_failed", error=str(e))
+            logger.exception("mission_failed", error=str(e))
             result.error = str(e)
 
         result.duration_seconds = time.monotonic() - t_start
-        logger.info("mission_complete",
-                     phases=result.phases_executed,
-                     succeeded=result.phases_succeeded,
-                     failed=result.phases_failed)
+        logger.info(
+            "mission_complete",
+            phases=result.phases_executed,
+            succeeded=result.phases_succeeded,
+            failed=result.phases_failed,
+        )
 
         # Étape 3: Générer le rapport
         if self.reporter:
@@ -149,7 +164,7 @@ class MissionOrchestrator:
 
         return result
 
-    async def _execute_phase(self, phase) -> Optional[dict]:
+    async def _execute_phase(self, phase) -> dict | None:
         """Exécute une phase selon son module."""
         module = phase.module_needed
         params = phase.parameters
@@ -160,14 +175,17 @@ class MissionOrchestrator:
             ports = self._parse_ports(ports_str)
 
             # Utiliser le scanner contextuel si dispo
-            if hasattr(self.scanner, 'scan'):
+            if hasattr(self.scanner, "scan"):
                 results = await self.scanner.scan(target, ports=ports)
                 return {
                     "hosts_scanned": 1,
-                    "open_ports": len([r for r in results if not (hasattr(r, 'error') and r.error)]),
+                    "open_ports": len(
+                        [r for r in results if not (hasattr(r, "error") and r.error)],
+                    ),
                     "services": [
                         {"port": r.port, "service": r.service, "version": r.version}
-                        for r in results if not (hasattr(r, 'error') and r.error)
+                        for r in results
+                        if not (hasattr(r, "error") and r.error)
                     ],
                 }
 
@@ -176,7 +194,7 @@ class MissionOrchestrator:
 
         elif module == "osint" and self.osint:
             target = params.get("target", "")
-            if hasattr(self.osint, 'investigate_domain'):
+            if hasattr(self.osint, "investigate_domain"):
                 await self.osint.investigate_domain(target)
                 return {"status": "completed", "target": target}
 
@@ -187,7 +205,9 @@ class MissionOrchestrator:
             # Chercher un exploit correspondant
             results = self.exploits.search(query=service_hint)
             if results:
-                exploit_name = results[0] if isinstance(results[0], str) else results[0].get("name", "")
+                exploit_name = (
+                    results[0] if isinstance(results[0], str) else results[0].get("name", "")
+                )
                 return {
                     "exploit_found": True,
                     "exploit": exploit_name,
@@ -205,7 +225,7 @@ class MissionOrchestrator:
 
     async def _execute_ad_phase(self, params: dict) -> dict:
         """Exécute une phase d'énumération AD."""
-        from navmax.ad.connector import ADConfig, ADAuthMethod
+        from navmax.ad.connector import ADAuthMethod, ADConfig
         from navmax.ad.enumerator import ADEnumerator
 
         server = params.get("server", params.get("target", ""))
@@ -225,15 +245,14 @@ class MissionOrchestrator:
             domain=domain,
             username=username or None,
             password=password or None,
-            auth_method=(
-                ADAuthMethod.SIMPLE if username else ADAuthMethod.ANONYMOUS
-            ),
+            auth_method=(ADAuthMethod.SIMPLE if username else ADAuthMethod.ANONYMOUS),
             use_ssl=use_ssl,
         )
 
         connector = None  # type: ignore[assignment]
         try:
             from navmax.ad.connector import ADConnector
+
             connector = ADConnector(config)
             await connector.connect()
 

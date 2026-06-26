@@ -1,5 +1,4 @@
-"""
-Scanner de vulnérabilités web — détection automatisée.
+"""Scanner de vulnérabilités web — détection automatisée.
 
 Vulnérabilités détectées :
 - XSS reflété
@@ -10,12 +9,10 @@ Vulnérabilités détectées :
 - Information disclosure
 """
 
-import asyncio
 import re
 import time
-from dataclasses import dataclass, field
-from typing import Any
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from dataclasses import dataclass
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
 
@@ -27,6 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class Vulnerability:
     """Une vulnérabilité web détectée."""
+
     name: str
     severity: str  # info | low | medium | high | critical
     url: str
@@ -46,7 +44,7 @@ XSS_PAYLOADS = [
     '"><script>alert("NavMAX_XSS")</script>',
     '<img src=x onerror=alert("NavMAX_XSS")>',
     '" onmouseover="alert(\'NavMAX_XSS\')"',
-    '\' onfocus="alert(\'NavMAX_XSS\')" autofocus',
+    "' onfocus=\"alert('NavMAX_XSS')\" autofocus",
     'javascript:alert("NavMAX_XSS")',
 ]
 
@@ -54,7 +52,7 @@ SQLI_ERROR_PAYLOADS = [
     "'",
     "''",
     "' OR '1'='1",
-    "\" OR \"1\"=\"1",
+    '" OR "1"="1',
     "' OR 1=1--",
     "') OR ('1'='1",
     "1' AND 1=1--",
@@ -113,7 +111,10 @@ PATH_TRAVERSAL_PATTERNS = [
 
 SECURITY_HEADERS = {
     "Strict-Transport-Security": ("medium", "HSTS manquant — risque de downgrade HTTPS"),
-    "Content-Security-Policy": ("medium", "CSP manquant — pas de restriction sur les sources de contenu"),
+    "Content-Security-Policy": (
+        "medium",
+        "CSP manquant — pas de restriction sur les sources de contenu",
+    ),
     "X-Content-Type-Options": ("low", "X-Content-Type-Options manquant — risque de MIME sniffing"),
     "X-Frame-Options": ("medium", "X-Frame-Options manquant — risque de clickjacking"),
     "X-XSS-Protection": ("low", "X-XSS-Protection manquant"),
@@ -121,17 +122,23 @@ SECURITY_HEADERS = {
 }
 
 INFO_DISCLOSURE_PATTERNS = [
-    (r"(?:X-AspNet-Version|X-Powered-By|Server):\s*(.+)", "low", "En-tête {header} exposé : {value}"),
+    (
+        r"(?:X-AspNet-Version|X-Powered-By|Server):\s*(.+)",
+        "low",
+        "En-tête {header} exposé : {value}",
+    ),
     (r"<!--.*?TODO.*?-->", "low", "Commentaire TODO exposé"),
-    (r"(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*[\"']?[\w-]+[\"']?", "high", "Possible credentials dans la réponse"),
+    (
+        r"(?:password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*[\"']?[\w-]+[\"']?",
+        "high",
+        "Possible credentials dans la réponse",
+    ),
     (r"<!--.*?FIXME.*?-->", "low", "Commentaire FIXME exposé"),
 ]
 
 
 class WebScanner:
-    """
-    Scanner de vulnérabilités web automatisé.
-    """
+    """Scanner de vulnérabilités web automatisé."""
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
@@ -159,14 +166,14 @@ class WebScanner:
         params: dict[str, str] | None = None,
         body: str | None = None,
     ) -> list[Vulnerability]:
-        """
-        Scan complet d'une URL.
+        """Scan complet d'une URL.
 
         Args:
             url: URL à scanner
             method: GET ou POST
             params: Paramètres de requête (pour GET)
             body: Corps de la requête (pour POST)
+
         """
         vulns: list[Vulnerability] = []
         client = await self._get_client()
@@ -204,34 +211,40 @@ class WebScanner:
     # Checks individuels
     # ------------------------------------------------------------------
     async def _check_security_headers(
-        self, client: httpx.AsyncClient, url: str,
+        self,
+        client: httpx.AsyncClient,
+        url: str,
     ) -> list[Vulnerability]:
         vulns: list[Vulnerability] = []
         try:
             resp = await client.head(url)
-            resp_headers_lower = {k.lower(): k for k in resp.headers.keys()}
+            resp_headers_lower = {k.lower(): k for k in resp.headers}
             for header, (severity, description) in SECURITY_HEADERS.items():
                 if header.lower() not in resp_headers_lower:
-                    vulns.append(Vulnerability(
-                        name=f"Header sécurité manquant : {header}",
-                        severity=severity,
-                        url=url,
-                        description=description,
-                        remediation=f"Ajouter l'en-tête {header} dans la configuration du serveur",
-                        cwe="CWE-693",
-                    ))
+                    vulns.append(
+                        Vulnerability(
+                            name=f"Header sécurité manquant : {header}",
+                            severity=severity,
+                            url=url,
+                            description=description,
+                            remediation=f"Ajouter l'en-tête {header} dans la configuration du serveur",
+                            cwe="CWE-693",
+                        ),
+                    )
         except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
             logger.debug("scan_headers_échec", url=url, erreur=str(e))
         return vulns
 
     async def _check_info_disclosure(
-        self, client: httpx.AsyncClient, url: str,
+        self,
+        client: httpx.AsyncClient,
+        url: str,
     ) -> list[Vulnerability]:
         vulns: list[Vulnerability] = []
         try:
             resp = await client.get(url)
             text = resp.text[:100_000]
-            resp_headers_text = "\n".join(f"{k}: {v}" for k, v in resp.headers.items())
+            "\n".join(f"{k}: {v}" for k, v in resp.headers.items())
 
             for pattern, severity, template in INFO_DISCLOSURE_PATTERNS:
                 for match in re.finditer(pattern, text, re.IGNORECASE):
@@ -240,15 +253,17 @@ class WebScanner:
                         header=match.group(1) if match.lastindex else evidence,
                         value=evidence,
                     )
-                    vulns.append(Vulnerability(
-                        name="Information disclosure",
-                        severity=severity,
-                        url=url,
-                        evidence=evidence,
-                        description=description,
-                        remediation="Supprimer les informations sensibles des réponses HTTP",
-                        cwe="CWE-200",
-                    ))
+                    vulns.append(
+                        Vulnerability(
+                            name="Information disclosure",
+                            severity=severity,
+                            url=url,
+                            evidence=evidence,
+                            description=description,
+                            remediation="Supprimer les informations sensibles des réponses HTTP",
+                            cwe="CWE-200",
+                        ),
+                    )
         except (httpx.TimeoutException, httpx.RequestError, OSError) as e:
             logger.debug("scan_info_échec", url=url, erreur=str(e))
         return vulns
@@ -265,7 +280,7 @@ class WebScanner:
         if not params:
             return vulns
 
-        for param_name in params.keys():
+        for param_name in params:
             for payload in XSS_PAYLOADS[:3]:  # Limiter à 3 payloads par paramètre
                 try:
                     test_params = dict(params)
@@ -281,17 +296,19 @@ class WebScanner:
                         resp = await client.post(url, data=test_params)
 
                     if payload in resp.text:
-                        vulns.append(Vulnerability(
-                            name="XSS reflété (Cross-Site Scripting)",
-                            severity="high",
-                            url=url,
-                            parameter=param_name,
-                            payload=payload,
-                            evidence=f"Le payload {payload[:50]} est reflété dans la réponse",
-                            description=f"Le paramètre '{param_name}' reflète le payload XSS sans échappement.",
-                            remediation="Échapper les sorties HTML (htmlspecialchars, etc.) et valider les entrées.",
-                            cwe="CWE-79",
-                        ))
+                        vulns.append(
+                            Vulnerability(
+                                name="XSS reflété (Cross-Site Scripting)",
+                                severity="high",
+                                url=url,
+                                parameter=param_name,
+                                payload=payload,
+                                evidence=f"Le payload {payload[:50]} est reflété dans la réponse",
+                                description=f"Le paramètre '{param_name}' reflète le payload XSS sans échappement.",
+                                remediation="Échapper les sorties HTML (htmlspecialchars, etc.) et valider les entrées.",
+                                cwe="CWE-79",
+                            ),
+                        )
                         break  # Un seul payload suffit pour confirmer
                 except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
@@ -310,7 +327,7 @@ class WebScanner:
         if not params:
             return vulns
 
-        for param_name in params.keys():
+        for param_name in params:
             for payload in SQLI_ERROR_PAYLOADS[:4]:
                 try:
                     test_params = dict(params)
@@ -324,17 +341,19 @@ class WebScanner:
 
                     for pattern in SQLI_ERROR_PATTERNS:
                         if re.search(pattern, resp.text, re.IGNORECASE):
-                            vulns.append(Vulnerability(
-                                name="SQL Injection (error-based)",
-                                severity="critical",
-                                url=url,
-                                parameter=param_name,
-                                payload=payload,
-                                evidence=f"Erreur SQL détectée : {pattern}",
-                                description=f"Injection SQL détectée via le paramètre '{param_name}'.",
-                                remediation="Utiliser des requêtes paramétrées (prepared statements).",
-                                cwe="CWE-89",
-                            ))
+                            vulns.append(
+                                Vulnerability(
+                                    name="SQL Injection (error-based)",
+                                    severity="critical",
+                                    url=url,
+                                    parameter=param_name,
+                                    payload=payload,
+                                    evidence=f"Erreur SQL détectée : {pattern}",
+                                    description=f"Injection SQL détectée via le paramètre '{param_name}'.",
+                                    remediation="Utiliser des requêtes paramétrées (prepared statements).",
+                                    cwe="CWE-89",
+                                ),
+                            )
                             return vulns  # Une seule suffit
                 except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
@@ -352,7 +371,7 @@ class WebScanner:
         if not params:
             return vulns
 
-        for param_name in params.keys():
+        for param_name in params:
             test_params = dict(params)
             test_params[param_name] = SQLI_TIME_PAYLOADS[0]  # SLEEP(2)
 
@@ -367,24 +386,28 @@ class WebScanner:
                 elapsed = time.monotonic() - t0
 
                 if elapsed > 1.8:  # Le serveur a dormi ~2 secondes
-                    vulns.append(Vulnerability(
-                        name="SQL Injection (time-based blind)",
-                        severity="high",
-                        url=url,
-                        parameter=param_name,
-                        payload=SQLI_TIME_PAYLOADS[0],
-                        evidence=f"Temps de réponse anormal : {elapsed:.1f}s (attendu < 0.5s)",
-                        description=f"Blind SQLi time-based via le paramètre '{param_name}'.",
-                        remediation="Utiliser des requêtes paramétrées (prepared statements).",
-                        cwe="CWE-89",
-                    ))
+                    vulns.append(
+                        Vulnerability(
+                            name="SQL Injection (time-based blind)",
+                            severity="high",
+                            url=url,
+                            parameter=param_name,
+                            payload=SQLI_TIME_PAYLOADS[0],
+                            evidence=f"Temps de réponse anormal : {elapsed:.1f}s (attendu < 0.5s)",
+                            description=f"Blind SQLi time-based via le paramètre '{param_name}'.",
+                            remediation="Utiliser des requêtes paramétrées (prepared statements).",
+                            cwe="CWE-89",
+                        ),
+                    )
             except (httpx.TimeoutException, httpx.RequestError, OSError):
                 continue
 
         return vulns
 
     async def _check_path_traversal(
-        self, client: httpx.AsyncClient, url: str,
+        self,
+        client: httpx.AsyncClient,
+        url: str,
     ) -> list[Vulnerability]:
         vulns: list[Vulnerability] = []
         parsed = urlparse(url)
@@ -394,9 +417,13 @@ class WebScanner:
             return vulns
 
         params = parse_qs(parsed.query)
-        path_params = [k for k in params if any(
-            hint in k.lower() for hint in ("file", "path", "page", "doc", "template", "include")
-        )]
+        path_params = [
+            k
+            for k in params
+            if any(
+                hint in k.lower() for hint in ("file", "path", "page", "doc", "template", "include")
+            )
+        ]
 
         for param_name in path_params:
             for payload in PATH_TRAVERSAL_PAYLOADS[:4]:
@@ -408,17 +435,19 @@ class WebScanner:
 
                     for pattern in PATH_TRAVERSAL_PATTERNS:
                         if re.search(pattern, resp.text, re.IGNORECASE):
-                            vulns.append(Vulnerability(
-                                name="Path Traversal",
-                                severity="high",
-                                url=url,
-                                parameter=param_name,
-                                payload=payload,
-                                evidence=f"Contenu de fichier système détecté via {payload}",
-                                description=f"Lecture de fichiers arbitraires via le paramètre '{param_name}'.",
-                                remediation="Valider et sandboxer les chemins de fichiers. Utiliser des chemins canoniques.",
-                                cwe="CWE-22",
-                            ))
+                            vulns.append(
+                                Vulnerability(
+                                    name="Path Traversal",
+                                    severity="high",
+                                    url=url,
+                                    parameter=param_name,
+                                    payload=payload,
+                                    evidence=f"Contenu de fichier système détecté via {payload}",
+                                    description=f"Lecture de fichiers arbitraires via le paramètre '{param_name}'.",
+                                    remediation="Valider et sandboxer les chemins de fichiers. Utiliser des chemins canoniques.",
+                                    cwe="CWE-22",
+                                ),
+                            )
                             return vulns
                 except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
@@ -432,8 +461,11 @@ class WebScanner:
     ) -> list[Vulnerability]:
         vulns: list[Vulnerability] = []
         redirect_params = [
-            k for k in params if any(
-                hint in k.lower() for hint in ("redirect", "url", "next", "return", "goto", "target", "dest")
+            k
+            for k in params
+            if any(
+                hint in k.lower()
+                for hint in ("redirect", "url", "next", "return", "goto", "target", "dest")
             )
         ]
 
@@ -449,17 +481,19 @@ class WebScanner:
                     if resp.status_code in (301, 302, 303, 307, 308):
                         location = resp.headers.get("Location", "")
                         if "evil.com" in location:
-                            vulns.append(Vulnerability(
-                                name="Open Redirect",
-                                severity="medium",
-                                url=url,
-                                parameter=param_name,
-                                payload=payload,
-                                evidence=f"Redirection vers {location}",
-                                description=f"Le paramètre '{param_name}' permet une redirection non validée.",
-                                remediation="Utiliser une whitelist de destinations ou des tokens de redirection.",
-                                cwe="CWE-601",
-                            ))
+                            vulns.append(
+                                Vulnerability(
+                                    name="Open Redirect",
+                                    severity="medium",
+                                    url=url,
+                                    parameter=param_name,
+                                    payload=payload,
+                                    evidence=f"Redirection vers {location}",
+                                    description=f"Le paramètre '{param_name}' permet une redirection non validée.",
+                                    remediation="Utiliser une whitelist de destinations ou des tokens de redirection.",
+                                    cwe="CWE-601",
+                                ),
+                            )
                 except (httpx.TimeoutException, httpx.RequestError, OSError):
                     continue
         return vulns

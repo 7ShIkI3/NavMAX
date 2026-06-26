@@ -1,6 +1,4 @@
-"""
-SDK client NavMAX — import principal.
-"""
+"""SDK client NavMAX — import principal."""
 
 from .client import NavMAXClient, NavMAXError
 

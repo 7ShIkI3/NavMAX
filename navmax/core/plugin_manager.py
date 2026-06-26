@@ -1,5 +1,4 @@
-"""
-Système de plugins modulaire pour NavMAX.
+"""Système de plugins modulaire pour NavMAX.
 ===========================================
 
 Découverte par dossier (~/.navmax/plugins/<nom>/plugin.py + manifest.json),
@@ -9,24 +8,28 @@ et intégration API REST.
 Catégories supportées : scanner, exploit, osint, proxy, ad, firewall, reporting, ai.
 """
 
-from __future__ import annotations
+from __future__ import annotations as _annotations
 
 import abc
 import importlib.util
 import json
-import os
 import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from navmax.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from fastapi import APIRouter
 
 logger = get_logger(__name__)
 
 # ── registre global (peuplé par le décorateur @register_plugin) ──────────────
-_PLUGIN_REGISTRY: dict[str, type["PluginBase"]] = {}
+_PLUGIN_REGISTRY: dict[str, type[PluginBase]] = {}
 
 
 def register_plugin(
@@ -36,7 +39,7 @@ def register_plugin(
     author: str = "",
     description: str = "",
     category: str = "",
-) -> Callable[[type["PluginBase"]], type["PluginBase"]]:
+) -> Callable[[type[PluginBase]], type[PluginBase]]:
     """Décorateur : enregistre une classe de plugin dans le registre global.
 
     Args:
@@ -53,19 +56,27 @@ def register_plugin(
             ...
 
     La classe doit hériter de *PluginBase*.
+
     """
     VALID_CATEGORIES = {"scanner", "exploit", "osint", "proxy", "ad", "firewall", "reporting", "ai"}
     if category and category not in VALID_CATEGORIES:
-        raise ValueError(
+        msg = (
             f"Catégorie '{category}' invalide. "
             f"Choisir parmi : {', '.join(sorted(VALID_CATEGORIES))}"
         )
+        raise ValueError(
+            msg,
+        )
 
-    def _decorator(cls: type["PluginBase"]) -> type["PluginBase"]:
+    def _decorator(cls: type[PluginBase]) -> type[PluginBase]:
         if not issubclass(cls, PluginBase):
-            raise TypeError(f"@{register_plugin.__name__} ne peut être appliqué qu'à une sous-classe de PluginBase.")
+            msg = f"@{register_plugin.__name__} ne peut être appliqué qu'à une sous-classe de PluginBase."
+            raise TypeError(
+                msg,
+            )
         if name in _PLUGIN_REGISTRY:
-            raise KeyError(f"Un plugin nommé '{name}' est déjà enregistré.")
+            msg = f"Un plugin nommé '{name}' est déjà enregistré."
+            raise KeyError(msg)
         # Attacher les métadonnées comme attributs de classe
         cls._meta_name = name
         cls._meta_version = version
@@ -152,6 +163,7 @@ class PluginBase(abc.ABC):
         Returns:
             Dictionnaire avec au moins les clés ``status`` et ``data``.
             Exemple : {"status": "ok", "data": {...}}.
+
         """
 
     async def cleanup(self) -> None:
@@ -169,7 +181,8 @@ def _load_module_from_path(module_path: str | Path) -> Any:
     """
     module_path = Path(module_path).resolve()
     if not module_path.exists():
-        raise FileNotFoundError(f"Plugin introuvable : {module_path}")
+        msg = f"Plugin introuvable : {module_path}"
+        raise FileNotFoundError(msg)
 
     # Nom de module unique basé sur le chemin absolu pour éviter les collisions
     stem = module_path.stem  # ex. "plugin"
@@ -177,7 +190,8 @@ def _load_module_from_path(module_path: str | Path) -> Any:
 
     spec = importlib.util.spec_from_file_location(mod_name, module_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Impossible de créer un spec pour {module_path}")
+        msg = f"Impossible de créer un spec pour {module_path}"
+        raise ImportError(msg)
 
     mod = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = mod
@@ -229,6 +243,7 @@ class PluginManager:
 
         Returns:
             Liste des descripteurs de plugins découverts.
+
         """
         base = Path(plugin_dir).expanduser().resolve()
         if not base.is_dir():
@@ -282,6 +297,7 @@ class PluginManager:
 
         Returns:
             L'instance du plugin, ou ``None`` en cas d'échec.
+
         """
         # 0. Déjà chargé ?
         if name in self._loaded:
@@ -305,9 +321,9 @@ class PluginManager:
             return None
 
         try:
-            mod = _load_module_from_path(plugin_py)
+            _load_module_from_path(plugin_py)
         except (ImportError, AttributeError, FileNotFoundError) as exc:
-            logger.error("plugin_chargement_erreur", plugin=name, error=str(exc))
+            logger.exception("plugin_chargement_erreur", plugin=name, error=str(exc))
             # fallback : peut-être que la classe vient du registre déjà importé
             if name in _PLUGIN_REGISTRY:
                 cls = _PLUGIN_REGISTRY[name]
@@ -327,7 +343,7 @@ class PluginManager:
         try:
             await instance.initialize()
         except (ImportError, AttributeError, RuntimeError, OSError) as e:
-            logger.error("plugin_initialisation_erreur", plugin=name, error=str(e))
+            logger.exception("plugin_initialisation_erreur", plugin=name, error=str(e))
             return None
 
         self._loaded[name] = instance
@@ -342,6 +358,7 @@ class PluginManager:
 
         Returns:
             Liste de dictionnaires contenant les métadonnées et l'état de chaque plugin.
+
         """
         result: list[dict[str, Any]] = []
 
@@ -349,17 +366,19 @@ class PluginManager:
         seen: set[str] = set()
         for desc in self._descriptors.values():
             seen.add(desc.name)
-            result.append({
-                "name": desc.name,
-                "version": desc.version,
-                "author": desc.author,
-                "description": desc.description,
-                "category": desc.category,
-                "loaded": desc.loaded,
-                "instance_id": desc.instance_id,
-                "path": desc.path,
-                "extra": desc.extra,
-            })
+            result.append(
+                {
+                    "name": desc.name,
+                    "version": desc.version,
+                    "author": desc.author,
+                    "description": desc.description,
+                    "category": desc.category,
+                    "loaded": desc.loaded,
+                    "instance_id": desc.instance_id,
+                    "path": desc.path,
+                    "extra": desc.extra,
+                },
+            )
 
         # Plugins dans le registre global mais pas (encore) découverts par dossier
         for reg_name, cls in _PLUGIN_REGISTRY.items():
@@ -369,17 +388,19 @@ class PluginManager:
             instance_id = ""
             if loaded:
                 instance_id = self._loaded[reg_name].instance_id
-            result.append({
-                "name": reg_name,
-                "version": getattr(cls, "_meta_version", ""),
-                "author": getattr(cls, "_meta_author", ""),
-                "description": getattr(cls, "_meta_description", ""),
-                "category": getattr(cls, "_meta_category", ""),
-                "loaded": loaded,
-                "instance_id": instance_id,
-                "path": "",
-                "extra": {},
-            })
+            result.append(
+                {
+                    "name": reg_name,
+                    "version": getattr(cls, "_meta_version", ""),
+                    "author": getattr(cls, "_meta_author", ""),
+                    "description": getattr(cls, "_meta_description", ""),
+                    "category": getattr(cls, "_meta_category", ""),
+                    "loaded": loaded,
+                    "instance_id": instance_id,
+                    "path": "",
+                    "extra": {},
+                },
+            )
 
         return result
 
@@ -392,6 +413,7 @@ class PluginManager:
 
         Returns:
             ``True`` si le plugin a été déchargé, ``False`` s'il n'était pas chargé.
+
         """
         instance = self._loaded.pop(name, None)
         if instance is None:
@@ -419,6 +441,7 @@ class PluginManager:
 
         Returns:
             Résultat de ``execute()``, ou dictionnaire d'erreur.
+
         """
         instance = self._loaded.get(name)
         if instance is None:
@@ -426,16 +449,15 @@ class PluginManager:
         if not instance.initialized:
             return {"status": "error", "message": f"Plugin '{name}' non initialisé."}
         try:
-            result = await instance.execute(**kwargs)
-            return result
+            return await instance.execute(**kwargs)
         except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-            logger.error("plugin_execution_erreur", plugin=name, error=str(exc))
+            logger.exception("plugin_execution_erreur", plugin=name, error=str(exc))
             return {"status": "error", "message": str(exc)}
 
     # ── hooks pour le registre global ───────────────────────────────────────
 
     @classmethod
-    def registered_plugins(cls) -> dict[str, type["PluginBase"]]:
+    def registered_plugins(cls) -> dict[str, type[PluginBase]]:
         """Retourne une copie du registre global (lecture seule)."""
         return dict(_PLUGIN_REGISTRY)
 
@@ -448,19 +470,22 @@ class PluginManager:
 # ── helpers d'intégration API REST ───────────────────────────────────────────
 
 
-def make_plugin_api_routes(manager: PluginManager) -> list[dict[str, Any]]:
-    """Génère les définitions de routes REST pour FastAPI à partir du manager.
+def make_plugin_api_routes(manager: PluginManager) -> APIRouter:
+    """Génère un routeur FastAPI avec les endpoints pour les plugins.
+
+    Args:
+        manager: Instance du PluginManager.
 
     Returns:
-        Liste de dictionnaires utilisables comme routes FastAPI.
-        Chaque dict contient ``method``, ``path``, ``handler``, ``summary``.
+        APIRouter FastAPI pré-configuré avec les routes plugins.
 
     Usage::
 
         manager = PluginManager()
         manager.discover_plugins("~/.navmax/plugins")
-        for route in make_plugin_api_routes(manager):
-            app.add_api_route(**route)
+        router = make_plugin_api_routes(manager)
+        app.include_router(router)
+
     """
     from fastapi import APIRouter
 
@@ -475,6 +500,7 @@ def make_plugin_api_routes(manager: PluginManager) -> list[dict[str, Any]]:
         result = await manager.execute_plugin(name, **(payload or {}))
         if result.get("status") == "error":
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=400, content=result)
         return result
 
