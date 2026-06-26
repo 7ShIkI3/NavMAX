@@ -24,7 +24,7 @@ from navmax.core.config import config
 from navmax.core.logging import get_logger, setup_logging
 from navmax.db import create_all
 
-from .routes import ad, ai, exploit, firewall, nuclei, osint, proxy, scans, targets, workspaces
+from .routes import ad, ai, exploit, firewall, nuclei, osint, proxy, scans, settings, targets, workspaces
 
 logger = get_logger(__name__)
 
@@ -183,6 +183,13 @@ app.include_router(
     ad.router,
     tags=["Active Directory"],
     dependencies=admin_only,
+)
+
+# Settings / API Keys (operator+)
+app.include_router(
+    settings.router,
+    tags=["Settings"],
+    dependencies=operator_or_admin,
 )
 
 # Firewall (sensible → admin)

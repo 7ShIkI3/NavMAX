@@ -6,6 +6,7 @@ Cœur du module IA de NavMAX. Combine :
 - ModelSelector pour choisir le meilleur modèle par tâche
 - Fallback automatique : local → cloud, Heavy → Medium → Light
 - Mode airgap (désactive tous les providers cloud)
+- Lecture des API keys depuis ~/.navmax/api_keys.yaml
 
 Usage:
     engine = AIEngine()
@@ -16,9 +17,11 @@ Usage:
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Optional
 
 import structlog
+import yaml
 
 from navmax.ai.hardware import HardwareProfile, detect_hardware
 from navmax.ai.providers.base import (
@@ -64,6 +67,46 @@ class AIEngine:
         self._hw: HardwareProfile | None = None
         self._selector: ModelSelector | None = None
         self._initialized = False
+
+    # ── API Keys from YAML ─────────────────────────────────────
+
+    API_KEYS_PATH = Path.home() / ".navmax" / "api_keys.yaml"
+
+    @staticmethod
+    def _load_api_keys() -> dict[str, str]:
+        """Charge les API keys depuis ~/.navmax/api_keys.yaml.
+
+        Retourne un dict {provider_name: api_key}.
+        Priorité : YAML > variable d'environnement > vide.
+        """
+        keys: dict[str, str] = {}
+
+        # Essayer le fichier YAML d'abord
+        yaml_path = AIEngine.API_KEYS_PATH
+        if yaml_path.exists():
+            try:
+                content = yaml_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(content)
+                if isinstance(data, dict) and "providers" in data:
+                    for provider, key in data["providers"].items():
+                        if key and isinstance(key, str):
+                            keys[provider] = key
+            except Exception:
+                logger.warning("api_keys_yaml_lecture_erreur", path=str(yaml_path))
+
+        # Fallback sur les variables d'environnement si pas trouvé dans YAML
+        env_map = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+        }
+        for provider, env_var in env_map.items():
+            if provider not in keys:
+                env_val = os.environ.get(env_var, "")
+                if env_val:
+                    keys[provider] = env_val
+
+        return keys
 
     # ── Initialization ──────────────────────────────────────────
 
@@ -156,7 +199,8 @@ class AIEngine:
             return None
 
     async def _init_openai(self) -> BaseProvider | None:
-        api_key = os.environ.get("OPENAI_API_KEY", "")
+        keys = self._load_api_keys()
+        api_key = keys.get("openai", "")
         if not api_key:
             return None
         try:
@@ -171,7 +215,8 @@ class AIEngine:
             return None
 
     async def _init_anthropic(self) -> BaseProvider | None:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        keys = self._load_api_keys()
+        api_key = keys.get("anthropic", "")
         if not api_key:
             return None
         try:
@@ -186,7 +231,8 @@ class AIEngine:
             return None
 
     async def _init_deepseek(self) -> BaseProvider | None:
-        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        keys = self._load_api_keys()
+        api_key = keys.get("deepseek", "")
         if not api_key:
             return None
         try:

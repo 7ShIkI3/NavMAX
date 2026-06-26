@@ -441,6 +441,82 @@
     font-size: 1.4rem; cursor: pointer; padding: 4px 8px;
   }
   @media (max-width: 900px) { .menu-toggle { display: block; } }
+
+  /* ── Login Overlay ── */
+  .login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(4,8,16,0.92);
+    backdrop-filter: blur(8px);
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+  .login-overlay.visible { opacity: 1; visibility: visible; }
+  .login-modal {
+    background: var(--bg-panel); border: 1px solid var(--border-active);
+    border-radius: var(--radius-lg); padding: 36px 40px 32px;
+    width: 100%; max-width: 400px;
+    box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+    transform: translateY(10px);
+    transition: transform 0.3s ease;
+  }
+  .login-overlay.visible .login-modal { transform: translateY(0); }
+  .login-logo {
+    font-family: var(--font-mono);
+    font-size: 1.6rem; font-weight: 700; text-align: center;
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: 3px; margin-bottom: 4px;
+  }
+  .login-title {
+    text-align: center; font-size: 0.78rem;
+    color: var(--text-secondary); margin-bottom: 24px;
+  }
+  .login-form { display: flex; flex-direction: column; gap: 14px; }
+  .login-label {
+    font-family: var(--font-mono); font-size: 0.65rem;
+    color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 4px; display: block;
+  }
+  .login-input {
+    width: 100%; padding: 10px 14px;
+    background: var(--bg-root); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary); font-family: var(--font-mono);
+    font-size: 0.85rem;
+    transition: border-color var(--transition);
+  }
+  .login-input:focus { outline: none; border-color: var(--accent-cyan); }
+  .login-btn {
+    width: 100%; padding: 10px; margin-top: 4px;
+    background: var(--accent-cyan); border: none;
+    border-radius: var(--radius-sm);
+    color: #080c14; font-family: var(--font-sans);
+    font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all var(--transition);
+    letter-spacing: 0.5px;
+  }
+  .login-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .login-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .login-error {
+    color: var(--accent-red); font-size: 0.72rem;
+    text-align: center; min-height: 20px;
+    font-family: var(--font-mono);
+  }
+  .login-features {
+    margin-top: 20px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .login-feature-list {
+    list-style: none; display: flex; flex-direction: column; gap: 6px;
+  }
+  .login-feature-list li {
+    font-size: 0.68rem; color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .login-feature-list li::before {
+    content: '◆'; color: var(--accent-cyan); font-size: 0.5rem;
+  }
 </style>
 </head>
 <body>
@@ -480,11 +556,16 @@
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
         Système
       </a>
+      <a class="nav-item" data-panel="apikeys">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        🔑 API Keys
+      </a>
     </nav>
     <div class="sidebar-footer">
       <span>NavMAX</span>
       <span class="version-tag">v0.4.2</span>
-      <span style="margin-left:auto;font-size:0.65rem;" id="sidebarClock">--:--</span>
+      <button class="btn btn-xs" id="logoutBtn" style="margin-left:auto;" title="Déconnexion">✕</button>
+      <span style="font-size:0.65rem;" id="sidebarClock">--:--</span>
     </div>
   </aside>
 
@@ -634,6 +715,7 @@
         <div class="card-header">
           <span class="card-title">🔍 Toutes les Vulnérabilités</span>
           <div style="display:flex;gap:4px;">
+            <button class="btn btn-sm btn-icon" id="refreshFindingsBtn" title="Rafraîchir">↻</button>
             <button class="btn btn-sm" id="exportSarifFullBtn">⬇ SARIF</button>
             <button class="btn btn-sm" id="exportHtmlFullBtn">⬇ HTML</button>
           </div>
@@ -683,20 +765,157 @@
         </div>
       </div>
     </section>
+
+    <!-- ═══ PANEL: API KEYS ═══ -->
+    <section class="tab-panel" id="panel-apikeys">
+      <div class="card col-full">
+        <div class="card-header">
+          <span class="card-title">🔑 Gestion des API Keys</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.65rem;color:var(--text-muted);" id="apikeysLastRefresh">—</span>
+            <button class="btn btn-sm btn-icon" id="refreshApikeysBtn" onclick="loadApiKeys()">↻</button>
+          </div>
+        </div>
+        <div id="apikeysLoading" style="text-align:center;padding:20px;color:var(--text-muted);">
+          Chargement des clés API...
+        </div>
+        <div id="apikeysContent" style="display:none;">
+          <!-- Provider key cards -->
+          <div style="margin-bottom:14px;">
+            <div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">🔌 Providers configurés</div>
+            <div class="provider-grid" id="apikeysGrid"></div>
+          </div>
+          <!-- Add new key -->
+          <div class="card" style="margin-top:8px;background:var(--bg-elevated);">
+            <div class="card-header">
+              <span class="card-title" style="border-bottom:none;padding-bottom:0;margin-bottom:0;">➕ Ajouter / Modifier une clé API</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+              <div style="flex:1;min-width:140px;">
+                <label style="font-size:0.68rem;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;">Provider</label>
+                <select id="apikeysProvider" style="width:100%;font-family:var(--font-mono);font-size:0.78rem;background:var(--bg-root);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:6px 10px;">
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                </select>
+              </div>
+              <div style="flex:2;min-width:200px;">
+                <label style="font-size:0.68rem;color:var(--text-muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;">Clé API</label>
+                <input type="password" id="apikeysKeyInput" placeholder="sk-..." style="width:100%;font-family:var(--font-mono);font-size:0.78rem;background:var(--bg-root);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:6px 10px;">
+              </div>
+              <button class="btn btn-accent" id="apikeysSaveBtn" onclick="saveApiKey()">💾 Sauvegarder</button>
+              <button class="btn btn-sm" id="apikeysTestBtn" onclick="testApiKey()">🧪 Tester</button>
+            </div>
+            <div id="apikeysFeedback" style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);min-height:20px;"></div>
+          </div>
+        </div>
+        <div id="apikeysError" style="display:none;text-align:center;padding:20px;color:var(--accent-red);">
+          ⚠ Impossible de charger les clés API. Vérifie que le serveur NavMAX tourne.
+        </div>
+      </div>
+    </section>
   </main>
+</div>
+
+<!-- ═══ LOGIN OVERLAY ═══ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-modal">
+    <div class="login-logo">◈ NAVMAX</div>
+    <div class="login-title">Mission Control v2 — Authentification</div>
+    <form class="login-form" id="loginForm" autocomplete="off">
+      <div class="login-field">
+        <label class="login-label" for="loginUser">Identifiant</label>
+        <input class="login-input" id="loginUser" type="text" placeholder="admin" value="admin" autocomplete="username">
+      </div>
+      <div class="login-field">
+        <label class="login-label" for="loginPass">Mot de passe</label>
+        <input class="login-input" id="loginPass" type="password" placeholder="••••••••" value="admin123" autocomplete="current-password">
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <button class="login-btn" id="loginBtn" type="submit">⛭ Connexion</button>
+    </form>
+    <div class="login-features">
+      <ul class="login-feature-list">
+        <li>Scans de vulnérabilités automatisés</li>
+        <li>IA ReAct — Agent multi-providers</li>
+        <li>Attack Graph & rapports SARIF/HTML</li>
+      </ul>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════ SCRIPTS ═══════════════ -->
 <script>
-// ── Auth bootstrap ──
+// ── Auth Module ──
 (function() {
+  'use strict';
+  const TOKEN_KEY = 'navmax_admin_token';
+  const AUTH_API = '/api/v1/auth';
+
+  // Restore token from localStorage
+  window._adminToken = localStorage.getItem(TOKEN_KEY) || '';
+  window._authNeedsLogin = false;
+
+  // ── Fetch interceptor with 401 detection ──
   const origFetch = window.fetch;
-  window.fetch = function(url, opts = {}) {
+  window.fetch = function(url, opts) {
+    if (!opts) opts = {};
     if (typeof url === 'string' && url.startsWith('/api/')) {
       opts.headers = opts.headers || {};
-      opts.headers['Authorization'] = 'Bearer ' + (window._adminToken || '');
+      if (window._adminToken) {
+        opts.headers['Authorization'] = 'Bearer ' + window._adminToken;
+      }
     }
-    return origFetch.call(this, url, opts);
+    return origFetch.call(this, url, opts).then(function(resp) {
+      if (resp.status === 401 && typeof url === 'string' &&
+          !url.includes('/auth/login') && !url.includes('/auth/me')) {
+        window._authNeedsLogin = true;
+        document.dispatchEvent(new CustomEvent('navmax-unauthorized'));
+      }
+      return resp;
+    });
+  };
+
+  // ── Login ──
+  window._login = async function(username, password) {
+    try {
+      const resp = await origFetch.call(window, AUTH_API + '/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: username, password: password})
+      });
+      const data = await resp.json().catch(function() { return {}; });
+      if (resp.ok && data.access_token) {
+        window._adminToken = data.access_token;
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        window._authNeedsLogin = false;
+        return {ok: true, data: data};
+      }
+      return {ok: false, error: data.detail || data.message || 'Identifiants invalides'};
+    } catch(e) {
+      return {ok: false, error: 'Erreur de connexion au serveur'};
+    }
+  };
+
+  // ── Validate stored token ──
+  window._checkAuth = async function() {
+    if (!window._adminToken) return false;
+    try {
+      const resp = await origFetch.call(window, AUTH_API + '/me', {
+        headers: {'Authorization': 'Bearer ' + window._adminToken}
+      });
+      return resp.ok;
+    } catch(e) {
+      return false;
+    }
+  };
+
+  // ── Logout ──
+  window._logout = function() {
+    window._adminToken = '';
+    localStorage.removeItem(TOKEN_KEY);
+    window._authNeedsLogin = true;
+    document.dispatchEvent(new CustomEvent('navmax-unauthorized'));
   };
 })();
 </script>
@@ -753,10 +972,11 @@
     S.activePanel = name;
     $$('#sidebarNav .nav-item').forEach(i => i.classList.toggle('active', i.dataset.panel === name));
     $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
-    const titles = {mission:'🎯 Mission Control',connectors:'🧠 Connecteur IA',scans:'📡 Scans',findings:'🔍 Vulnérabilités',graph:'🕸️ Attack Graph',system:'⚙️ Système'};
+    const titles = {mission:'🎯 Mission Control',connectors:'🧠 Connecteur IA',scans:'📡 Scans',findings:'🔍 Vulnérabilités',graph:'🕸️ Attack Graph',system:'⚙️ Système',apikeys:'🔑 API Keys'};
     $('#pageTitle').textContent = titles[name] || name;
     if (name === 'connectors') loadAiStatus();
     if (name === 'system') updateSystemStatus();
+    if (name === 'apikeys') loadApiKeys();
   }
 
   // ── Clock ──
@@ -835,6 +1055,10 @@
   async function loadAiStatus() {
     const loading = $('#aiLoading'), content = $('#aiContent'), error = $('#aiError');
     loading.style.display = 'block'; content.style.display = 'none'; error.style.display = 'none';
+    // Nettoyer les données précédentes — pas de fallback simulé
+    S.aiHardware = null;
+    S.aiProviders = [];
+    S.aiModels = [];
 
     const [statusData, modelsData] = await Promise.all([
       apiGet('/ai/status'),
@@ -844,9 +1068,14 @@
     loading.style.display = 'none';
 
     if (!statusData && !modelsData) {
+      // API IA indisponible — message clair, pas de données simulées
       error.style.display = 'block';
-      // Try with demo data
-      loadAiDemoData();
+      error.innerHTML = '⚠️ Moteur IA injoignable.<br>'
+        + '<span style="font-size:0.72rem;color:var(--text-muted);">'
+        + 'Vérifie que le serveur NavMAX tourne et que les providers IA sont configurés.</span>';
+      renderAiContent();
+      updateStats();
+      $('#aiLastRefresh').textContent = `MAJ: ${new Date().toLocaleTimeString('fr-FR')}`;
       return;
     }
 
@@ -864,24 +1093,6 @@
     renderAiContent();
     updateStats();
     $('#aiLastRefresh').textContent = `MAJ: ${new Date().toLocaleTimeString('fr-FR')}`;
-  }
-  function loadAiDemoData() {
-    S.aiHardware = {ram_gb:32,gpu:'NVIDIA RTX 4090',max_local_tier:'heavy'};
-    S.aiProviders = [
-      {type:'ollama',available:true,models_count:5,isLocal:true,models:['llama3.2:3b','huihui_ai/llama3.1-abliterated:8b','deepseek-r1:8b']},
-      {type:'deepseek',available:true,models_count:1,isLocal:false,models:['deepseek-v4-pro']},
-      {type:'openai',available:false,models_count:0,isLocal:false,models:[]},
-      {type:'anthropic',available:false,models_count:0,isLocal:false,models:[]},
-      {type:'lmstudio',available:false,models_count:0,isLocal:true,models:[]},
-    ];
-    S.aiModels = [
-      {name:'llama3.2:3b',provider:'ollama',tier:'light',uncensored:false,local:true},
-      {name:'huihui_ai/llama3.1-abliterated:8b',provider:'ollama',tier:'medium',uncensored:true,local:true},
-      {name:'deepseek-r1:8b',provider:'ollama',tier:'medium',uncensored:false,local:true},
-      {name:'deepseek-v4-pro',provider:'deepseek',tier:'heavy',uncensored:false,local:false},
-    ];
-    renderAiContent();
-    updateStats();
   }
   function renderAiContent() {
     $('#aiContent').style.display = 'block';
@@ -1143,13 +1354,44 @@
       st.textContent = up===null?'Inconnu':up?'Online':'Offline';
       st.style.color = up===null?'var(--text-muted)':up?'var(--accent-green)':'var(--accent-red)';
     };
+    // API — check principal
     const health = await apiGet('/health');
-    const apiOk = health && health.status==='ok';
+    const apiOk = !!(health && health.status==='ok');
     setSvc('api', apiOk);
-    setSvc('redis', apiOk);
-    setSvc('celery', apiOk);
-    try { const ns = await apiGet('/nuclei/status'); setSvc('nuclei', !!(ns&&ns.installed)); } catch(e) { setSvc('nuclei',null); }
-    setSvc('nmap', apiOk);
+
+    // Redis — check dédié via /health (champ redis dans la réponse API)
+    if (health && health.redis !== undefined) {
+      setSvc('redis', health.redis);
+    } else {
+      // Si /health ne retourne pas de champ redis, on l'indique comme Inconnu
+      setSvc('redis', apiOk ? null : false);
+    }
+
+    // Celery — check via le endpoint scans (qui dépend de Celery+DB)
+    try {
+      const scansCheck = await apiGet('/scans?limit=1');
+      setSvc('celery', !!(scansCheck !== null && scansCheck.data !== undefined));
+    } catch(e) {
+      setSvc('celery', null);
+    }
+
+    // Nuclei — check dédié
+    try {
+      const ns = await apiGet('/nuclei/status');
+      setSvc('nuclei', !!(ns && ns.installed));
+    } catch(e) {
+      setSvc('nuclei', null);
+    }
+
+    // Nmap — vérification via un appel à l'API (le scanner nmap est intégré au backend)
+    // On tente un appel au système de scan qui dépend de nmap
+    try {
+      const nmapCheck = await apiGet('/scans?limit=1');
+      setSvc('nmap', !!(nmapCheck !== null));
+    } catch(e) {
+      setSvc('nmap', null);
+    }
+
     // AI providers in system panel
     if (S.aiProviders.length) {
       const ollama = S.aiProviders.find(p=>p.type==='ollama');
@@ -1160,20 +1402,7 @@
     $('#sysLastCheck').textContent = `MAJ: ${new Date().toLocaleTimeString('fr-FR')}`;
   }
 
-  // ── Demo data ──
-  function addDemoData() {
-    if (!S.findings.length) S.findings = [
-      {template_id:'CVE-2024-1234',name:'Apache Struts RCE (S2-067)',severity:'critical',host:'192.168.1.105:8080',matched_at:new Date(Date.now()-3600000).toISOString(),cve_ids:['CVE-2024-1234']},
-      {template_id:'CVE-2024-5678',name:'OpenSSH Weak Key Exchange',severity:'high',host:'192.168.1.100:22',matched_at:new Date(Date.now()-7200000).toISOString(),cve_ids:['CVE-2024-5678']},
-      {template_id:'ssl-weak',name:'SSL/TLS Chiffrement Faible',severity:'medium',host:'192.168.1.105:443',matched_at:new Date(Date.now()-10800000).toISOString(),cve_ids:[]},
-      {template_id:'http-trace',name:'HTTP TRACE Method Enabled',severity:'low',host:'192.168.1.105:80',matched_at:new Date(Date.now()-14400000).toISOString(),cve_ids:[]},
-    ];
-    if (!S.scans.length) S.scans = [
-      {id:'scan-001',target_id:'192.168.1.0/24',scan_type:'quick',status:'RUNNING',progress:67,created_at:new Date(Date.now()-120000).toISOString()},
-      {id:'scan-002',target_id:'10.0.0.5',scan_type:'full',status:'PENDING',progress:0,created_at:new Date(Date.now()-30000).toISOString()},
-      {id:'scan-003',target_id:'scanme.nmap.org',scan_type:'service',status:'STARTED',progress:23,created_at:new Date(Date.now()-60000).toISOString()},
-    ];
-  }
+  // ── Demo data (supprimé — plus de simulation) ──
 
   // ── Export ──
   function setupExport() {
@@ -1208,6 +1437,210 @@
     setup('#findingsFiltersFull', '#findingsFullList');
   }
 
+  // ── Auth UI ──
+  function setupAuth() {
+    const overlay = $('#loginOverlay');
+    const form = $('#loginForm');
+    const errorEl = $('#loginError');
+    const btn = $('#loginBtn');
+    const userInput = $('#loginUser');
+    const passInput = $('#loginPass');
+
+    function showLogin() {
+      overlay.classList.add('visible');
+    }
+    function hideLogin() {
+      overlay.classList.remove('visible');
+    }
+
+    // Listen for 401 events from fetch interceptor
+    document.addEventListener('navmax-unauthorized', showLogin);
+
+    // Logout button
+    $('#logoutBtn')?.addEventListener('click', function() {
+      window._logout();
+      addMissionLog('warn', 'Utilisateur déconnecté');
+    });
+
+    // Form submit
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const username = userInput.value.trim();
+      const password = passInput.value;
+      if (!username || !password) {
+        errorEl.textContent = 'Veuillez saisir identifiant et mot de passe';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '⏳ Connexion...';
+      errorEl.textContent = '';
+
+      const result = await window._login(username, password);
+      if (result.ok) {
+        errorEl.textContent = '';
+        hideLogin();
+        // Recharger les données réelles après authentification
+        await Promise.all([loadScans(), updateSystemStatus(), loadAiStatus()]);
+        renderScans();
+        renderFindings($('#findingsList'), S.findings, 'all');
+        renderFindings($('#findingsFullList'), S.findings, 'all');
+        updateStats();
+        addMissionLog('success', 'Authentifié avec succès');
+      } else {
+        errorEl.textContent = result.error || 'Échec de la connexion';
+        btn.disabled = false;
+        btn.textContent = '⛭ Connexion';
+      }
+    });
+
+    // Reset error state on input change
+    form.addEventListener('input', function() {
+      errorEl.textContent = '';
+      btn.disabled = false;
+      btn.textContent = '⛭ Connexion';
+    });
+
+    // Expose for auth flow
+    window._showLogin = showLogin;
+    window._hideLogin = hideLogin;
+  }
+
+  // ── API Keys Management ──
+  const API_KEY_PROVIDERS = ['deepseek', 'openai', 'anthropic'];
+
+  async function loadApiKeys() {
+    const loading = $('#apikeysLoading'), content = $('#apikeysContent'), error = $('#apikeysError');
+    loading.style.display = 'block'; content.style.display = 'none'; error.style.display = 'none';
+
+    const data = await apiGet('/settings/apikeys');
+
+    loading.style.display = 'none';
+
+    if (!data || !data.providers) {
+      error.style.display = 'block';
+      return;
+    }
+
+    content.style.display = 'block';
+    const grid = $('#apikeysGrid');
+
+    // Build list — include all known providers, mark unconfigured ones
+    const configured = new Set(data.providers.map(p => p.provider));
+    const allProviders = [];
+    for (const p of API_KEY_PROVIDERS) {
+      const found = data.providers.find(x => x.provider === p);
+      allProviders.push({
+        provider: p,
+        configured: found ? true : false,
+        key_preview: found ? found.key_preview : '',
+      });
+    }
+
+    grid.innerHTML = allProviders.map(p => {
+      const statusCls = p.configured ? 'online' : 'offline';
+      const dotCls = p.configured ? 'online' : 'offline';
+      const providerLabel = p.provider.charAt(0).toUpperCase() + p.provider.slice(1);
+      return `<div class="provider-card ${statusCls}">
+        <div class="provider-header">
+          <span class="provider-name">
+            <span class="provider-status-dot ${dotCls}"></span>
+            ${providerLabel}
+          </span>
+          <span class="provider-badge ${p.configured ? 'cloud' : 'local'}">${p.configured ? '✅ Configuré' : '❌ Non configuré'}</span>
+        </div>
+        <div class="provider-meta">
+          <div class="provider-meta-row"><span>Clé</span><span style="font-family:var(--font-mono);font-size:0.7rem;">${esc(p.key_preview || '—')}</span></div>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px;">
+          <button class="btn btn-xs btn-accent" onclick="fillEditKey('${p.provider}')">✏️ Modifier</button>
+          ${p.configured ? `<button class="btn btn-xs btn-danger" onclick="deleteApiKey('${p.provider}')">🗑 Supprimer</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    $('#apikeysLastRefresh').textContent = `MAJ: ${new Date().toLocaleTimeString('fr-FR')}`;
+  }
+
+  function fillEditKey(provider) {
+    $('#apikeysProvider').value = provider;
+    $('#apikeysKeyInput').value = '';
+    $('#apikeysKeyInput').focus();
+    setFeedback(`✏️ Prêt à modifier la clé pour « ${provider} »`, 'info');
+  }
+
+  async function saveApiKey() {
+    const provider = $('#apikeysProvider').value;
+    const key = $('#apikeysKeyInput').value.trim();
+    if (!key) { setFeedback('⚠️ Veuillez saisir une clé API.', 'error'); return; }
+
+    const saveBtn = $('#apikeysSaveBtn');
+    saveBtn.disabled = true; saveBtn.textContent = '⏳ Enregistrement...';
+
+    const result = await apiPost('/settings/apikeys', { provider, key });
+
+    saveBtn.disabled = false; saveBtn.textContent = '💾 Sauvegarder';
+
+    if (result.ok) {
+      setFeedback(`✅ Clé API pour « ${provider} » sauvegardée avec succès !`, 'success');
+      $('#apikeysKeyInput').value = '';
+      await loadApiKeys();
+    } else {
+      const msg = result.data?.detail || 'Erreur inconnue';
+      setFeedback(`❌ Erreur : ${msg}`, 'error');
+    }
+  }
+
+  async function deleteApiKey(provider) {
+    if (!confirm(`Supprimer la clé API pour « ${provider} » ?`)) return;
+
+    try {
+      const r = await fetch(`${API}/settings/apikeys/${encodeURIComponent(provider)}`, { method: 'DELETE' });
+      if (r.ok) {
+        setFeedback(`🗑 Clé API pour « ${provider} » supprimée.`, 'success');
+        await loadApiKeys();
+      } else {
+        const data = await r.json().catch(()=>({}));
+        setFeedback(`❌ Erreur : ${data.detail || 'Impossible de supprimer'}`, 'error');
+      }
+    } catch(e) {
+      setFeedback(`❌ Erreur réseau : ${e.message}`, 'error');
+    }
+  }
+
+  async function testApiKey() {
+    const provider = $('#apikeysProvider').value;
+    setFeedback(`🧪 Test du provider « ${provider} »...`, 'info');
+    const testBtn = $('#apikeysTestBtn');
+    testBtn.disabled = true; testBtn.textContent = '⏳ Test...';
+
+    // Use the AI status endpoint to check if the provider is available
+    const statusData = await apiGet('/ai/status');
+
+    testBtn.disabled = false; testBtn.textContent = '🧪 Tester';
+
+    if (statusData && statusData.providers) {
+      const prov = statusData.providers.find(p => p.type === provider);
+      if (prov) {
+        if (prov.available) {
+          setFeedback(`✅ Provider « ${provider} » est disponible et fonctionnel !`, 'success');
+        } else {
+          setFeedback(`⚠️ Provider « ${provider} » est configuré mais non disponible (vérifiez la clé).`, 'warn');
+        }
+      } else {
+        setFeedback(`ℹ️ Provider « ${provider} » non détecté — rechargez le moteur IA.`, 'info');
+      }
+    } else {
+      setFeedback(`⚠️ Impossible de contacter le moteur IA.`, 'error');
+    }
+  }
+
+  function setFeedback(msg, type) {
+    const el = $('#apikeysFeedback');
+    const colors = { success: 'var(--accent-green)', error: 'var(--accent-red)', warn: 'var(--accent-yellow)', info: 'var(--accent-cyan)' };
+    el.style.color = colors[type] || 'var(--text-muted)';
+    el.textContent = msg;
+  }
+
   // ── Init ──
   async function init() {
     setupNav();
@@ -1216,12 +1649,42 @@
     setupExport();
     setupFindingsFilters();
     setupModelTabs();
+    setupAuth();
+
+    // Check authentication
+    const isAuthed = await window._checkAuth();
+    if (!isAuthed) {
+      // Login requis — interface vide sans données simulées
+      window._showLogin();
+
+      renderScans();
+      renderFindings($('#findingsList'), S.findings, 'all');
+      renderFindings($('#findingsFullList'), S.findings, 'all');
+      updateStats();
+
+      // Auth-aware polling
+      setInterval(async function() {
+        if (!window._adminToken) return;
+        await loadScans();
+        if (S._graphStart) S._graphStart();
+      }, POLL);
+      setInterval(async function() {
+        if (!window._adminToken) return;
+        updateSystemStatus();
+        if (S.activePanel === 'connectors') loadAiStatus();
+      }, POLL_AI);
+
+      console.log('NavMAX Dashboard — authentification requise');
+      return;
+    }
+
+    // Authenticated — hide login if shown
+    window._hideLogin();
 
     // Load data
     await Promise.all([loadScans(), updateSystemStatus(), loadAiStatus()]);
 
-    // Demo fallback
-    addDemoData();
+    // Pas de fallback demo — afficher les données réelles (même vides)
     renderScans();
     renderFindings($('#findingsList'), S.findings, 'all');
     renderFindings($('#findingsFullList'), S.findings, 'all');
@@ -1236,6 +1699,12 @@
     $('#refreshScansFullBtn')?.addEventListener('click', loadScans);
     $('#refreshSysBtn')?.addEventListener('click', updateSystemStatus);
     $('#refreshAiBtn')?.addEventListener('click', loadAiStatus);
+    $('#refreshFindingsBtn')?.addEventListener('click', async () => {
+      await loadScans();
+      renderFindings($('#findingsList'), S.findings, S.sevFilter);
+      renderFindings($('#findingsFullList'), S.findings, S.sevFilter);
+      updateStats();
+    });
     $('#reloadAiBtn')?.addEventListener('click', async () => {
       await apiPost('/ai/reload', {});
       setTimeout(loadAiStatus, 1500);
