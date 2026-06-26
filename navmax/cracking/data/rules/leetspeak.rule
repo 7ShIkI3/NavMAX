@@ -1,0 +1,165 @@
+# leetspeak.rule — Substitutions l33t (e→3, a→@, etc.)
+# Règhes l33t p0ur hashcat — 1337 5p34k
+# Transforme les mots en remplaçant certaines lettres par leurs équivalents numériques/symboles.
+
+# Substitutions individuelles
+:
+sa@
+sa4
+se3
+si1
+si!
+so0
+ss5
+st7
+sl1
+sg9
+sz2
+sb8
+sx%
+sj/
+sn^
+sa@@
+sa44
+se33
+si11
+so00
+ss55
+st77
+sa@a
+se3e
+si1i
+so0o
+ss5s
+sa4a
+
+# Substitutions doubles
+sa@ se3
+sa@ ss5
+sa@ si1
+sa@ so0
+se3 si1
+se3 ss5
+se3 so0
+si1 ss5
+si1 so0
+ss5 so0
+sa@ se3 si1
+sa@ se3 ss5
+sa@ se3 so0
+sa@ si1 ss5
+sa@ si1 so0
+sa@ ss5 so0
+se3 si1 ss5
+se3 si1 so0
+se3 ss5 so0
+si1 ss5 so0
+sa@ se3 si1 ss5
+sa@ se3 si1 so0
+sa@ se3 ss5 so0
+sa@ si1 ss5 so0
+se3 si1 ss5 so0
+sa@ se3 si1 ss5 so0
+
+# Substitutions triples
+sa@ se3 si1 ss5 so0
+sa4 se3 si1 ss5 so0
+
+# Avec capitalisation
+c sa@
+c se3
+c si1
+c ss5
+c so0
+c sa4
+c sa@ se3
+c sa@ ss5
+c se3 si1
+c si1 ss5
+c sa@ se3 si1
+c sa@ se3 ss5
+c sa@ se3 si1 ss5
+c sa@ se3 si1 ss5 so0
+u sa@
+u se3
+u si1
+u ss5
+u so0
+u sa4
+u sa@ se3
+u sa@ ss5
+u sa@ se3 si1
+u sa@ se3 si1 ss5
+u sa@ se3 si1 ss5 so0
+
+# Avec suffixes numériques
+sa@ $1
+sa@ $2
+sa@ $3
+sa@ $1$2$3
+se3 $1
+se3 $2
+se3 $1$2$3
+c sa@ $1
+c sa@ $2
+c sa@ $1$2$3
+c se3 $1
+c se3 $2
+c se3 $1$2$3
+u sa@ $1
+u sa@ $2
+u sa@ $1$2$3
+u se3 $1
+u se3 $2
+u se3 $1$2$3
+
+# Avec préfixes
+^! sa@
+^@ sa@
+^! se3
+^@ se3
+c ^! sa@
+c ^! se3
+u ^! sa@
+u ^! se3
+
+# Combinaisons l33t avancées
+sa4 se3 si1 ss5 so0
+sa4 se3 si1 so0
+sa4 se3 si1 ss5
+c sa4 se3 si1 ss5 so0
+u sa4 se3 si1 ss5 so0
+c sa4 $! se3 $!
+u sa4 $! se3 $!
+sa@ sa@@
+se3 se33
+si1 si11
+so0 so00
+ss5 ss55
+sa@ $! se3 $! si1 $!
+sa@ $! se3 $! si1 $! ss5 $!
+c sa@ $! se3 $! si1 $! ss5 $!
+u sa@ $! se3 $! si1 $! ss5 $!
+
+# Substitutions rares
+sa/
+se&
+si|
+st+
+sl!
+sg6
+sz2
+sx%
+s$s
+s@
+s3
+s1
+s0
+s5
+s4
+s+
+s#
+s<:
+s|:
+s/\\
+s/\\

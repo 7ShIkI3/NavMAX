@@ -1,0 +1,448 @@
+# d3ad0ne.rule — Règles agressives (échantillon représentatif)
+# Version complète: https://github.com/hashcat/hashcat/tree/master/rules/d3ad0ne.rule
+# Téléchargement: hashcat --rules-file /path/to/d3ad0ne.rule
+#
+# Règles de transformation de base
+:
+c
+u
+l
+T0
+T1
+T2
+T3
+T4
+T5
+T6
+T7
+T8
+T9
+c$1
+c$2
+c$3
+c$!
+c$@
+c$#
+c$$
+c$%
+c$1$2$3
+c$1$2$3$4
+u$1
+u$2
+u$!
+u$@
+u$1$2$3
+u$1$2$3$4
+c so0
+c si1
+c se3
+c ss5
+c sa4
+c sa@@
+c so0 si1
+c so0 se3
+c so0 ss5
+c so0 sa4
+c si1 se3
+c si1 ss5
+c si1 sa4
+c so0 si1 se3
+c so0 si1 ss5
+c so0 si1 sa4
+c so0 se3 ss5
+c so0 se3 sa4
+c si1 se3 ss5
+c si1 se3 sa4
+c so0 si1 se3 ss5
+c so0 si1 se3 sa4
+c so0 si1 se3 ss5 sa4
+u so0
+u si1
+u se3
+u ss5
+u sa4
+u so0 si1
+u so0 se3
+u so0 ss5
+u si1 se3
+u so0 si1 se3
+u so0 si1 se3 ss5 sa4
+$1
+$2
+$3
+$4
+$5
+$6
+$7
+$8
+$9
+$0
+$!
+$@
+$#
+$$
+$%
+$^
+$&
+$*
+$1$2$3
+$1$2$3$4
+$2$0$2$4
+$2$0$2$3
+$2$0$2$2
+$2$0$2$1
+$2$0$2$0
+$1$9$9$9
+$1$9$9$8
+$1$9$9$7
+$1$9$9$6
+$1$9$9$5
+$1$9$9$0
+$1$9$8$0
+$!$1
+$!$2
+$!$3
+$!$@
+$!$#
+$!$$
+$!$1$2$3
+$@$1
+$@$2
+$#$1
+$#$2
+$$$1
+$%$1
+^!
+^@
+^#
+^$
+^%
+^^
+^&
+^*
+^1
+^2
+^3
+^1^2^3
+^!
+^@
+^#^1
+^!^2
+^@^!
+^!^@^#
+^1^2^3^4
+^2^0^2^4
+^!
+^!^1
+^!^2
+^!^3
+^!^4
+^!^1^2^3
+^!^2^0^2^4
+u c
+c u
+l u
+u l
+c l
+l c
+T0 T1
+T0 T2
+T1 T2
+T0 T1 T2
+c T0
+c T1
+c T2
+u T0
+u T1
+u T2
+T0 c
+T1 c
+T2 c
+T0 u
+T1 u
+T2 u
+c T0 T1
+c T0 T2
+u T0 T1
+u T0 T2
+T0 c T1
+T0 u T1
+T1 c T2
+T1 u T2
+T0 T1 c
+T0 T1 u
+T2 T1 c
+T2 T1 u
+$1 c
+$2 c
+$! c
+$@ c
+$1 u
+$2 u
+$! u
+$@ u
+c $1
+c $2
+c $!
+c $@
+u $1
+u $2
+u $!
+u $@
+$1 c $1$2$3
+$1 u $1$2$3
+c $1$2$3 c
+u $1$2$3 u
+c $1$2$3$4$5$6 u
+u $1$2$3$4$5$6 c
+so0
+si1
+se3
+ss5
+sa4
+sa@@
+so0 si1
+so0 se3
+so0 ss5
+so0 sa4
+si1 se3
+si1 ss5
+si1 sa4
+se3 ss5
+se3 sa4
+ss5 sa4
+so0 si1 se3
+so0 si1 ss5
+so0 si1 sa4
+so0 se3 ss5
+so0 se3 sa4
+si1 se3 ss5
+si1 se3 sa4
+si1 ss5 sa4
+se3 ss5 sa4
+so0 si1 se3 ss5
+so0 si1 se3 sa4
+so0 si1 ss5 sa4
+so0 se3 ss5 sa4
+si1 se3 ss5 sa4
+so0 si1 se3 ss5 sa4
+so0 si1 se3 ss5 sa4 c
+so0 si1 se3 ss5 sa4 u
+c so0 si1 se3 ss5 sa4
+u so0 si1 se3 ss5 sa4
+$1 so0
+$1 si1
+$1 se3
+$1$2$3 so0 si1
+$1$2$3 so0 se3
+$1$2$3 si1 se3
+c so0 $1
+c si1 $1
+c se3 $1
+u so0 $1
+u si1 $1
+u se3 $1
+$1$2$3
+$1$2$3$4
+$1$2$3$4$5
+$1$2$3$4$5$6
+$1$2$3$4$5$6$7
+$1$2$3$4$5$6$7$8
+^a
+^b
+^c
+^d
+^e
+^f
+^g
+^h
+^i
+^j
+^k
+^l
+^m
+^n
+^o
+^p
+^q
+^r
+^s
+^t
+^u
+^v
+^w
+^x
+^y
+^z
+^A
+^B
+^C
+^D
+^E
+^F
+^G
+^H
+^I
+^J
+^K
+^L
+^M
+^N
+^O
+^P
+^Q
+^R
+^S
+^T
+^U
+^V
+^W
+^X
+^Y
+^Z
+$a
+$b
+$c
+$d
+$e
+$f
+$g
+$h
+$i
+$j
+$k
+$l
+$m
+$n
+$o
+$p
+$q
+$r
+$s
+$t
+$u
+$v
+$w
+$x
+$y
+$z
+$A
+$B
+$C
+$D
+$E
+$F
+$G
+$H
+$I
+$J
+$K
+$L
+$M
+$N
+$O
+$P
+$Q
+$R
+$S
+$T
+$U
+$V
+$W
+$X
+$Y
+$Z
+c ^a
+c ^b
+c ^c
+c ^A
+c ^B
+c ^C
+u ^a
+u ^b
+u ^c
+u ^A
+u ^B
+u ^C
+c $a
+c $b
+c $c
+c $A
+c $B
+c $C
+u $a
+u $b
+u $c
+u $A
+u $B
+u $C
+^1 ^2 ^3
+^! ^@ ^#
+^1^2^3^4
+^!^@^#^$
+c ^! ^@ ^#
+u ^! ^@ ^#
+c ^!^@^#^$
+u ^!^@^#^$
+c ^a ^1
+c ^b ^2
+c ^A ^!
+u ^a ^1
+u ^b ^2
+u ^A ^!
+$! $1 $2 $3
+$! $@ $#
+$!$@$#$
+c $! $1 $2 $3
+u $! $1 $2 $3
+c $1 $!$@$#$
+u $1 $!$@$#$
+$2 $0 $2 $4
+$1 $9 $9 $0
+$1 $9 $8 $0
+c $2$0$2$4
+c $1$9$9$0
+c $1$9$8$0
+u $2$0$2$4
+u $1$9$9$0
+u $1$9$8$0
+c $2$0$2$4 $!
+u $2$0$2$4 $!
+c $2$0$2$4 $!
+u $2$0$2$4 $!
+$1$9$9$0$!
+$1$9$8$0$!
+c $1$9$9$0$!
+c $1$9$8$0$!
+u $1$9$9$0$!
+u $1$9$8$0$!
+^! $2$0$2$4
+^@ $2$0$2$4
+^# $2$0$2$4
+c ^! $2$0$2$4
+c ^@ $2$0$2$4
+u ^! $2$0$2$4
+u ^@ $2$0$2$4
+r
+d
+p
+f
+{
+}
+\
+/
+]
+[
+=
++
+_
+-
+;
+'
+,
+.
+`
+~
+:
+""
+" "

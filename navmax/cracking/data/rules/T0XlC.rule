@@ -1,0 +1,148 @@
+# T0XlC.rule — Règles optimisées pour la vitesse (échantillon représentatif)
+# Version complète: https://github.com/hashcat/hashcat/tree/master/rules/T0XlC.rule
+# Ces règles sont conçues pour un maximum de cracks par seconde.
+# La version complète contient ~7000 règles.
+
+:
+c
+u
+l
+T0
+T1
+T2
+T3
+T4
+T5
+T6
+T7
+T8
+T9
+c$1
+c$2
+c$3
+c$!
+c$@
+c$#
+c$$
+c$1$2$3
+u$1
+u$2
+u$3
+u$!
+u$@
+u$1$2$3
+c$1 so0
+c$1 si1
+c$1 se3
+c$1 ss5
+c$1 sa4
+u$1 so0
+u$1 si1
+u$1 se3
+u$1 ss5
+u$1 sa4
+c so0 $1
+c si1 $1
+c se3 $1
+c ss5 $1
+c sa4 $1
+u so0 $1
+u si1 $1
+u se3 $1
+u ss5 $1
+u sa4 $1
+c so0 si1 se3 ss5 sa4
+u so0 si1 se3 ss5 sa4
+so0
+si1
+se3
+ss5
+sa4
+so0 si1
+so0 se3
+si1 se3
+se3 ss5
+sa4 ss5
+so0 si1 se3
+so0 si1 se3 ss5
+so0 si1 se3 ss5 sa4
+$1$2$3
+$1$2$3$4
+$1$2$3$4$5$6
+$2$0$2$4
+$2$0$2$3
+$2$0$2$2
+$2$0$2$1
+$2$0$2$0
+$1$9$9$0
+$1$9$9$9
+$1$9$8$0
+$!
+$@
+$#
+$$
+$%
+$^
+$&
+$*
+c $! $1$2$3
+u $! $1$2$3
+c $@ $1$2$3
+u $@ $1$2$3
+c $! $2$0$2$4
+u $! $2$0$2$4
+^!
+^@
+^#
+^$
+^%
+^1
+^2
+^3
+^1^2^3
+^2^0^2^4
+^!^@^#
+c ^!
+c ^!
+c ^1
+c ^2
+u ^!
+u ^!
+u ^1
+u ^2
+c ^! $1$2$3
+u ^! $1$2$3
+c ^1 $2$0$2$4
+u ^1 $2$0$2$4
+c ^! $2$0$2$4
+u ^! $2$0$2$4
+c ^! ^1
+u ^! ^1
+c ^! ^1^2^3
+u ^! ^1^2^3
+p
+r
+d
+f
+{
+}
+[
+]
++
+-
+_
+=
+.
+,
+;
+'
+`
+~
+:
+'
+""
+/back
+/at
+/dot
+/colon
+/space
