@@ -19,6 +19,7 @@ from navmax.api.auth import (
     limiter,
     require_role,
 )
+from navmax.api.schemas_responses import HealthResponse
 from navmax.core.config import config
 from navmax.core.logging import get_logger, setup_logging
 from navmax.db import create_all
@@ -210,7 +211,7 @@ logger.info("dashboard_monté", path=static_dir)
 
 
 # ── Health check (public) ───────────────────────────────────────
-@app.get("/api/v1/health")
-async def health() -> dict:
+@app.get("/api/v1/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
     """Point de santé — utilisé par les agents pour vérifier que l'API est vivante."""
-    return {"status": "ok", "version": "0.1.0"}
+    return HealthResponse(status="ok", version="0.1.0")

@@ -8,6 +8,11 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, HTTPException, Query
 
+from navmax.api.schemas_responses import (
+    NucleiScanResponse,
+    NucleiStatusResponse,
+    NucleiUpdateTemplatesResponse,
+)
 from navmax.scanner.nuclei_scanner import (
     NucleiNotFoundError,
     NucleiScanner,
@@ -19,7 +24,18 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-@router.post("/scan", tags=["Nuclei"])
+@router.post(
+    "/scan",
+    response_model=NucleiScanResponse,
+    summary="Lance un scan nuclei sur une cible",
+    description="Utilise le moteur de templates nuclei (10 000+ templates communautaires) pour détecter les vulnérabilités connues.",
+    responses={
+        200: {"description": "Résultat du scan avec les vulnérabilités détectées"},
+        400: {"description": "Paramètres invalides (ex: sévérité inconnue)"},
+        503: {"description": "Nuclei non installé ou non trouvé"},
+        504: {"description": "Timeout du scan nuclei"},
+    },
+)
 async def scan_nuclei(
     target: Annotated[str, Query(description="Cible à scanner (URL, IP, domaine)")],
     templates: Annotated[str | None, Query(description="Templates nuclei (séparés par des virgules). Ex: 'cves/,exposed-panels/' ou None pour tout")] = None,
@@ -126,14 +142,18 @@ async def scan_nuclei(
     }
 
 
-@router.post("/update-templates", tags=["Nuclei"])
-async def update_nuclei_templates() -> dict:
-    """Met à jour les templates nuclei officiels.
-
-    Télécharge la dernière version des templates communautaires
-    (10 000+ templates de vulnérabilités) en exécutant
-    ``nuclei -update-templates``.
-    """
+@router.post(
+    "/update-templates",
+    response_model=NucleiUpdateTemplatesResponse,
+    summary="Met à jour les templates nuclei",
+    description="Télécharge la dernière version des templates communautaires (10 000+ templates) via nuclei -update-templates.",
+    responses={
+        200: {"description": "Templates mis à jour avec succès"},
+        503: {"description": "Nuclei non installé"},
+    },
+)
+async def update_nuclei_templates() -> NucleiUpdateTemplatesResponse:
+    """Met à jour les templates nuclei officiels."""
     installed = await NucleiScanner().check_installed()
     if not installed:
         raise HTTPException(
@@ -163,8 +183,14 @@ async def update_nuclei_templates() -> dict:
     return {"status": "ok", "message": "Templates nuclei mis à jour avec succès."}
 
 
-@router.get("/status", tags=["Nuclei"])
-async def nuclei_status() -> dict:
+@router.get(
+    "/status",
+    response_model=NucleiStatusResponse,
+    summary="Vérifie l'installation nuclei",
+    description="Vérifie si le binaire nuclei est installé et si les templates sont disponibles.",
+    responses={200: {"description": "État de l'installation nuclei"}},
+)
+async def nuclei_status() -> NucleiStatusResponse:
     """Vérifie si nuclei est installé et les templates disponibles."""
     scanner = NucleiScanner()
     installed = await scanner.check_installed()

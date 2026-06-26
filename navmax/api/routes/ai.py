@@ -16,6 +16,12 @@ from pydantic import BaseModel, Field
 
 from navmax.ai.engine import get_engine
 from navmax.ai.providers.base import ModelTier, ProviderType
+from navmax.api.schemas_responses import (
+    AIModelInfo,
+    AIModelsResponse,
+    AIReloadResponse,
+    AIStatusResponse,
+)
 from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
@@ -49,18 +55,38 @@ class GenerateResponse(BaseModel):
 # ── Routes ───────────────────────────────────────────────────────
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    response_model=AIStatusResponse,
+    summary="État complet du moteur IA",
+    description="Retourne l'état des providers, du matériel GPU, et du modèle actif.",
+    responses={
+        200: {"description": "État du moteur IA"},
+        503: {"description": "Moteur IA non disponible"},
+    },
+)
 async def ai_status():
-    """État complet du moteur IA."""
+    """État complet du moteur IA : providers, hardware GPU, modèles disponibles."""
     engine = get_engine()
     if not engine._initialized:
         await engine.initialize()
     return await engine.get_status()
 
 
-@router.post("/generate", response_model=GenerateResponse)
+@router.post(
+    "/generate",
+    response_model=GenerateResponse,
+    summary="Génération de texte avec sélection automatique",
+    description="Sélectionne le meilleur modèle disponible selon le tier demandé et génère une réponse.",
+    status_code=200,
+    responses={
+        200: {"description": "Texte généré avec métriques d'utilisation"},
+        400: {"description": "Tier ou provider invalide"},
+        503: {"description": "Service de génération indisponible"},
+    },
+)
 async def ai_generate(req: GenerateRequest):
-    """Génération avec sélection automatique du meilleur modèle."""
+    """Génération avec sélection automatique du meilleur modèle (light/medium/heavy)."""
     engine = get_engine()
     if not engine._initialized:
         await engine.initialize()
@@ -109,9 +135,17 @@ async def ai_generate(req: GenerateRequest):
         raise HTTPException(503, str(e))
 
 
-@router.post("/stream")
+@router.post(
+    "/stream",
+    summary="Streaming SSE de génération de texte",
+    description="Génération en temps réel via Server-Sent Events. Chaque chunk est envoyé immédiatement.",
+    responses={
+        200: {"description": "Flux SSE avec chunks de texte", "content": {"text/event-stream": {}}},
+        400: {"description": "Tier ou provider invalide"},
+    },
+)
 async def ai_stream(req: GenerateRequest):
-    """Streaming SSE — chaque chunk est envoyé en temps réel."""
+    """Streaming SSE — chaque chunk de texte est envoyé en temps réel au client."""
     engine = get_engine()
     if not engine._initialized:
         await engine.initialize()
@@ -151,9 +185,17 @@ async def ai_stream(req: GenerateRequest):
     )
 
 
-@router.get("/models")
+@router.get(
+    "/models",
+    response_model=AIModelsResponse,
+    summary="Liste tous les modèles IA disponibles",
+    description="Retourne la liste des modèles par provider avec leurs caractéristiques (tier, local, uncensored).",
+    responses={
+        200: {"description": "Liste des modèles disponibles"},
+    },
+)
 async def list_models():
-    """Liste tous les modèles disponibles, par provider."""
+    """Liste tous les modèles disponibles, triés par priorité (local → uncensored → tier)."""
     engine = get_engine()
     if not engine._initialized:
         await engine.initialize()
@@ -162,29 +204,37 @@ async def list_models():
     if engine._selector:
         for result in engine._selector._available.values():
             models.append(
-                {
-                    "name": result.model,
-                    "provider": result.provider.value,
-                    "tier": result.tier.value,
-                    "uncensored": result.is_uncensored,
-                    "local": result.is_local,
-                    "reason": result.reason,
-                },
+                AIModelInfo(
+                    name=result.model,
+                    provider=result.provider.value,
+                    tier=result.tier.value,
+                    uncensored=result.is_uncensored,
+                    local=result.is_local,
+                    reason=result.reason,
+                ),
             )
 
     # Trier: local d'abord, puis uncensored, puis par tier
     models.sort(
         key=lambda m: (
-            0 if m["local"] else 1,
-            0 if m["uncensored"] else 1,
-            {"light": 0, "medium": 1, "heavy": 2}[m["tier"]],
+            0 if m.local else 1,
+            0 if m.uncensored else 1,
+            {"light": 0, "medium": 1, "heavy": 2}[m.tier],
         ),
     )
 
-    return {"models": models}
+    return AIModelsResponse(models=models)
 
 
-@router.post("/reload")
+@router.post(
+    "/reload",
+    response_model=AIReloadResponse,
+    summary="Réinitialise le moteur IA",
+    description="Recharge tous les providers après un changement de configuration ou installation d'un nouveau modèle.",
+    responses={
+        200: {"description": "Moteur rechargé avec succès"},
+    },
+)
 async def reload_engine():
     """Réinitialise tous les providers (après changement de config ou install de modèle)."""
     logger.info("ai_engine_rechargement")

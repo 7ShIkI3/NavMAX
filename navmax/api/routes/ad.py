@@ -6,12 +6,17 @@ POST /api/v1/ad/enumerate      — Énumération complète du domaine
 POST /api/v1/ad/scan           — Scan de vulnérabilités
 POST /api/v1/ad/analyze        — Analyse des chemins d'attaque
 POST /api/v1/ad/spray          — Password spraying (⚠️ sensible)
-GET  /api/v1/ad/graph/export   — Export BloodHound JSON
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from navmax.api.schemas_responses import (
+    ADAnalyzeResponse,
+    ADEnumerateResponse,
+    ADScanResponse,
+    ADSprayResponse,
+)
 from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/ad", tags=["Active Directory"])
@@ -56,12 +61,19 @@ class ADSprayRequest(BaseModel):
 # ── Routes ─────────────────────────────────────────────────────
 
 
-@router.post("/enumerate")
+@router.post(
+    "/enumerate",
+    response_model=ADEnumerateResponse,
+    summary="Énumération complète Active Directory",
+    description="Énumère un domaine AD : utilisateurs, groupes, ordinateurs, UO, GPO, relations de confiance, comptes kerberoastables.",
+    responses={
+        200: {"description": "Résumé de l'énumération AD"},
+        401: {"description": "Authentification AD échouée"},
+        502: {"description": "Connexion AD échouée"},
+    },
+)
 async def ad_enumerate(req: ADEnumerateRequest):
-    """Énumération complète Active Directory.
-
-    Retourne le résumé de la DomainMap : comptage users, groups, etc.
-    """
+    """Énumération complète Active Directory — retourne le résumé de la DomainMap."""
     from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.enumerator import ADEnumerator
 
@@ -111,9 +123,19 @@ async def ad_enumerate(req: ADEnumerateRequest):
         await connector.close()
 
 
-@router.post("/scan")
+@router.post(
+    "/scan",
+    response_model=ADScanResponse,
+    summary="Scan de vulnérabilités Active Directory",
+    description="Analyse un domaine AD à la recherche de vulnérabilités : délégations non sécurisées, ACL dangereuses, comptes à risque, etc.",
+    responses={
+        200: {"description": "Rapport de vulnérabilités AD"},
+        401: {"description": "Authentification AD échouée"},
+        502: {"description": "Connexion AD échouée"},
+    },
+)
 async def ad_scan(req: ADScanRequest):
-    """Scan de vulnérabilités Active Directory."""
+    """Scan de vulnérabilités Active Directory — retourne les findings classés par sévérité."""
     from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.enumerator import ADEnumerator
     from navmax.ad.vuln_scanner import ADVulnScanner
@@ -171,7 +193,17 @@ async def ad_scan(req: ADScanRequest):
         await connector.close()
 
 
-@router.post("/analyze")
+@router.post(
+    "/analyze",
+    response_model=ADAnalyzeResponse,
+    summary="Analyse des chemins d'attaque AD",
+    description="Construit le graphe des relations AD, identifie les chemins d'attaque critiques vers le DA, et génère un résumé exécutif.",
+    responses={
+        200: {"description": "Analyse des chemins d'attaque"},
+        401: {"description": "Authentification AD échouée"},
+        502: {"description": "Connexion AD échouée"},
+    },
+)
 async def ad_analyze(req: ADAnalyzeRequest):
     """Analyse des chemins d'attaque + graphe BloodHound."""
     from navmax.ad.attack_paths import AttackPathAnalyzer
@@ -242,9 +274,19 @@ async def ad_analyze(req: ADAnalyzeRequest):
         await connector.close()
 
 
-@router.post("/spray")
+@router.post(
+    "/spray",
+    response_model=ADSprayResponse,
+    summary="Password spraying (⚠️ sensible)",
+    description="⚠️ ENDPOINT SENSIBLE — Tente des mots de passe sur des comptes AD. Utilise le mode SAFE par défaut pour éviter le lockout.",
+    responses={
+        200: {"description": "Résultat du password spraying"},
+        401: {"description": "Authentification AD échouée"},
+        502: {"description": "Connexion AD échouée"},
+    },
+)
 async def ad_spray(req: ADSprayRequest):
-    """Password spraying (⚠️ endpoint sensible)."""
+    """Password spraying (⚠️ endpoint sensible) — attaque par pulvérisation de mots de passe."""
     from navmax.ad.connector import ADAuthMethod, ADConfig, ADConnector
     from navmax.ad.password_spray import PasswordSprayer, SprayConfig, SprayMode
 

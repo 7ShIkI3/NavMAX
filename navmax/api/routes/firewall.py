@@ -9,6 +9,7 @@ POST /api/v1/firewall/correlate         — Corréler AD × Firewall
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from navmax.api.schemas_responses import FirewallAnalyzeResponse, FWRulesResponse
 from navmax.core.logging import get_logger
 
 router = APIRouter(prefix="/api/v1/firewall", tags=["Firewall"])
@@ -195,7 +196,15 @@ async def stormshield_rules(req: StormShieldRequest):
         await sns.close()
 
 
-@router.post("/analyze")
+@router.post(
+    "/analyze",
+    response_model=FirewallAnalyzeResponse,
+    summary="Analyse les règles firewall",
+    description="Détecte les anomalies de configuration : règles shadowing, Any/Any, règles redondantes, etc.",
+    responses={
+        200: {"description": "Rapport d'analyse des règles"},
+    },
+)
 async def firewall_analyze(req: AnalyzeRequest):
     """Analyse les règles firewall (shadowing, Any/Any, etc.)."""
     from navmax.firewall.base import (

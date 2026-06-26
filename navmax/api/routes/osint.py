@@ -5,6 +5,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
+from navmax.api.schemas_responses import (
+    DNSLookupResponse,
+    InvestigateResponse,
+    ListTransformsResponse,
+    SSLLookupResponse,
+    WebAnalyzeResponse,
+    WhoisLookupResponse,
+)
 from navmax.core.logging import get_logger
 from navmax.osint import (
     DnsCollector,
@@ -26,8 +34,14 @@ class InvestigateRequest(BaseModel):
 
 # ---------------------------------------------------------------------------
 # Collecteurs individuels
-# ---------------------------------------------------------------------------
-@router.get("/dns/{domain}")
+# ── Collecteurs individuels ───────────────────────────────────────────
+@router.get(
+    "/dns/{domain}",
+    response_model=DNSLookupResponse,
+    summary="Résolution DNS d'un domaine",
+    description="Effectue une résolution DNS pour un domaine donné et retourne les enregistrements (A, AAAA, MX, NS, TXT, CNAME, SOA).",
+    responses={200: {"description": "Enregistrements DNS du domaine"}},
+)
 async def dns_lookup(
     domain: str,
     types: Annotated[str | None, Query(description="A,AAAA,MX,NS,TXT,CNAME,SOA (séparés par virgule)")] = None,
@@ -44,8 +58,14 @@ async def dns_lookup(
     }
 
 
-@router.get("/whois/{domain}")
-async def whois_lookup(domain: str) -> dict:
+@router.get(
+    "/whois/{domain}",
+    response_model=WhoisLookupResponse,
+    summary="WHOIS d'un domaine",
+    description="Interroge les bases WHOIS pour obtenir les informations d'enregistrement d'un domaine.",
+    responses={200: {"description": "Informations WHOIS du domaine"}},
+)
+async def whois_lookup(domain: str) -> WhoisLookupResponse:
     """WHOIS d'un domaine."""
     info = await WhoisCollector.lookup(domain)
     if info is None:
@@ -64,29 +84,41 @@ async def whois_lookup(domain: str) -> dict:
     }
 
 
-@router.get("/ssl/{host}")
-async def ssl_lookup(host: str, port: Annotated[int, Query()] = 443) -> dict:
+@router.get(
+    "/ssl/{host}",
+    response_model=SSLLookupResponse,
+    summary="Certificat SSL d'un hôte",
+    description="Récupère et analyse le certificat SSL/TLS d'un hôte : validité, SAN, empreinte, jours restants.",
+    responses={200: {"description": "Informations du certificat SSL"}},
+)
+async def ssl_lookup(host: str, port: Annotated[int, Query()] = 443) -> SSLLookupResponse:
     """Certificat SSL d'un hôte."""
     info = await SslCollector.get_cert(host, port)
     if info is None:
-        return {"host": host, "error": "Certificat inaccessible"}
-    return {
-        "host": info.host,
-        "port": info.port,
-        "subject": info.subject,
-        "issuer": info.issuer,
-        "serial_number": info.serial_number,
-        "not_before": info.not_before,
-        "not_after": info.not_after,
-        "san": info.san,
-        "fingerprint_sha256": info.fingerprint_sha256,
-        "is_valid": info.is_valid,
-        "days_remaining": info.days_remaining,
-    }
+        return SSLLookupResponse(host=host, port=port, error="Certificat inaccessible")
+    return SSLLookupResponse(
+        host=info.host,
+        port=info.port,
+        subject=info.subject,
+        issuer=info.issuer,
+        serial_number=info.serial_number,
+        not_before=info.not_before,
+        not_after=info.not_after,
+        san=info.san,
+        fingerprint_sha256=info.fingerprint_sha256,
+        is_valid=info.is_valid,
+        days_remaining=info.days_remaining,
+    )
 
 
-@router.get("/web/{url:path}")
-async def web_analyze(url: str) -> dict:
+@router.get(
+    "/web/{url:path}",
+    response_model=WebAnalyzeResponse,
+    summary="Analyse d'une page web",
+    description="Analyse une page web pour détecter les technologies utilisées, emails, liens externes et réseaux sociaux.",
+    responses={200: {"description": "Analyse de la page web"}},
+)
+async def web_analyze(url: str) -> WebAnalyzeResponse:
     """Analyse d'une page web."""
     # FastAPI décode l'URL → reconstruire
     from urllib.parse import unquote
@@ -115,8 +147,14 @@ async def web_analyze(url: str) -> dict:
 # ---------------------------------------------------------------------------
 # Investigation complète
 # ---------------------------------------------------------------------------
-@router.post("/investigate")
-async def investigate(req: InvestigateRequest) -> dict:
+@router.post(
+    "/investigate",
+    response_model=InvestigateResponse,
+    summary="Investigation OSINT complète",
+    description="Lance une investigation multi-source complète : DNS, WHOIS, SSL, web, Shodan, liens internes/externes, graphe de relations.",
+    responses={200: {"description": "Résultat de l'investigation OSINT"}},
+)
+async def investigate(req: InvestigateRequest) -> InvestigateResponse:
     """Investigation OSINT complète (orchestrateur)."""
     logger.info(
         "osint_investigation_lancée", target=req.target, type=req.target_type, depth=req.max_depth,
@@ -141,8 +179,14 @@ async def investigate(req: InvestigateRequest) -> dict:
 # ---------------------------------------------------------------------------
 # Transforms disponibles
 # ---------------------------------------------------------------------------
-@router.get("/transforms")
-async def list_transforms() -> dict:
+@router.get(
+    "/transforms",
+    response_model=ListTransformsResponse,
+    summary="Liste les transforms OSINT disponibles",
+    description="Retourne la liste des transforms OSINT (collecteurs disponibles) avec leur type d'entrée et description.",
+    responses={200: {"description": "Liste des transforms"}},
+)
+async def list_transforms() -> ListTransformsResponse:
     """Liste les transforms OSINT disponibles."""
     from navmax.osint.graph import ALL_TRANSFORMS
 

@@ -6,6 +6,18 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from navmax.api.schemas_responses import (
+    FlowDecisionResponse,
+    FlowListResponse,
+    FuzzResponse,
+    InterceptToggleResponse,
+    ProxyStartResponse,
+    ProxyStatusResponse,
+    ProxyStopResponse,
+    ReplayHistoryResponse,
+    ReplayResponse,
+    ScanURLResponse,
+)
 from navmax.core.logging import get_logger
 from navmax.proxy import (
     FlowAction,
@@ -74,12 +86,18 @@ class ReplayRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Proxy lifecycle
 # ---------------------------------------------------------------------------
-@router.post("/start")
-async def proxy_start(req: ProxyStartRequest) -> dict:
+@router.post(
+    "/start",
+    response_model=ProxyStartResponse,
+    summary="Démarre le proxy MITM",
+    description="Lance un serveur proxy MITM pour intercepter et analyser le trafic HTTP/HTTPS.",
+    responses={200: {"description": "Proxy démarré ou déjà en cours"}},
+)
+async def proxy_start(req: ProxyStartRequest) -> ProxyStartResponse:
     """Démarre le serveur proxy MITM."""
     global _proxy_server
     if _proxy_server and _proxy_server.running:
-        return {"status": "already_running", "host": _proxy_server.host, "port": _proxy_server.port}
+        return ProxyStartResponse(status="already_running", host=_proxy_server.host, port=_proxy_server.port)
 
     _proxy_server = ProxyServer(
         host=req.host,
@@ -89,23 +107,35 @@ async def proxy_start(req: ProxyStartRequest) -> dict:
     task = asyncio.create_task(_proxy_server.start())
     task.add_done_callback(_on_proxy_task_error)
     logger.info("proxy_démarré", host=req.host, port=req.port)
-    return {"status": "started", "host": req.host, "port": req.port}
+    return ProxyStartResponse(status="started", host=req.host, port=req.port)
 
 
-@router.post("/stop")
-async def proxy_stop() -> dict:
+@router.post(
+    "/stop",
+    response_model=ProxyStopResponse,
+    summary="Arrête le proxy",
+    description="Arrête le serveur proxy MITM et libère le port.",
+    responses={200: {"description": "Proxy arrêté ou non démarré"}},
+)
+async def proxy_stop() -> ProxyStopResponse:
     """Arrête le serveur proxy."""
     global _proxy_server
     if _proxy_server:
         await _proxy_server.stop()
         _proxy_server = None
         logger.info("proxy_arrêté")
-        return {"status": "stopped"}
-    return {"status": "not_running"}
+        return ProxyStopResponse(status="stopped")
+    return ProxyStopResponse(status="not_running")
 
 
-@router.get("/status")
-async def proxy_status() -> dict:
+@router.get(
+    "/status",
+    response_model=ProxyStatusResponse,
+    summary="État du proxy",
+    description="Retourne l'état actuel du proxy : running, ports, nombre de flux, état de l'interception.",
+    responses={200: {"description": "État du proxy"}},
+)
+async def proxy_status() -> ProxyStatusResponse:
     """État du proxy."""
     if not _proxy_server:
         return {
@@ -126,14 +156,26 @@ async def proxy_status() -> dict:
 # ---------------------------------------------------------------------------
 # Interception
 # ---------------------------------------------------------------------------
-@router.post("/intercept/toggle")
-async def intercept_toggle() -> dict:
+@router.post(
+    "/intercept/toggle",
+    response_model=InterceptToggleResponse,
+    summary="Active/désactive l'interception",
+    description="Bascule l'état de l'interception des flux HTTP au niveau du proxy.",
+    responses={200: {"description": "Nouvel état de l'interception"}},
+)
+async def intercept_toggle() -> InterceptToggleResponse:
     """Active/désactive l'interception."""
     _interceptor.intercept_enabled = not _interceptor.intercept_enabled
-    return {"intercept_enabled": _interceptor.intercept_enabled}
+    return InterceptToggleResponse(intercept_enabled=_interceptor.intercept_enabled)
 
 
-@router.get("/flows")
+@router.get(
+    "/flows",
+    response_model=FlowListResponse,
+    summary="Liste les flux interceptés",
+    description="Retourne les derniers flux HTTP interceptés par le proxy avec les détails des requêtes/réponses.",
+    responses={200: {"description": "Liste des flux"}},
+)
 async def list_flows(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> dict:
@@ -168,8 +210,17 @@ async def list_flows(
     }
 
 
-@router.post("/flows/{flow_id}/decide")
-async def decide_flow(flow_id: str, decision: FlowDecision) -> dict:
+@router.post(
+    "/flows/{flow_id}/decide",
+    response_model=FlowDecisionResponse,
+    summary="Décide du sort d'un flux intercepté",
+    description="Permet de forwarder, dropper ou modifier un flux intercepté par le proxy.",
+    responses={
+        200: {"description": "Décision appliquée"},
+        404: {"description": "Flux introuvable"},
+    },
+)
+async def decide_flow(flow_id: str, decision: FlowDecision) -> FlowDecisionResponse:
     """Décide du sort d'un flux intercepté."""
     action = FlowAction(decision.action)
     modified = None
@@ -179,14 +230,22 @@ async def decide_flow(flow_id: str, decision: FlowDecision) -> dict:
     ok = _interceptor.decide(flow_id, action, modified)
     if not ok:
         raise HTTPException(404, "Flux introuvable")
-    return {"status": "ok", "flow_id": flow_id, "action": action.value}
+    return FlowDecisionResponse(status="ok", flow_id=flow_id, action=action.value)
 
 
 # ---------------------------------------------------------------------------
 # Scanner web
 # ---------------------------------------------------------------------------
-@router.post("/scan")
-async def scan_url(req: ScanRequest) -> dict:
+@router.post(
+    "/scan",
+    response_model=ScanURLResponse,
+    summary="Scanne une URL pour les vulnérabilités web",
+    description="Analyse une URL à la recherche de vulnérabilités web (XSS, SQLi, etc.) avec rapport détaillé.",
+    responses={
+        200: {"description": "Rapport de vulnérabilités"},
+    },
+)
+async def scan_url(req: ScanRequest) -> ScanURLResponse:
     """Scanne une URL pour les vulnérabilités web."""
     logger.info("proxy_scan_web_lancé", url=req.url, method=req.method)
     vulns = await _web_scanner.scan_url(
@@ -219,8 +278,16 @@ async def scan_url(req: ScanRequest) -> dict:
 # ---------------------------------------------------------------------------
 # Fuzzer
 # ---------------------------------------------------------------------------
-@router.post("/fuzz")
-async def fuzz_url(req: FuzzRequest) -> dict:
+@router.post(
+    "/fuzz",
+    response_model=FuzzResponse,
+    summary="Fuzze une URL avec des payloads d'attaque",
+    description="Teste une URL avec des payloads d'attaque prédéfinis (XSS, injection, path traversal, etc.) et détecte les anomalies.",
+    responses={
+        200: {"description": "Rapport de fuzzing"},
+    },
+)
+async def fuzz_url(req: FuzzRequest) -> FuzzResponse:
     """Fuzze une URL avec des payloads d'attaque."""
     logger.info("proxy_fuzz_lancé", url=req.url, method=req.method)
     report = await _fuzzer.fuzz_url(
@@ -253,8 +320,16 @@ async def fuzz_url(req: FuzzRequest) -> dict:
 # ---------------------------------------------------------------------------
 # Repeater
 # ---------------------------------------------------------------------------
-@router.post("/replay")
-async def replay_request(req: ReplayRequest) -> dict:
+@router.post(
+    "/replay",
+    response_model=ReplayResponse,
+    summary="Rejoue une requête HTTP",
+    description="Envoie une requête HTTP personnalisée (method, url, headers, body) et retourne la réponse complète.",
+    responses={
+        200: {"description": "Réponse du replay"},
+    },
+)
+async def replay_request(req: ReplayRequest) -> ReplayResponse:
     """Rejoue une requête HTTP."""
     result = await _repeater.send(
         method=req.method,
@@ -263,17 +338,23 @@ async def replay_request(req: ReplayRequest) -> dict:
         body=req.body or b"",
     )
 
-    return {
-        "status": result.status,
-        "headers": result.headers,
-        "body": result.body[:10_000],
-        "elapsed_ms": result.elapsed_ms,
-        "error": result.error,
-    }
+    return ReplayResponse(
+        status=result.status,
+        headers=result.headers,
+        body=result.body[:10_000],
+        elapsed_ms=result.elapsed_ms,
+        error=result.error,
+    )
 
 
-@router.get("/replay/history")
-async def replay_history(limit: Annotated[int, Query(ge=1, le=100)] = 20) -> dict:
+@router.get(
+    "/replay/history",
+    response_model=ReplayHistoryResponse,
+    summary="Historique des replays",
+    description="Retourne l'historique des requêtes replayées avec leur statut et temps de réponse.",
+    responses={200: {"description": "Historique des replays"}},
+)
+async def replay_history(limit: Annotated[int, Query(ge=1, le=100)] = 20) -> ReplayHistoryResponse:
     """Historique des replays."""
     history = _repeater.history[-limit:]
     return {
