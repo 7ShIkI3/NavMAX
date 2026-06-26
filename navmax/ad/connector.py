@@ -805,7 +805,14 @@ class ADConnector:
 
     @staticmethod
     def _check_impacket() -> None:
-        """Vérifie que impacket est installé, lève une erreur claire sinon."""
+        """Vérifie que impacket est installé, lève une erreur claire sinon.
+
+        Corrige également une régression d'impacket 0.13.1 :
+        ``LOG`` a été retiré de ``impacket.__init__`` mais les modules
+        internes (``ntlm.py``, ``smb.py``) tentent toujours
+        ``from impacket import LOG``. On le rétablit ici pour éviter
+        un ``ImportError`` au premier appel.
+        """
         try:
             import impacket  # noqa: F401
         except ImportError:
@@ -822,6 +829,11 @@ class ADConnector:
             raise ADConnectionError(
                 msg,
             )
+        # ── Correction régression impacket 0.13.1 ──────────────────
+        if not hasattr(impacket, "LOG"):
+            import logging  # pylint: disable=import-outside-toplevel
+
+            impacket.LOG = logging.getLogger("impacket")
 
     # ══════════════════════════════════════════════════════════════════
     # Authentification NTLM / Kerberos (impacket)
