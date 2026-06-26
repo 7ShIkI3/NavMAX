@@ -31,8 +31,9 @@ def mock_storage():
         return storage
 
     async def fake_save(data):
+        snapshot = dict(data)
         storage.clear()
-        storage.update(data)
+        storage.update(snapshot)
 
     with patch(
         "navmax.api.routes.settings._load_keys",
@@ -58,7 +59,7 @@ class TestMaskKey:
 
 class TestListApiKeys:
     async def test_liste_vide(self, client, mock_storage):
-        resp = await client.get("/apikeys")
+        resp = await client.get("/api/v1/settings/apikeys")
         assert resp.status_code == 200
         data = resp.json()
         assert data["providers"] == []
@@ -67,7 +68,7 @@ class TestListApiKeys:
         _, _, storage = mock_storage
         storage["providers"]["deepseek"] = "sk-dee...-123"
         storage["providers"]["openai"] = "sk-old-key"
-        resp = await client.get("/apikeys")
+        resp = await client.get("/api/v1/settings/apikeys")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["providers"]) == 2
@@ -81,7 +82,7 @@ class TestSaveApiKey:
         _, _, storage = mock_storage
         storage["providers"]["openai"] = "sk-old-key"
         resp = await client.post(
-            "/apikeys",
+            "/api/v1/settings/apikeys",
             json={"provider": "deepseek", "key": "sk-dee...-key"},
         )
         assert resp.status_code == 201
@@ -92,14 +93,14 @@ class TestSaveApiKey:
 
     async def test_cle_vide_refusee(self, client, mock_storage):
         resp = await client.post(
-            "/apikeys",
+            "/api/v1/settings/apikeys",
             json={"provider": "deepseek", "key": "   "},
         )
         assert resp.status_code == 400
 
     async def test_provider_invalide_refuse(self, client, mock_storage):
         resp = await client.post(
-            "/apikeys",
+            "/api/v1/settings/apikeys",
             json={"provider": "", "key": "sk-test"},
         )
         assert resp.status_code == 422
@@ -110,7 +111,7 @@ class TestDeleteApiKey:
         _, _, storage = mock_storage
         storage["providers"]["deepseek"] = "sk-key-1"
         storage["providers"]["openai"] = "sk-key-2"
-        resp = await client.delete("/apikeys/deepseek")
+        resp = await client.delete("/api/v1/settings/apikeys/deepseek")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "deleted"
@@ -120,7 +121,7 @@ class TestDeleteApiKey:
     async def test_supprimer_cle_inexistante(self, client, mock_storage):
         _, _, storage = mock_storage
         storage["providers"] = {}
-        resp = await client.delete("/apikeys/deepseek")
+        resp = await client.delete("/api/v1/settings/apikeys/deepseek")
         assert resp.status_code == 404
 
 
