@@ -15,3 +15,5 @@ htmlcov/
 *.pem
 .hermes/
 **/PLAN.md
+jwt.txt
+*.jwt
