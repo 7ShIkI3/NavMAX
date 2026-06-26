@@ -51,8 +51,8 @@ echo.
 echo   Demarrage du serveur...
 echo.
 
-:: Lancer le serveur avec pythonw (sans console)
-start "" /B "%PYTHONW%" -m navmax serve --port %PORT%
+:: Lancer le serveur avec uvicorn (plus fiable que python -m navmax)
+start "" /B "%PYTHONW%" -m uvicorn navmax.api.app:app --host 127.0.0.1 --port %PORT%
 
 :: Attendre que le serveur soit prêt — timeout 5s
 timeout /t 3 /nobreak >nul

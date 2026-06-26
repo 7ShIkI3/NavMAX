@@ -179,7 +179,7 @@ if (-not $NoShortcut) {
     $WScriptShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath = "$VenvDir\Scripts\$PythonWExe.exe"
-    $Shortcut.Arguments = "-m navmax serve --port $Port"
+    $Shortcut.Arguments = "-m uvicorn navmax.api.app:app --host 127.0.0.1 --port $Port"
     $Shortcut.WorkingDirectory = $AppDir
     $Shortcut.Description = "$AppName Mission Control - Dashboard cybernetique"
     if (Test-Path $IconDest) {
@@ -204,7 +204,7 @@ if (-not $NoStartMenu) {
     # Lancer NavMAX
     $Shortcut = $WScriptShell.CreateShortcut($StartMenuShortcut)
     $Shortcut.TargetPath = "$VenvDir\Scripts\$PythonWExe.exe"
-    $Shortcut.Arguments = "-m navmax serve --port $Port"
+    $Shortcut.Arguments = "-m uvicorn navmax.api.app:app --host 127.0.0.1 --port $Port"
     $Shortcut.WorkingDirectory = $AppDir
     $Shortcut.Description = "$AppName Mission Control - Dashboard cybernetique"
     if (Test-Path $IconDest) {
