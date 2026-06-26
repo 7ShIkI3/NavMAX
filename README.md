@@ -2,14 +2,14 @@
 
 <div align="center">
 
-**Plateforme de cybersécurité offensive autonome — Dashboard Web, Cloud Scanner (AWS S3/IAM), Intruder (Burp-style), Plugin System — pilotée par IA, pour agents IA**
+**Plateforme de cybersécurité offensive autonome — Dashboard v3 (auth + API keys), Cloud Scanner (AWS S3/IAM), Intruder (Burp-style), Plugin System — pilotée par IA, pour agents IA**
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1088%2F1088-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.7.0--rc-purple.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Tests](https://img.shields.io/badge/tests-873%2F873-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.5.1-purple.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (25 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK** · **🖥️ Dashboard v2** · **🧠 ConnecteurIA** · **🖥️ Installeur Windows** · **🔐 Cracking** · **📡 Wireless** · **💻 Pwntools***
+*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (25 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK** · **🖥️ Dashboard v3** · **🔑 API Keys** · **🧠 ConnecteurIA** · **🖥️ Installeur Windows** · **🔐 Cracking** · **📡 Wireless** · **💻 Pwntools***
 
 </div>
 
@@ -74,6 +74,17 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 | 🧪 **Tests** | 773 | ✅ **827** (+54) |
 | 🤖 **Agentic** | ❌ Aucun | ✅ **5 templates agents** (codeur/analyste/structure/plan/innovation), quality standards, orchestrateur YAML |
 | 🔒 **Hermes** | Config faiblesses | ✅ auto_prune, tirith_fail_open→false, skills dupliquées mergées, mémoire consolidée |
+
+### 🆕 v0.5.1 — Dashboard Auth, API Keys, Données Réelles
+
+| Module | Avant (v0.5.0) | Maintenant (v0.5.1) |
+|---|---|---|
+| 🔐 **Dashboard Auth** | Simple JWT header | ✅ **Login modal** cyber-industrial, token localStorage, auto-login on 401, logout, fetch interceptor |
+| 🔑 **API Keys** | ❌ Aucune UI | ✅ **Settings page** CRUD, stockage YAML, clés masquées, intégré AIEngine |
+| 🗑️ **Simulation** | Données codées en dur | ✅ **Supprimée** — `loadAiDemoData()`, `addDemoData()` retirées |
+| ⚙️ **System Status** | apiOk partagé | ✅ **Par service** — API, Redis, Celery, Nuclei, Nmap |
+| 🔧 **Launch** | `navmax serve` | ✅ `uvicorn navmax.api.app:app` direct, raccourci corrigé |
+| 🧪 **Tests** | 827 | ✅ **883** (+56 settings + auth) |
 
 ### 🆕 v0.4.2 — Refactoring Mathis & Core Infra
 
