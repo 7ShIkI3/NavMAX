@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Installe NavMAX sur le système — crée un environnement virtuel, installe les dépendances,
     copie les assets, crée un raccourci bureau et une entrée dans le menu Démarrer.
@@ -181,7 +181,7 @@ if (-not $NoShortcut) {
     $Shortcut.TargetPath = "$VenvDir\Scripts\$PythonWExe.exe"
     $Shortcut.Arguments = "-m navmax serve --port $Port"
     $Shortcut.WorkingDirectory = $AppDir
-    $Shortcut.Description = "$AppName Mission Control — Dashboard cybernétique"
+    $Shortcut.Description = "$AppName Mission Control - Dashboard cybernetique"
     if (Test-Path $IconDest) {
         $Shortcut.IconLocation = "$IconDest, 0"
     }
@@ -206,7 +206,7 @@ if (-not $NoStartMenu) {
     $Shortcut.TargetPath = "$VenvDir\Scripts\$PythonWExe.exe"
     $Shortcut.Arguments = "-m navmax serve --port $Port"
     $Shortcut.WorkingDirectory = $AppDir
-    $Shortcut.Description = "$AppName Mission Control — Dashboard cybernétique"
+    $Shortcut.Description = "$AppName Mission Control - Dashboard cybernetique"
     if (Test-Path $IconDest) {
         $Shortcut.IconLocation = "$IconDest, 0"
     }
@@ -237,7 +237,7 @@ if (Test-Path $VenvPython) {
     $Version = & $VenvPython --version 2>&1
     Write-Host "  ✓ Python : $Version" -ForegroundColor Gray
 }
-if (Test-Path "$VenvDir\Lib\site-packages\navmax" -or (Test-Path "$VenvDir\Lib\site-packages\navmax*.egg-link" -or (Test-Path "$VenvDir\Lib\site-packages\navmax*.pth"))) {
+if ((Test-Path "$VenvDir\Lib\site-packages\navmax") -or (Test-Path "$VenvDir\Lib\site-packages\navmax*.egg-link") -or (Test-Path "$VenvDir\Lib\site-packages\navmax*.pth") -or (Test-Path "$VenvDir\Lib\site-packages\*navmax*.pth") -or (Test-Path "$VenvDir\Lib\site-packages\navmax*.dist-info")) {
     Write-Host "  ✓ Package navmax installé" -ForegroundColor Gray
 } else {
     Write-Host "  ⚠ Vérifiez que navmax est bien accessible depuis le venv" -ForegroundColor Yellow
