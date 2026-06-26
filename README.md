@@ -6,10 +6,10 @@
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-773%2F773-brightgreen.svg)](tests/)
-[![Version](https://img.shields.io/badge/version-0.4.2-orange.svg)](https://github.com/7ShIkI3/NavMAX)
+[![Tests](https://img.shields.io/badge/tests-827%2F827-brightgreen.svg)](tests/)
+[![Version](https://img.shields.io/badge/version-0.5.0-purple.svg)](https://github.com/7ShIkI3/NavMAX)
 
-*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK***
+*Scanner réseau · **Nuclei (10k+ CVE)** · Proxy MITM · Framework d'exploitation (24 exploits) · OSINT & Graphe · Sandbox Docker · **🧠 ReAct Agent IA** · **💣 Exploit Generator** · **🎭 Évasion polymorphique** · **📄 Rapports IA** · **🔗 SIEM/SOAR** · **🛡️ AD/LDAP** · **🔥 Firewall** · **🏗️ Infrastructure SOC** · **⚙️ Celery Tasks** · **📊 CVSS 3.1 + SARIF** · **🕸️ Playwright Spider** · **🔐 JWT + RBAC** · **🎯 MITRE ATT&CK** · **🖥️ Dashboard v2** · **🧠 ConnecteurIA** · **🖥️ Installeur Windows***
 
 </div>
 
@@ -47,6 +47,21 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 | 🔒 **Sécurité** | ❌ Aucune | ✅ **Audit P0+P1** (6 fixes), SAST CI/CD (Bandit+Safety) |
 | 🐳 **Docker** | Basique | ✅ **PostgreSQL**, Nginx, volumes persistants, tout-en-un |
 | 🧪 **Tests** | 403 | ✅ **773** |
+
+### 🆕 v0.5.0 — Installeur, Dashboard v2, Optimisations & Audit
+
+| Module | Avant (v0.4.2) | Maintenant (v0.5.0) |
+|---|---|---|
+| 🖥️ **Installeur Windows** | ❌ Aucun | ✅ `install.ps1` (venv, raccourci bureau, menu Démarrer), `uninstall.ps1` (-KeepData), `launch.bat` one-click |
+| 🧠 **Dashboard v2** | UI basique | ✅ **Sidebar navigation**, **ConnecteurIA** (providers, modèles, hardware), sélection modèle IA, tabs (Mission/Scans/Vuln/Graph/Système) |
+| ⚡ **Perf** | Pas d'optimisations | ✅ Pool HTTP centralisé (-200ms/req), 16 indexes DB, probes parallélisées, lazy imports (-90ms) |
+| 📐 **Qualité** | 4374 violations ruff | ✅ **-58%** violations, 22→2 silent swallowers, mypy core: 4→0 erreurs, 134 fichiers formatés |
+| 🔧 **Fuzzer** | Faux négatifs | ✅ Détection regex (uid=, root:, Volume Serial), Content-Length diff, +16 payloads |
+| 🔍 **Nuclei** | Préfixe cassé | ✅ `/api/v1/nuclei`, update-templates, startup check graceful |
+| 📦 **Modules** | Censys dans shodan.py | ✅ CensysCollector dédié, intégrations refactorisées (thehive/misp/hub), cloud scanner pattern |
+| 🧪 **Tests** | 773 | ✅ **827** (+54) |
+| 🤖 **Agentic** | ❌ Aucun | ✅ **5 templates agents** (codeur/analyste/structure/plan/innovation), quality standards, orchestrateur YAML |
+| 🔒 **Hermes** | Config faiblesses | ✅ auto_prune, tirith_fail_open→false, skills dupliquées mergées, mémoire consolidée |
 
 ### 🆕 v0.4.2 — Refactoring Mathis & Core Infra
 
@@ -146,6 +161,31 @@ $ navmax mission "Trouve la base de données sensible sur 10.0.0.0/24"
 ---
 
 ## 📦 Installation
+
+### Windows (recommandé)
+
+```powershell
+git clone https://github.com/7ShIkI3/NavMAX.git
+cd NavMAX
+.\scripts\install.ps1               # Installation standard (venv, raccourci bureau)
+.\scripts\install.ps1 -DevMode      # Mode développement
+```
+
+Après installation : double-clic sur **"NavMAX Mission Control"** sur le Bureau, ou :
+
+```cmd
+%LOCALAPPDATA%\NavMAX\launch.bat
+```
+
+### Désinstallation
+
+```powershell
+.\scripts\uninstall.ps1                 # Suppression complète
+.\scripts\uninstall.ps1 -KeepData       # Garder les données (DB, logs)
+.\scripts\uninstall.ps1 -KeepData -KeepConfig  # Garder données + config
+```
+
+### Depuis les sources
 
 ```bash
 git clone https://github.com/7ShIkI3/NavMAX.git
@@ -628,8 +668,15 @@ SI airgap mode → cloud désactivé, 100% local
 
 ```bash
 pytest tests/ -v
-# 773 passed
+# 827 passed, 45 skipped
 ```
+
+| Métrique | Valeur |
+|---|---|
+| Tests unitaires | 827 |
+| Couverture modules | 100% (16/16 modules) |
+| CI/CD | GitHub Actions (lint + test) |
+| Qualité | ruff -58% violations, mypy core 0 erreurs |
 
 ---
 
@@ -690,15 +737,22 @@ NavMAX/
 │   │   └── ai_report.py      # Rapports IA HTML/MD
 │   ├── integrations/      # 🔗 TheHive, MISP, Hub
 │   ├── core/
-│   │   ├── constants.py      # 30+ constantes (NOUVEAU v0.4.2)
-│   │   ├── exceptions.py     # 16 exceptions typées (NOUVEAU v0.4.2)
-│   │   ├── retry.py          # @async_retry backoff (NOUVEAU v0.4.2)
-│   │   └── utils.py          # safe_close_writer (NOUVEAU v0.4.2)
-│   ├── db/                # SQLAlchemy async models
-│   ├── api/               # FastAPI routes REST (34+ endpoints)
-│   │   └── static/        #   🖥️ Dashboard Web (NOUVEAU v0.4.1)
+│   │   ├── constants.py      # 30+ constantes (v0.4.2)
+│   │   ├── exceptions.py     # 16 exceptions typées (v0.4.2)
+│   │   ├── retry.py          # @async_retry backoff (v0.4.2)
+│   │   ├── http_client.py    # 🌐 Pool HTTP centralisé (NOUVEAU v0.5.0)
+│   │   ├── lazy_import.py    # ⚡ Lazy importer (NOUVEAU v0.5.0)
+│   │   └── utils.py          # safe_close_writer (v0.4.2)
+│   ├── db/                # SQLAlchemy async models + 16 indexes (v0.5.0)
+│   ├── api/               # FastAPI routes REST (42+ endpoints)
+│   │   └── static/        #   🖥️ Dashboard v2 (v0.5.0)
 │   └── sdk/               # Client Python async
-├── tests/                 # 773 tests
+├── scripts/               # 🖥️ Installeur Windows (NOUVEAU v0.5.0)
+│   ├── install.ps1        #   Installation one-click
+│   ├── uninstall.ps1      #   Désinstallation (-KeepData)
+│   ├── launch.bat         #   Lancement + dashboard
+│   └── navmax.ico         #   Icône application
+├── tests/                 # 827 tests (+55 vs v0.4.2)
 ├── .github/workflows/     # 🔒 SAST CI/CD (NOUVEAU)
 ├── nginx/                 # 🐳 Reverse proxy (NOUVEAU)
 ├── Dockerfile             # 🐳 Multi-stage (NOUVEAU)
