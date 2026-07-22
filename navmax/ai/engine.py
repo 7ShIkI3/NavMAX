@@ -238,9 +238,10 @@ class AIEngine:
         try:
             from navmax.ai.providers.openai_compat import OpenAICompatProvider
 
+            base_url = os.environ.get("DEEPSEEK_BASE_URL", keys.get("deepseek_base_url", "https://api.deepseek.com/v1"))
             return OpenAICompatProvider(
                 provider_type=ProviderType.DEEPSEEK,
-                base_url="https://api.deepseek.com/v1",
+                base_url=base_url,
                 api_key=api_key,
             )
         except ImportError:

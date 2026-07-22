@@ -694,6 +694,40 @@ def workspace_create(
         raise typer.Exit(0)
     except Exception as e:
         typer.echo(f"Erreur : {e}", err=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dark Triad — Multi-Agent Red Team
+# ═══════════════════════════════════════════════════════════════════════════════
+_dark_triad_app = typer.Typer(help="🜏 Dark Triad — missions multi-agents avec personnalités")
+app.add_typer(_dark_triad_app, name="dark-triad")
+
+
+@_dark_triad_app.command("mission")
+def dark_triad_mission(
+    objective: str = typer.Argument(..., help="Objectif de la mission en langage naturel"),
+    persona: str = typer.Option("mach", "--persona", "-p", help="mach|narcissism|psychopathy"),
+) -> None:
+    """Lance une mission Dark Triad complète (planification + exécution multi-agent)."""
+    import asyncio
+    from navmax.dark_triad.bootstrap import run_mission
+
+    async def _run() -> None:
+        typer.echo(f"\n🜏 Dark Triad — {persona.upper()} MODE\n")
+        typer.echo(f"Objectif : {objective}\n")
+        result = await run_mission(objective, persona)
+        typer.echo(f"\n✅ {result['completed']} phases OK / {result['failed']} failed ({result['duration_ms']}ms)")
+        for p in result["phases"]:
+            icon = "✅" if p["status"] == "completed" else "❌"
+            typer.echo(f"  {icon} {p['name']} — {p['agent']} ({p['duration_ms']}ms)")
+            if p.get("output"):
+                for line in p["output"].split("\n")[:3]:
+                    typer.echo(f"     {line[:120]}")
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        typer.echo(f"❌ Mission échouée : {e}", err=True)
         raise typer.Exit(1)
 
 

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🜏 Dark Triad — Cyber Kill Chain</title>
+<style>
+:root {
+  --bg: #080808;
+  --surface: #111;
+  --border: #1a1a2e;
+  --amber: #f59e0b;
+  --orange: #f97316;
+  --red: #ef4444;
+  --violet: #7c3aed;
+  --indigo: #4f46e5;
+  --cyan: #0891b2;
+  --text: #f5f0e8;
+  --dim: #6b7280;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;overflow-x:hidden}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:1.2rem;background:linear-gradient(135deg,var(--amber),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.status-bar{display:flex;gap:16px;font-size:.75rem;align-items:center}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.badge{padding:4px 10px;border-radius:12px;font-size:.7rem;font-weight:700}
+.badge-active{background:rgba(245,158,11,.15);color:var(--amber)}
+.badge-done{background:rgba(8,145,178,.15);color:var(--cyan)}
+main{padding:24px;max-width:1400px;margin:0 auto}
+/* Kill Chain SVG */
+#killchain-svg{width:100%;height:320px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:24px}
+/* Phase cards */
+.phases-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.phase-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;transition:.2s;cursor:pointer}
+.phase-card:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.phase-card.active{border-color:var(--amber);box-shadow:0 0 20px rgba(245,158,11,.15)}
+.phase-card.success{border-color:var(--cyan)}
+.phase-card.failed{border-color:var(--red)}
+.phase-emoji{font-size:1.5rem;margin-bottom:8px}
+.phase-name{font-size:.7rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.phase-agent{font-size:.65rem;color:var(--amber);margin-top:4px}
+.phase-status{font-size:.6rem;margin-top:4px}
+/* Questions Panel */
+.questions-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px}
+.questions-panel h2{font-size:1rem;margin-bottom:16px;color:var(--amber)}
+.question-active{font-size:.95rem;margin-bottom:16px;line-height:1.5}
+.choices-grid{display:flex;flex-wrap:wrap;gap:8px}
+.choice-btn{padding:10px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:.8rem;transition:.15s}
+.choice-btn:hover{background:rgba(245,158,11,.1);border-color:var(--amber)}
+.choice-btn.selected{background:rgba(245,158,11,.2);border-color:var(--amber);color:var(--amber)}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;margin-top:16px}
+.progress-fill{height:100%;background:var(--amber);border-radius:2px;transition:width .3s}
+/* Findings feed */
+.findings-feed{margin-bottom:24px}
+.finding-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.finding-phase{font-size:.65rem;padding:3px 8px;border-radius:4px}
+.finding-text{font-size:.8rem;flex:1}
+.finding-time{font-size:.65rem;color:var(--dim)}
+/* Two-column layout */
+.cols{display:grid;grid-template-columns:1fr 340px;gap:24px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.plan-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.plan-card h3{font-size:.8rem;color:var(--amber);margin-bottom:12px}
+.agent-list{list-style:none}
+.agent-list li{padding:6px 0;font-size:.75rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.agent-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+button{font-family:inherit;border:none;cursor:pointer}
+.btn-primary{padding:12px 24px;background:var(--amber);color:#000;border-radius:8px;font-weight:700;font-size:.85rem;transition:.15s}
+.btn-primary:hover{background:var(--orange)}
+.btn-danger{padding:12px 24px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:.85rem}
+.actions-bar{display:flex;gap:12px;margin-top:16px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🜏 DARK TRIAD · CYBER KILL CHAIN</h1>
+  <div class="status-bar">
+    <div class="pulse"></div>
+    <span id="phase-label">INITIALISATION</span>
+    <span class="badge badge-active" id="persona-badge">MACH</span>
+    <span id="progress-text">0%</span>
+  </div>
+</header>
+
+<main>
+  <!-- Kill Chain Graph -->
+  <svg id="killchain-svg" viewBox="0 0 1400 280"></svg>
+
+  <!-- Phase Cards -->
+  <div class="phases-grid" id="phases-grid"></div>
+
+  <div class="cols">
+    <div>
+      <!-- Questions Panel -->
+      <div class="questions-panel" id="questions-panel">
+        <h2>📋 Interview Stratégique</h2>
+        <div class="question-active" id="question-text">Chargement...</div>
+        <div class="choices-grid" id="choices-container"></div>
+        <div class="progress-bar"><div class="progress-fill" id="question-progress" style="width:0%"></div></div>
+        <div class="actions-bar">
+          <button class="btn-primary" id="btn-skip">Passer →</button>
+          <button class="btn-primary" id="btn-answer" style="display:none">Valider ✓</button>
+        </div>
+      </div>
+
+      <!-- Findings Feed -->
+      <div class="findings-feed" id="findings-container">
+        <h2 style="font-size:1rem;margin-bottom:12px;color:var(--amber)">🔍 Findings</h2>
+        <div id="findings-list">Aucun finding pour le moment.</div>
+      </div>
+    </div>
+
+    <div>
+      <!-- Plan Card -->
+      <div class="plan-card">
+        <h3>⚡ Plan d'Attaque</h3>
+        <ul class="agent-list" id="agent-list"></ul>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const MISSION_ID = 'killchain-' + Date.now().toString(36);
+const API = '/api/killchain';
+
+// Phase config
+const PHASES = [
+  {id:'reconnaissance',emoji:'🔍',name:'Recon',desc:'Cartographie',color:'#f59e0b',agents:['ReconAgent']},
+  {id:'weaponization',emoji:'⚔️',name:'Weaponize',desc:'Exploits & Payloads',color:'#f97316',agents:['ExploiterAgent','JailbreakAgent']},
+  {id:'delivery',emoji:'📨',name:'Deliver',desc:'Livraison payloads',color:'#ef4444',agents:['ExploiterAgent']},
+  {id:'exploitation',emoji:'💥',name:'Exploit',desc:'Exploitation',color:'#dc2626',agents:['ExploiterAgent','PrivescAgent']},
+  {id:'installation',emoji:'📥',name:'Install',desc:'Persistence',color:'#7c3aed',agents:['PostExploitAgent']},
+  {id:'command_and_control',emoji:'🕸️',name:'C2',desc:'Command & Control',color:'#4f46e5',agents:['PostExploitAgent','EvaderAgent']},
+  {id:'actions_on_objective',emoji:'🏁',name:'Actions',desc:'Objectifs finaux',color:'#0891b2',agents:['PrivescAgent','JailbreakAgent']},
+];
+
+let state = {nodes:[],phase_statuses:{},current_phase:'reconnaissance',progress_pct:0,active_persona:'mach',current_question_index:0,total_questions:15,answers:{},findings_count:0};
+
+// ── Render Kill Chain Graph ────────────────────────────────────────────
+function renderGraph() {
+  const svg = document.getElementById('killchain-svg');
+  const w = 1400, h = 280;
+  const cx = 50, cy = h/2, stepX = (w-100)/PHASES.length, nodeR = 28;
+  
+  let html = `<defs>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#333"/></marker>
+  </defs>`;
+
+  // Edges
+  PHASES.forEach((p,i) => {
+    if (i < PHASES.length-1) {
+      const x1 = cx + i*stepX + nodeR, x2 = cx + (i+1)*stepX - nodeR;
+      html += `<line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>`;
+    }
+  });
+
+  // Nodes
+  PHASES.forEach((p,i) => {
+    const x = cx + i*stepX;
+    const status = state.phase_statuses[p.id] || 'pending';
+    let fill = '#1a1a2e', stroke = '#333';
+    if (status === 'active') { fill = 'rgba(245,158,11,.2)'; stroke = p.color; }
+    if (status === 'success') { fill = 'rgba(8,145,178,.2)'; stroke = '#0891b2'; }
+    if (status === 'failed') { fill = 'rgba(239,68,68,.2)'; stroke = '#ef4444'; }
+
+    html += `<circle cx="${x}" cy="${cy}" r="${nodeR}" fill="${fill}" stroke="${stroke}" stroke-width="${status==='active'?3:1.5}" ${status==='active'?'filter="url(#glow)"':''}/>`;
+    html += `<text x="${x}" y="${cy+5}" text-anchor="middle" fill="#f5f0e8" font-size="18">${p.emoji}</text>`;
+    html += `<text x="${x}" y="${cy+50}" text-anchor="middle" fill="#6b7280" font-size="10">${p.name}</text>`;
+    
+    // Status dot
+    let dotColor = '#333';
+    if (status === 'active') dotColor = p.color;
+    if (status === 'success') dotColor = '#0891b2';
+    if (status === 'failed') dotColor = '#ef4444';
+    html += `<circle cx="${x}" cy="${cy-nodeR-12}" r="4" fill="${dotColor}" ${status==='active'?'filter="url(#glow)"':''}/>`;
+    
+    // Agent label
+    const agents = p.agents.join(', ');
+    html += `<text x="${x}" y="${cy+66}" text-anchor="middle" fill="#f59e0b" font-size="8">${agents}</text>`;
+  });
+
+  // Current phase indicator
+  const ci = PHASES.findIndex(p => p.id === state.current_phase);
+  if (ci >= 0) {
+    const ix = cx + ci*stepX;
+    html += `<text x="${ix}" y="${cy-50}" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="700">▼ ACTIVE</text>`;
+  }
+
+  svg.innerHTML = html;
+
+  // Phase cards
+  const grid = document.getElementById('phases-grid');
+  grid.innerHTML = PHASES.map((p,i) => {
+    const status = state.phase_statuses[p.id] || 'pending';
+    let cardClass = 'phase-card';
+    if (status === 'active') cardClass += ' active';
+    if (status === 'success') cardClass += ' success';
+    if (status === 'failed') cardClass += ' failed';
+    const agents = p.agents.join(', ');
+    return `<div class="${cardClass}">
+      <div class="phase-emoji">${p.emoji}</div>
+      <div class="phase-name">${p.desc}</div>
+      <div class="phase-agent">${agents}</div>
+      <div class="phase-status" style="color:${status==='active'?p.color:status==='success'?'var(--cyan)':'var(--dim)'}">${status.toUpperCase()}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Questions ──────────────────────────────────────────────────────────
+let currentChoices = [];
+let selectedChoice = null;
+
+function renderQuestion() {
+  const q = state.current_question_index < state.total_questions 
+    ? {text:'Chargement...', choices:[], multi_select:false} : null;
+  
+  // Le vrai contenu vient de l'API
+  document.getElementById('question-progress').style.width = 
+    ((state.current_question_index / state.total_questions) * 100) + '%';
+}
+
+function answerQuestion(choice) {
+  selectedChoice = choice;
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  event.target.classList.add('selected');
+  document.getElementById('btn-answer').style.display = 'inline-block';
+}
+
+async function submitAnswer() {
+  if (!selectedChoice) return;
+  const resp = await fetch(API + '/answer', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mission_id:MISSION_ID, answer:selectedChoice, question_index:state.current_question_index})
+  });
+  const d = await resp.json();
+  updateState(d);
+  selectedChoice = null;
+  document.getElementById('btn-answer').style.display = 'none';
+}
+
+async function skipQuestion() {
+  const resp = await fetch(API + '/skip', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mission_id:MISSION_ID})
+  });
+  const d = await resp.json();
+  updateState(d);
+}
+
+// ── State update ───────────────────────────────────────────────────────
+function updateState(d) {
+  if (d.nodes) state.nodes = d.nodes;
+  if (d.phase_statuses) state.phase_statuses = d.phase_statuses;
+  if (d.current_phase) state.current_phase = d.current_phase;
+  if (d.progress_pct !== undefined) state.progress_pct = d.progress_pct;
+  if (d.active_persona) state.active_persona = d.active_persona;
+  if (d.current_question_index !== undefined) state.current_question_index = d.current_question_index;
+  if (d.total_questions) state.total_questions = d.total_questions;
+  if (d.answers) state.answers = d.answers;
+  if (d.findings_count !== undefined) state.findings_count = d.findings_count;
+  
+  document.getElementById('phase-label').textContent = state.current_phase.toUpperCase();
+  document.getElementById('persona-badge').textContent = state.active_persona.toUpperCase();
+  document.getElementById('progress-text').textContent = Math.round(state.progress_pct) + '%';
+  
+  if (d.question) {
+    document.getElementById('question-text').textContent = d.question.text;
+    currentChoices = d.question.choices || [];
+    const container = document.getElementById('choices-container');
+    container.innerHTML = currentChoices.map(c => 
+      `<button class="choice-btn" onclick="answerQuestion('${c.replace(/'/g,"\\'")}')">${c}</button>`
+    ).join('');
+    if (currentChoices.length === 0) {
+      document.getElementById('btn-skip').style.display = 'none';
+    }
+  }
+  
+  if (d.findings) {
+    const list = document.getElementById('findings-list');
+    list.innerHTML = d.findings.slice(-10).map(f => `
+      <div class="finding-item">
+        <span class="finding-phase" style="background:${f.color||'#333'};color:${f.color||'#f59e0b'}">${f.phase}</span>
+        <span class="finding-text">${f.text}</span>
+        <span class="finding-time">${f.time||''}</span>
+      </div>
+    `).join('') || 'Aucun finding.';
+  }
+  
+  if (d.agents) {
+    document.getElementById('agent-list').innerHTML = d.agents.map(a => `
+      <li><span class="agent-dot" style="background:${a.color||'#f59e0b'}"></span>${a.name} <span style="color:var(--dim);margin-left:auto;font-size:.65rem">${a.phase}</span></li>
+    `).join('');
+  }
+  
+  renderGraph();
+  renderQuestion();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+async function init() {
+  // Get initial state
+  const resp = await fetch(API + '/init', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mission_id:MISSION_ID})
+  });
+  const d = await resp.json();
+  updateState(d);
+  
+  // Poll every 3s
+  setInterval(async () => {
+    const r = await fetch(API + '?mission_id=' + MISSION_ID);
+    const d = await r.json();
+    updateState(d);
+  }, 3000);
+}
+
+document.getElementById('btn-skip').addEventListener('click', skipQuestion);
+document.getElementById('btn-answer').addEventListener('click', submitAnswer);
+init();
+</script>
+</body>
+</html>

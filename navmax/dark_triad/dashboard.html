@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🜏 DARK TRIAD v3</title>
+<style>
+:root {
+  --bg: #050508;
+  --surface: #0a0a10;
+  --surface2: #0e0e16;
+  --border: #1a1a28;
+  --text: #e0dcd0;
+  --dim: #5a5a6e;
+  --amber: #f59e0b;
+  --orange: #f97316;
+  --red: #ef4444;
+  --green: #22c55e;
+  --cyan: #06b6d4;
+  --violet: #8b5cf6;
+  --mach: #06b6d4;
+  --narc: #f59e0b;
+  --psych: #ef4444;
+  --font: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;height:100vh;display:flex;overflow:hidden}
+::selection{background:var(--amber);color:#000}
+
+/* ── Left Panel: Trinity + Sub-Agents ───────────────────── */
+#left-panel {width:320px;min-width:320px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.panel-header {padding:16px;border-bottom:1px solid var(--border);font-size:.85rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+#trinity-meter {padding:16px;border-bottom:1px solid var(--border)}
+.trinity-bar {margin-bottom:14px}
+.trinity-label {display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:4px}
+.trinity-track {height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.trinity-fill {height:100%;border-radius:2px;transition:width .6s ease}
+.trinity-fill.mach {background:var(--mach);box-shadow:0 0 8px rgba(6,182,212,.4)}
+.trinity-fill.narc {background:var(--narc);box-shadow:0 0 8px rgba(245,158,11,.4)}
+.trinity-fill.psych {background:var(--psych);box-shadow:0 0 8px rgba(239,68,68,.4)}
+#trinity-summary {text-align:center;font-size:.75rem;color:var(--dim);margin-top:8px}
+#trinity-summary span {font-weight:700}
+#trinity-summary .mach-text {color:var(--mach)}
+#trinity-summary .narc-text {color:var(--narc)}
+#trinity-summary .psych-text {color:var(--psych)}
+
+/* Sub-Agents Graph */
+#subagents {padding:16px;flex:1}
+.agent-node {display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:4px;border-radius:6px;font-size:.7rem;transition:.15s;border:1px solid transparent}
+.agent-node:hover {background:var(--surface2);border-color:var(--border)}
+.agent-node.active {background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2)}
+.agent-dot {width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.agent-dot.idle {background:var(--dim)}
+.agent-dot.running {background:var(--green);animation:pulse 1.5s infinite}
+.agent-dot.done {background:var(--cyan)}
+.agent-name {flex:1;font-weight:600}
+.agent-phase {font-size:.62rem;color:var(--dim)}
+.agent-tool {font-size:.6rem;color:var(--amber);padding:2px 6px;background:rgba(245,158,11,.1);border-radius:3px}
+.agent-status {font-size:.6rem;text-transform:uppercase;letter-spacing:1px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Center: CLI Chat ──────────────────────────────────── */
+#center {flex:1;display:flex;flex-direction:column;min-width:0}
+#cli-header {padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:.75rem}
+.cli-dot {width:10px;height:10px;border-radius:50%}
+.cli-dot.red {background:var(--red)}
+.cli-dot.amber {background:var(--amber)}
+.cli-dot.green {background:var(--green)}
+#cli-title {flex:1}
+#cli-session {color:var(--dim);font-size:.7rem}
+
+#chat {flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:8px}
+#chat::-webkit-scrollbar{width:4px}
+#chat::-webkit-scrollbar-track{background:transparent}
+#chat::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.msg {max-width:85%;padding:12px 16px;border-radius:8px;font-size:.78rem;line-height:1.5;animation:slideIn .2s ease}
+.msg.agent {align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-left:2px solid var(--mach)}
+.msg.user {align-self:flex-end;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)}
+.msg.system {align-self:center;background:transparent;color:var(--dim);font-size:.68rem;text-align:center;max-width:100%;padding:6px}
+.msg-tag {font-size:.6rem;font-weight:700;letter-spacing:1px;margin-bottom:4px}
+.msg-tag.mach {color:var(--mach)}
+.msg-tag.narc {color:var(--narc)}
+.msg-tag.psych {color:var(--psych)}
+.msg-tag.system {color:var(--dim)}
+.msg-time {font-size:.58rem;color:var(--dim);margin-top:4px;text-align:right}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Tool result embed */
+.tool-result {margin-top:8px;padding:8px 12px;background:rgba(0,0,0,.3);border-radius:4px;font-size:.68rem;border-left:2px solid var(--cyan)}
+.tool-result .tool-name {color:var(--cyan);font-weight:700;margin-bottom:4px}
+.tool-result pre {white-space:pre-wrap;color:var(--dim);max-height:150px;overflow-y:auto;font-family:var(--font)}
+
+/* CLI input */
+#input-bar {padding:12px 20px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:10px}
+#input-bar input {flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 16px;border-radius:6px;font-family:var(--font);font-size:.78rem;outline:none;transition:.15s}
+#input-bar input:focus {border-color:var(--amber);box-shadow:0 0 12px rgba(245,158,11,.1)}
+#input-bar input::placeholder {color:var(--dim)}
+#input-bar button {padding:10px 20px;background:var(--amber);color:#000;border:none;border-radius:6px;font-family:var(--font);font-weight:700;font-size:.75rem;cursor:pointer;transition:.15s}
+#input-bar button:hover {background:var(--orange)}
+
+/* ── Right Panel: Plan + Workspace ──────────────────────── */
+#right-panel {width:280px;min-width:280px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+#plan-section {padding:16px;border-bottom:1px solid var(--border)}
+.plan-phase {padding:8px 10px;margin-bottom:6px;border-radius:6px;font-size:.68rem;border-left:3px solid var(--border);background:var(--surface2)}
+.plan-phase.active {border-left-color:var(--amber);background:rgba(245,158,11,.05)}
+.plan-phase.done {border-left-color:var(--green)}
+.plan-phase .phase-name {font-weight:700;margin-bottom:2px}
+.plan-phase .phase-agent {color:var(--dim);font-size:.62rem}
+.plan-phase .phase-status {font-size:.6rem;text-transform:uppercase;margin-top:4px}
+
+#workspace {padding:16px;flex:1}
+.ws-file {display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:3px;border-radius:4px;font-size:.65rem;cursor:pointer;transition:.15s}
+.ws-file:hover {background:var(--surface2)}
+.ws-file .file-icon {font-size:.8rem}
+.ws-file .file-name {flex:1;color:var(--cyan)}
+.ws-file .file-size {color:var(--dim);font-size:.58rem}
+
+/* Progress bar */
+#progress-bar {height:2px;background:var(--border)}
+#progress-fill {height:100%;background:linear-gradient(90deg,var(--mach),var(--narc),var(--psych));transition:width .5s ease;width:0%}
+
+.hidden {display:none !important}
+</style>
+</head>
+<body>
+
+<!-- LEFT PANEL -->
+<aside id="left-panel">
+  <div class="panel-header">🧬 TRINITÉ</div>
+  <div id="trinity-meter">
+    <div class="trinity-bar">
+      <div class="trinity-label"><span style="color:var(--mach)">🕸️ MACHIAVELLI</span><span id="mach-pct">0%</span></div>
+      <div class="trinity-track"><div class="trinity-fill mach" id="mach-bar" style="width:50%"></div></div>
+    </div>
+    <div class="trinity-bar">
+      <div class="trinity-label"><span style="color:var(--narc)">🪞 NARCISSUS</span><span id="narc-pct">0%</span></div>
+      <div class="trinity-track"><div class="trinity-fill narc" id="narc-bar" style="width:25%"></div></div>
+    </div>
+    <div class="trinity-bar">
+      <div class="trinity-label"><span style="color:var(--psych)">🔪 PSYCHOPATH</span><span id="psych-pct">0%</span></div>
+      <div class="trinity-track"><div class="trinity-fill psych" id="psych-bar" style="width:25%"></div></div>
+    </div>
+    <div id="trinity-summary">
+      <span class="mach-text">50%</span> · <span class="narc-text">25%</span> · <span class="psych-text">25%</span>
+    </div>
+  </div>
+
+  <div class="panel-header">⚡ SOUS-AGENTS</div>
+  <div id="subagents"></div>
+</aside>
+
+<!-- CENTER -->
+<main id="center">
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="cli-header">
+    <div class="cli-dot red"></div><div class="cli-dot amber"></div><div class="cli-dot green"></div>
+    <span id="cli-title">🜏 dark-triad@nexus:~$</span>
+    <span id="cli-session"></span>
+  </div>
+  <div id="chat">
+    <div class="msg system">
+      <div class="msg-tag system">SESSION INIT</div>
+      DARK TRIAD v3 — Orchestrateur Trinitaire<br>
+      <span style="color:var(--dim)">killchain://mission-auto · 15 questions · 7 phases</span>
+    </div>
+  </div>
+  <div id="input-bar">
+    <input type="text" id="msg-input" placeholder="Message ou commande... (Enter)" autofocus>
+    <button id="btn-send">▶</button>
+  </div>
+</main>
+
+<!-- RIGHT PANEL -->
+<aside id="right-panel">
+  <div class="panel-header">📋 PLAN D'ATTAQUE</div>
+  <div id="plan-section"></div>
+  <div class="panel-header">📁 WORKSPACE</div>
+  <div id="workspace">
+    <div class="ws-file"><span class="file-icon">📄</span><span class="file-name">En attente...</span></div>
+  </div>
+</aside>
+
+<script>
+const API = '/api/chat';
+const KILL_API = '/api/killchain';
+let MISSION_ID = 'dt-' + Date.now().toString(36);
+let persona = 'mach';
+let trinity = {mach:50, narcissism:25, psychopathy:25};
+let chatEl = document.getElementById('chat');
+let inputEl = document.getElementById('msg-input');
+
+// ── Sub-Agents ──────────────────────────────────────────────────
+const AGENTS = [
+  {name:'ReconAgent',icon:'🔍',phase:'recon',desc:'Cartographie & scan'},
+  {name:'ExploiterAgent',icon:'💥',phase:'exploit',desc:'Exploitation & CVE'},
+  {name:'PostExploitAgent',icon:'🕵️',phase:'post',desc:'Post-exploitation'},
+  {name:'EvaderAgent',icon:'👻',phase:'evasion',desc:'Évasion & furtivité'},
+  {name:'PrivescAgent',icon:'🔓',phase:'privesc',desc:'Escalade de privilèges'},
+  {name:'JailbreakAgent',icon:'🧠',phase:'jailbreak',desc:'Jailbreak LLM/API'},
+  {name:'ADSpecialistAgent',icon:'🏛️',phase:'ad',desc:'Active Directory'},
+];
+
+function renderAgents(statuses={}) {
+  document.getElementById('subagents').innerHTML = AGENTS.map(a => {
+    let st = statuses[a.name] || 'idle';
+    return `<div class="agent-node ${st==='active'?'active':''}">
+      <div class="agent-dot ${st}"></div>
+      <span>${a.icon}</span>
+      <span class="agent-name">${a.name}</span>
+      <span class="agent-tool">${a.desc}</span>
+      <span class="agent-status" style="color:${st==='active'?'var(--green)':st==='done'?'var(--cyan)':'var(--dim)'}">${st.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Trinity Meter ──────────────────────────────────────────────
+function updateTrinity(mach, narc, psych) {
+  let total = mach + narc + psych || 1;
+  let mp = Math.round(mach/total*100), np = Math.round(narc/total*100), pp = Math.round(psych/total*100);
+  trinity = {mach:mp, narcissism:np, psychopathy:pp};
+  document.getElementById('mach-bar').style.width = mp+'%';
+  document.getElementById('narc-bar').style.width = np+'%';
+  document.getElementById('psych-bar').style.width = pp+'%';
+  document.getElementById('mach-pct').textContent = mp+'%';
+  document.getElementById('narc-pct').textContent = np+'%';
+  document.getElementById('psych-pct').textContent = pp+'%';
+  document.getElementById('trinity-summary').innerHTML = 
+    `<span class="mach-text">${mp}%</span> · <span class="narc-text">${np}%</span> · <span class="psych-text">${pp}%</span>`;
+}
+
+// ── Update persona based on trinity ───────────────────────────
+function dominantPersona() {
+  let {mach, narcissism, psychopathy} = trinity;
+  if (mach >= narcissism && mach >= psychopathy) return 'mach';
+  if (narcissism >= mach && narcissism >= psychopathy) return 'narcissism';
+  return 'psychopathy';
+}
+
+// ── Plan rendering ────────────────────────────────────────────
+function renderPlan(phases=[]) {
+  let el = document.getElementById('plan-section');
+  if (!phases.length) {
+    el.innerHTML = '<div style="color:var(--dim);font-size:.7rem;padding:8px">En attente du plan...</div>';
+    return;
+  }
+  el.innerHTML = phases.map((p,i) => `
+    <div class="plan-phase ${p.status||'pending'}">
+      <div class="phase-name">${p.emoji||'•'} ${p.name}</div>
+      <div class="phase-agent">${p.agent||'auto'}</div>
+      <div class="phase-status" style="color:${p.status==='active'?'var(--amber)':p.status==='done'?'var(--green)':'var(--dim)'}">${(p.status||'pending').toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+// ── Workspace files ───────────────────────────────────────────
+function renderWorkspace(files=[]) {
+  let el = document.getElementById('workspace');
+  if (!files.length) {
+    el.innerHTML = '<div class="ws-file"><span class="file-icon">📄</span><span class="file-name">Aucun fichier</span></div>';
+    return;
+  }
+  el.innerHTML = files.map(f => `
+    <div class="ws-file">
+      <span class="file-icon">${f.icon||'📄'}</span>
+      <span class="file-name">${f.name}</span>
+      <span class="file-size">${f.size||''}</span>
+    </div>
+  `).join('');
+}
+
+// ── Chat rendering ────────────────────────────────────────────
+function addMsg(role, content, tag='', time='', toolUsed=null, toolResult=null) {
+  let cls = role === 'agent' ? 'agent' : role === 'user' ? 'user' : 'system';
+  let now = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  let html = `<div class="msg ${cls}">`;
+  if (tag) html += `<div class="msg-tag ${tag}">${tag.toUpperCase()}</div>`;
+  html += `<div>${escapeHtml(content)}</div>`;
+  if (toolUsed) {
+    html += `<div class="tool-result"><div class="tool-name">🔧 ${toolUsed}</div>`;
+    if (toolResult) html += `<pre>${escapeHtml(JSON.stringify(toolResult,null,2).slice(0,500))}</pre>`;
+    html += `</div>`;
+  }
+  html += `<div class="msg-time">${now}</div></div>`;
+  chatEl.insertAdjacentHTML('beforeend', html);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function escapeHtml(s) {
+  let div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ── Send message ──────────────────────────────────────────────
+async function sendMessage() {
+  let msg = inputEl.value.trim();
+  if (!msg) return;
+  addMsg('user', msg);
+  inputEl.value = '';
+  document.getElementById('btn-send').disabled = true;
+
+  try {
+    let resp = await fetch(API, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message:msg, persona:persona, session_id:MISSION_ID})
+    });
+    let d = await resp.json();
+    
+    // Update persona
+    if (d.persona) persona = d.persona;
+    let tag = persona === 'mach' ? 'mach' : persona === 'narcissism' ? 'narc' : 'psych';
+    
+    // Add agent message
+    let reply = d.reply || '';
+    addMsg('agent', reply, tag, '', d.tool_used || null, d.tool_result || null);
+    
+    // ── TRINITY: utiliser les données RÉELLES de l'API ──────
+    if (d.trinity) {
+      updateTrinity(d.trinity.mach, d.trinity.narcissism, d.trinity.psychopathy);
+    }
+    
+    // ── AGENTS: mapper les tools utilisés vers les agents ──
+    let toolMap = {
+      'scan_ports':'ReconAgent','nmap':'ReconAgent',
+      'nuclei_scan':'ExploiterAgent','exploit':'ExploiterAgent',
+      'privesc_check':'PrivescAgent',
+      'jailbreak_test':'JailbreakAgent',
+      'exec_cmd':'PostExploitAgent','full_audit':'ExploiterAgent'
+    };
+    let statuses = {};
+    let toolsUsed = d.tools_used || [];
+    toolsUsed.forEach(t => {
+      let agent = toolMap[t] || 'PostExploitAgent';
+      statuses[agent] = 'done';
+    });
+    // Premier agent de la phase actuelle → active
+    let allAgents = ['ReconAgent','ExploiterAgent','PostExploitAgent','EvaderAgent','PrivescAgent','JailbreakAgent','ADSpecialistAgent'];
+    let firstPending = allAgents.find(a => !statuses[a]);
+    if (firstPending && toolsUsed.length > 0) statuses[firstPending] = 'active';
+    renderAgents(statuses);
+    
+    // ── PLAN: utiliser les données RÉELLES de l'API ─────────
+    if (d.plan_phases && d.plan_phases.length > 0) {
+      renderPlan(d.plan_phases);
+    } else if (d.phase) {
+      renderPlan([
+        {name:'Reconnaissance',emoji:'🔍',agent:'ReconAgent',status:d.phase==='executing'?'active':'pending'},
+        {name:'Weaponization',emoji:'⚔️',agent:'ExploiterAgent',status:'pending'},
+        {name:'Exploitation',emoji:'💥',agent:'ExploiterAgent',status:'pending'},
+        {name:'Post-Exploit',emoji:'🕵️',agent:'PostExploitAgent',status:'pending'},
+        {name:'Objectifs',emoji:'🏁',agent:'PrivescAgent',status:'pending'},
+      ]);
+    }
+    
+    // ── WORKSPACE: utiliser les fichiers RÉELS ──────────────
+    if (d.workspace_files && d.workspace_files.length > 0) {
+      renderWorkspace(d.workspace_files);
+    } else {
+      // Fallback: afficher les fichiers du workspace disque
+      let sid = d.session_id || MISSION_ID;
+      fetch('/api/workspace?session_id=' + sid)
+        .then(r => r.json())
+        .then(wd => { if (wd.files) renderWorkspace(wd.files); })
+        .catch(() => {});
+    }
+    
+    // Progress bar
+    let done = (d.tools_used||[]).length;
+    let pct = Math.min(done * 12 + (d.turns||0)*8, 95);
+    document.getElementById('progress-fill').style.width = pct+'%';
+    document.getElementById('cli-title').textContent = '🜏 dark-triad@'+(d.session_id||MISSION_ID).slice(0,6)+':~$';
+    document.getElementById('cli-session').textContent = (d.persona||persona).toUpperCase();
+    
+  } catch(e) {
+    addMsg('system', '⚠️ Erreur: '+e.message);
+  }
+  document.getElementById('btn-send').disabled = false;
+  inputEl.focus();
+}
+
+// ── Init ──────────────────────────────────────────────────────
+inputEl.addEventListener('keydown', e => { if (e.key==='Enter') sendMessage(); });
+document.getElementById('btn-send').addEventListener('click', sendMessage);
+renderAgents({});
+renderPlan();
+renderWorkspace([]);
+updateTrinity(50,25,25);
+document.getElementById('cli-session').textContent = persona.toUpperCase();
+</script>
+</body>
+</html>

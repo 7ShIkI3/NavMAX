@@ -178,6 +178,20 @@ app.include_router(
     dependencies=operator_or_admin,
 )
 
+# Dark Triad (admin only — opérations offensives)
+from navmax.api.routes.dark_triad import router as dark_triad_router
+app.include_router(dark_triad_router, dependencies=admin_only)
+
+# Dashboard Dark Triad (HTML — accessible via /dark-triad)
+import os as _os
+from pathlib import Path as _Path
+_DT_DASHBOARD = _os.path.join(_os.path.dirname(__file__), "..", "dark_triad", "dashboard.html")
+if _os.path.exists(_DT_DASHBOARD):
+    from fastapi.responses import HTMLResponse
+    @app.get("/dark-triad", response_class=HTMLResponse, include_in_schema=False)
+    async def dark_triad_dashboard():
+        return HTMLResponse(_Path(_DT_DASHBOARD).read_text(encoding="utf-8"))
+
 # Active Directory (extrêmement sensible → admin)
 app.include_router(
     ad.router,

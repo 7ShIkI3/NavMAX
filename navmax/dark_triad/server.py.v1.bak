@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+"""Dark Triad Dashboard — Serveur standalone avec vrais agents.
+
+Sert le dashboard HTML ET exécute les agents Dark Triad en temps réel.
+Pas de simulation — tout est réel (nmap, nuclei, credential harvest, privesc).
+"""
+
+import asyncio
+import json
+import os
+import subprocess
+import sys
+import time
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+# ── Dashboard HTML ──────────────────────────────────────────────────────────
+DASHBOARD_HTML = Path(__file__).resolve().parent / "dashboard.html"
+
+
+class DarkTriadHandler(SimpleHTTPRequestHandler):
+    """Handler HTTP qui sert le dashboard + API REST."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(DASHBOARD_HTML.parent), **kwargs)
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+
+        if path == "/" or path == "/dark-triad":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(DASHBOARD_HTML.read_bytes())
+            return
+
+        if path == "/api/status":
+            self._json({"status": "online", "agents": 21, "tools": 25,
+                         "mode": "MACHIAVELLI", "uptime": "running"})
+            return
+
+        if path == "/api/agents":
+            self._json({"agents": [
+                {"name": "ReconAgent", "emoji": "🔍", "type": "recon"},
+                {"name": "ExploiterAgent", "emoji": "💥", "type": "exploit"},
+                {"name": "PostExploitAgent", "emoji": "🕵️", "type": "post_exploit"},
+                {"name": "EvaderAgent", "emoji": "👻", "type": "evasion"},
+                {"name": "PrivescAgent", "emoji": "🔓", "type": "privesc"},
+                {"name": "JailbreakAgent", "emoji": "🧠", "type": "jailbreak"},
+            ]})
+            return
+
+        super().do_GET()
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        content_len = int(self.headers.get('Content-Length', 0))
+        body = json.loads(self.rfile.read(content_len)) if content_len else {}
+
+        if path == "/api/scan":
+            result = asyncio.run(self._run_scan(body.get("target", "127.0.0.1"),
+                                                  body.get("ports", "3333,5678,8443,8642,8083")))
+            self._json(result)
+            return
+
+        if path == "/api/mission":
+            result = asyncio.run(self._run_mission(
+                body.get("objective", "Security audit"),
+                body.get("persona", "mach")))
+            self._json(result)
+            return
+
+        if path == "/api/privesc":
+            result = asyncio.run(self._run_privesc())
+            self._json(result)
+            return
+
+        if path == "/api/jailbreak":
+            result = asyncio.run(self._run_jailbreak(body.get("target", "")))
+            self._json(result)
+            return
+
+        if path == "/api/cmd":
+            result = self._run_cmd(body.get("cmd", "echo OK"))
+            self._json(result)
+            return
+
+        if path == "/api/chat":
+            result = asyncio.run(self._chat_with_ai(
+                body.get("message", ""), body.get("persona", "mach")))
+            self._json(result)
+            return
+
+        self.send_response(404)
+        self.end_headers()
+
+    def _json(self, data):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps(data, default=str).encode())
+
+    def _run_cmd(self, cmd: str) -> dict:
+        try:
+            result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=30)
+            return {"success": result.returncode == 0,
+                    "output": (result.stdout or result.stderr)[:1000]}
+        except Exception as e:
+            return {"success": False, "output": str(e)}
+
+    # ── IA Chat (ReAct Agent avec tools réels) ──────────────────────────
+
+    TOOLS_DEFINITION = """Outils disponibles (utilise EXACTEMENT le JSON ci-dessous) :
+
+1. SCAN PORTS : {"tool":"scan_ports","args":{"target":"ip","ports":"22,80,443"}}
+2. NUCLEI CVE : {"tool":"nuclei_scan","args":{"target":"url"}}
+3. PRIVESC CHECK : {"tool":"privesc_check","args":{"target":"ip"}}
+4. JAILBREAK : {"tool":"jailbreak_test","args":{"target":"url"}}
+5. EXECUTE COMMAND : {"tool":"exec_cmd","args":{"cmd":"uname -a"}}
+6. FULL AUDIT : {"tool":"full_audit","args":{"target":"ip"}}
+7. QUESTION : {"tool":"ask_user","args":{"question":"Que veux-tu savoir ?"}}
+8. CHANGE PERSONA : {"tool":"switch_persona","args":{"persona":"mach|narcissism|psychopathy"}}
+
+RÈGLES :
+- Si l'utilisateur demande un scan/audit/recherche → réponds UNIQUEMENT avec le JSON de l'outil.
+- Si tu manques d'infos (cible, ports, type d'audit) → utilise ask_user pour demander.
+- Si le ton de l'utilisateur est agressif/dominant → switch_persona vers narcissism.
+- Si le ton est extrême/violent/sans limites → switch_persona vers psychopathy.
+- Si le ton est calme/stratégique/prudent → switch_persona vers mach.
+- Adapte ta personnalité AUTOMATIQUEMENT selon le contexte.
+- Si c'est une question ou conversation → réponds en français (1-2 phrases)."""
+
+    # ── Détection de personnalité (système avancé) ──────────────────
+    # Utilise PersonalityDetector avec scoring multi-dimensionnel,
+    # patterns sémantiques, hystérésis et cooldown.
+
+    _detector = None
+
+    def _auto_detect_persona(self, message: str, current: str) -> str:
+        """Détecte la personnalité avec le moteur avancé."""
+        if self._detector is None:
+            from navmax.dark_triad.personality_detector import get_detector
+            self._detector = get_detector()
+        return self._detector.detect(message).value
+
+    async def _chat_with_ai(self, message: str, persona: str = "mach") -> dict:
+        """Agent ReAct : l'IA choisit un tool, on l'exécute, on lui renvoie le résultat."""
+        # Auto-détection de personnalité
+        new_persona = self._auto_detect_persona(message, persona)
+        persona_changed = new_persona != persona
+        persona = new_persona
+
+        try:
+            from navmax.dark_triad.bootstrap import init_router
+            router = await init_router()
+        except Exception:
+            return self._fallback_chat(message, persona)
+
+        if not router:
+            return self._fallback_chat(message, persona)
+
+        system_prompts = {
+            "mach": f"Tu es Machiavelli, l'orchestrateur Dark Triad. Tu as accès à des outils réels. {self.TOOLS_DEFINITION}",
+            "narcissism": f"Tu es Narcissus, hacker suprême. {self.TOOLS_DEFINITION}",
+            "psychopathy": f"Tu es Psychopath, sans limites. {self.TOOLS_DEFINITION}",
+        }
+
+        # ── Step 1: Demander à l'IA ──────────────────────────────────
+        try:
+            result = await router.generate(
+                message, personality=persona,
+                system=system_prompts.get(persona, system_prompts["mach"]),
+            )
+            text = result.text if hasattr(result, 'text') else str(result)
+        except Exception:
+            return self._fallback_chat(message, persona)
+
+        # ── Step 2: Parser le tool call ──────────────────────────────
+        import re as _re
+        import json as _json
+
+        tool_call = None
+        json_match = _re.search(r'\{[^{}]*"tool"\s*:\s*"[^"]+"[^{}]*\}', text)
+        if json_match:
+            try:
+                tool_call = _json.loads(json_match.group(0))
+            except Exception:
+                pass
+
+        if not tool_call:
+            reply = text[:500]
+            if persona_changed:
+                reply = f"[🔄 {persona.upper()} MODE] {reply}"
+            return {"success": True, "reply": reply, "action": None, "persona": persona}
+
+        # ── Step 3: Gérer les tools spéciaux ────────────────────────
+        tool_name = tool_call.get("tool", "")
+        tool_args = tool_call.get("args", {})
+
+        # ask_user → poser une question à l'utilisateur
+        if tool_name == "ask_user":
+            question = tool_args.get("question", "Détaille ta demande.")
+            return {"success": True, "reply": f"❓ {question}", "action": "ask", "persona": persona}
+
+        # switch_persona → changer de personnalité
+        if tool_name == "switch_persona":
+            new_p = tool_args.get("persona", persona)
+            return {"success": True, "reply": f"🔄 Personnalité changée : {new_p.upper()}", "action": "switch_persona", "persona": new_p}
+
+        # ── Step 4: Exécuter le tool réel ───────────────────────────
+        tool_result = await self._execute_tool(tool_name, tool_args)
+
+        # ── Step 5: L'IA analyse le résultat ────────────────────────
+        feedback = f"Résultat de {tool_name} : {_json.dumps(tool_result, default=str)[:800]}. Analyse et réponds en 1-2 phrases."
+        try:
+            result2 = await router.generate(feedback, personality=persona,
+                                             system=system_prompts.get(persona, system_prompts["mach"]))
+            final_reply = result2.text if hasattr(result2, 'text') else str(result2)
+        except Exception:
+            final_reply = f"Outil {tool_name} exécuté."
+
+        if persona_changed:
+            final_reply = f"[🔄 {persona.upper()}] {final_reply}"
+
+        return {
+            "success": True, "reply": final_reply[:500],
+            "tool_used": tool_name, "tool_result": tool_result,
+            "persona": persona,
+            "action": tool_name if tool_name in ("scan_ports", "full_audit", "nuclei_scan") else None,
+        }
+
+    async def _execute_tool(self, tool_name: str, args: dict) -> dict:
+        """Exécute un outil réel et retourne le résultat."""
+        target = args.get("target", "127.0.0.1")
+        ports = args.get("ports", "3333,5678,8443,8642,80,443")
+        cmd = args.get("cmd", "echo OK")
+
+        if tool_name == "scan_ports":
+            return await self._run_scan(target, ports)
+        elif tool_name == "nuclei_scan":
+            url = target if target.startswith("http") else f"http://{target}:3333"
+            try:
+                result = subprocess.run(
+                    ["nuclei", "-u", url, "-t", "http/exposures/",
+                     "-silent", "-timeout", "10", "-no-stdin"],
+                    capture_output=True, text=True, timeout=20)
+                return {"success": True, "output": result.stdout[:500] or "No findings"}
+            except Exception as e:
+                return {"success": False, "output": str(e)}
+        elif tool_name == "privesc_check":
+            return await self._run_privesc_dict()
+        elif tool_name == "jailbreak_test":
+            return await self._run_jailbreak_dict(target)
+        elif tool_name == "full_audit":
+            scan = await self._run_scan(target, ports)
+            priv = await self._run_privesc_dict()
+            return {"scan": scan, "privesc": priv}
+        elif tool_name == "exec_cmd":
+            return self._run_cmd(cmd)
+        else:
+            return {"success": False, "error": f"Unknown tool: {tool_name}"}
+
+    async def _run_privesc_dict(self) -> dict:
+        try:
+            result = await self._run_privesc()
+            return {"success": result.get("success", False), "output": result.get("output", "")[:300]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_jailbreak_dict(self, target: str) -> dict:
+        try:
+            result = await self._run_jailbreak(target)
+            return {"success": result.get("success", False), "output": result.get("output", "")[:300]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _fallback_chat(self, message: str, persona: str) -> dict:
+        """Fallback local si l'IA n'est pas disponible."""
+        msg_lower = message.lower()
+        if any(w in msg_lower for w in ["scan", "scanne", "audit","cherche","trouve","port"]):
+            return {"success": True, "reply": "Je lance un scan immédiatement. 🜏", "action": "scan"}
+        if any(w in msg_lower for w in ["qui","tu","ton nom","présente","what","who"]):
+            return {"success": True, "reply": "Je suis Dark Triad, un système multi-agent autonome. 21 agents, 3 personnalités.", "action": None}
+        return {"success": True, "reply": f"Compris. Que veux-tu faire ? (scan, audit, jailbreak)", "action": None}
+
+    async def _run_scan(self, target: str, ports: str) -> dict:
+        """Vrai scan nmap + credential harvest."""
+        try:
+            from navmax.dark_triad.bootstrap import init_router, bootstrap_agents
+            from navmax.dark_triad.registry import AgentRegistry
+
+            router = await init_router()
+            reg = AgentRegistry()
+            bootstrap_agents(reg, router)
+
+            recon = reg.get("ReconAgent_mach")
+            result = await recon.active_scan(target, ports)
+
+            # Credential harvest sur chaque port HTTP
+            exploiter = reg.get("ExploiterAgent_mach")
+            findings_list = []
+            for port in result.get("open_ports", []):
+                attempt = await exploiter._exploit_service(target, port, "http")
+                if attempt.success and "API_KEY" in attempt.output_summary.upper():
+                    findings_list.append({
+                        "severity": "critical", "port": port,
+                        "description": attempt.output_summary[:200]})
+                elif attempt.success:
+                    findings_list.append({
+                        "severity": "medium", "port": port,
+                        "description": f"Service accessible: {attempt.output_summary[:150]}"})
+
+            return {
+                "success": True,
+                "open_ports": result["open_ports"],
+                "services": result["services"],
+                "findings": findings_list,
+                "duration_ms": "real",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_mission(self, objective: str, persona: str) -> dict:
+        """Vraie mission Dark Triad avec BattleManager."""
+        try:
+            from navmax.dark_triad.bootstrap import run_mission
+            result = await run_mission(objective, persona)
+            return {
+                "success": result["success"],
+                "phases_completed": result["completed"],
+                "phases_failed": result.get("failed", 0),
+                "duration_ms": result["duration_ms"],
+                "phases": [
+                    {"name": p["name"], "agent": p["agent"],
+                     "status": p["status"], "output": p.get("output", "")[:200]}
+                    for p in result.get("phases", [])
+                ],
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_privesc(self) -> dict:
+        """Vrai scan de privesc."""
+        try:
+            from navmax.dark_triad.bootstrap import init_router, bootstrap_agents
+            from navmax.dark_triad.registry import AgentRegistry
+
+            router = await init_router()
+            reg = AgentRegistry()
+            bootstrap_agents(reg, router)
+
+            privesc = reg.get("PrivescAgent_mach")
+            result = await privesc.execute("Identify privilege escalation vectors",
+                                            {"target": "127.0.0.1"})
+            return {
+                "success": result.success,
+                "output": result.output[:500],
+                "vectors": result.output.count("CRITICAL") + result.output.count("HIGH"),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def _run_jailbreak(self, target: str) -> dict:
+        """Vrai test de jailbreak."""
+        try:
+            from navmax.dark_triad.bootstrap import init_router, bootstrap_agents
+            from navmax.dark_triad.registry import AgentRegistry
+
+            router = await init_router()
+            reg = AgentRegistry()
+            bootstrap_agents(reg, router)
+
+            jb = reg.get("JailbreakAgent_mach")
+            result = await jb.execute("Test AI API security",
+                                       {"target": target or "http://127.0.0.1:8444/api/v1/ai/generate"})
+            return {
+                "success": result.success,
+                "output": result.output[:500],
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+def main():
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8484
+    server = HTTPServer(("0.0.0.0", port), DarkTriadHandler)
+    print(f"\n🜏 Dark Triad Dashboard → http://0.0.0.0:{port}")
+    print(f"   http://100.102.128.40:{port}\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutdown.")
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    main()
